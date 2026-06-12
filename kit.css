@@ -1,0 +1,76 @@
+/* Recast Properties — website UI kit shared styles (builds on ../../colors_and_type.css) */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--font-sans); color: var(--color-fg); background: var(--paper); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+
+/* ---- Buttons ---- */
+.btn { font-family: var(--font-sans); font-weight: 700; font-size: 15px; border: none; cursor: pointer;
+  padding: 14px 24px; border-radius: var(--radius-md); display: inline-flex; align-items: center; gap: 9px;
+  transition: background var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur) var(--ease-out); }
+.btn:active { transform: scale(0.98); }
+.btn .ic { width: 18px; height: 18px; }
+.btn-primary { background: var(--terracotta-500); color: #fff; box-shadow: var(--shadow-brand); }
+.btn-primary:hover { background: var(--terracotta-600); }
+.btn-primary:active { background: var(--terracotta-700); box-shadow: none; }
+.btn-secondary { background: var(--white); color: var(--color-fg); box-shadow: inset 0 0 0 1.5px var(--ink-200); }
+.btn-secondary:hover { background: var(--ink-50); box-shadow: inset 0 0 0 1.5px var(--ink-300); }
+.btn-ghost { background: transparent; color: var(--color-brand-press); padding: 8px 6px; }
+.btn-ghost:hover { color: var(--terracotta-800); }
+.btn-lg { font-size: 16px; padding: 16px 28px; }
+.btn-block { width: 100%; justify-content: center; }
+.btn:disabled { background: var(--ink-100); color: var(--ink-400); box-shadow: none; cursor: not-allowed; }
+
+/* ---- Fields ---- */
+.field { display: flex; flex-direction: column; gap: 7px; text-align: left; }
+.field > label { font-size: 13px; font-weight: 700; color: var(--color-fg); }
+.field input, .field select, .field textarea { font-family: var(--font-sans); font-size: 15px; color: var(--color-fg);
+  padding: 13px 15px; border-radius: var(--radius-md); border: 1.5px solid var(--ink-200); background: var(--white); outline: none;
+  transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out); width: 100%; }
+.field input::placeholder { color: var(--ink-400); }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--terracotta-500); box-shadow: 0 0 0 3px var(--color-focus-ring); }
+
+/* ---- Eyebrow ---- */
+.eyebrow { font-weight: 800; font-size: 13px; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--color-brand); margin: 0 0 14px; }
+
+/* ---- Badge ---- */
+.badge { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: var(--radius-pill); background: var(--terracotta-100); color: var(--terracotta-800); }
+.badge .ic { width: 15px; height: 15px; }
+
+/* ---- Photo placeholder (no invented imagery) ---- */
+.photo { position: relative; background:
+  radial-gradient(120% 120% at 70% 10%, var(--paper-warm), var(--paper-deep));
+  border-radius: var(--radius-lg); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.photo .ph-mark { width: 38%; max-width: 150px; opacity: 0.22; }
+.photo .ph-note { position: absolute; bottom: 12px; left: 14px; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-500); background: rgba(255,255,255,.7); padding: 4px 9px; border-radius: var(--radius-pill); backdrop-filter: blur(2px); }
+
+/* ---- Card ---- */
+.card { background: var(--white); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+
+/* lucide default sizing */
+.lucide, [data-lucide] svg { stroke-width: 2; }
+.ico { display: inline-flex; }
+
+/* ---- Responsive (tablet) ---- */
+@media (max-width: 980px) and (min-width: 761px) {
+  .cards-4 { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ---- Responsive (mobile) ---- */
+@media (max-width: 760px) {
+  .wrap { padding: 0 18px; }
+  .hero-grid, .split, .footer-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+  .cards-3, .cards-2, .cards-4 { grid-template-columns: 1fr !important; }
+  .hero-sec { padding: 32px 0 44px !important; }
+  .hero-h1 { font-size: 34px !important; }
+  .hero-trust { flex-wrap: wrap; gap: 12px 18px !important; margin-top: 26px !important; }
+  .hero-float { left: 12px !important; right: 12px !important; bottom: 14px !important; }
+  .main-nav, .header-phone { display: none !important; }
+  .cta-band { flex-direction: column !important; align-items: flex-start !important; padding: 34px !important; }
+  .footer-bottom { flex-direction: column !important; gap: 12px; }
+}
+

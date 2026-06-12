@@ -1,0 +1,224 @@
+/* ============================================================
+   RECAST PROPERTIES — Design Foundations
+   Colors, Type, and Semantic Tokens
+   Brand mark color sampled from logo: #EA9B60 (terracotta)
+   ============================================================ */
+
+/* ---------- Fonts (Google Fonts substitutes — see README) ----------
+   Display / wordmark : Poppins  (closest match to the logo lettering)
+   Body / UI text     : Mulish
+------------------------------------------------------------------- */
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 400;
+  font-display: swap; src: url("fonts/poppins-400.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 500;
+  font-display: swap; src: url("fonts/poppins-500.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 600;
+  font-display: swap; src: url("fonts/poppins-600.woff2") format("woff2"); }
+@font-face { font-family: "Poppins"; font-style: normal; font-weight: 700;
+  font-display: swap; src: url("fonts/poppins-700.woff2") format("woff2"); }
+
+@font-face { font-family: "Mulish"; font-style: normal; font-weight: 400;
+  font-display: swap; src: url("fonts/mulish-400.woff2") format("woff2"); }
+@font-face { font-family: "Mulish"; font-style: normal; font-weight: 500;
+  font-display: swap; src: url("fonts/mulish-500.woff2") format("woff2"); }
+@font-face { font-family: "Mulish"; font-style: normal; font-weight: 600;
+  font-display: swap; src: url("fonts/mulish-600.woff2") format("woff2"); }
+@font-face { font-family: "Mulish"; font-style: normal; font-weight: 700;
+  font-display: swap; src: url("fonts/mulish-700.woff2") format("woff2"); }
+@font-face { font-family: "Mulish"; font-style: normal; font-weight: 800;
+  font-display: swap; src: url("fonts/mulish-800.woff2") format("woff2"); }
+
+@font-face { font-family: "Roboto Mono"; font-style: normal; font-weight: 400;
+  font-display: swap; src: url("fonts/roboto-mono-400.woff2") format("woff2"); }
+@font-face { font-family: "Roboto Mono"; font-style: normal; font-weight: 500;
+  font-display: swap; src: url("fonts/roboto-mono-500.woff2") format("woff2"); }
+
+:root {
+  /* =========================================================
+     1. CORE PALETTE
+     ========================================================= */
+
+  /* Brand terracotta — sampled #EA9B60 sits at 500 */
+  --terracotta-50:  #FDF6EF;
+  --terracotta-100: #FBEAD9;
+  --terracotta-200: #F6D3B4;
+  --terracotta-300: #F1BB8D;
+  --terracotta-400: #EEA973;
+  --terracotta-500: #EA9B60;   /* BRAND PRIMARY */
+  --terracotta-600: #DC8244;   /* hover / deeper */
+  --terracotta-700: #B96730;   /* press / on-light accents */
+  --terracotta-800: #8C4D24;
+  --terracotta-900: #5E3416;
+
+  /* Warm neutral "ink" ramp (text + surfaces) */
+  --ink-900: #18191C;   /* near-black, primary text & logo ink */
+  --ink-800: #26282D;
+  --ink-700: #3A3D44;
+  --ink-600: #53575F;
+  --ink-500: #71757E;
+  --ink-400: #9498A1;
+  --ink-300: #C0C3CB;
+  --ink-200: #E1E4E9;
+  --ink-100: #EFF1F4;
+  --ink-50:  #F6F7F9;
+  --white:   #FFFFFF;
+
+  /* Warm "paper" surfaces — the brand's signature off-white */
+  --paper:       #FBF8F4;   /* default page background */
+  --paper-deep:  #F3ECE3;   /* sunk panel / alt section */
+  --paper-warm:  #FAEFE3;   /* tinted terracotta wash */
+
+  /* Semantic status (harmonised, warm) */
+  --success-50:  #ECF6F0;  --success-500: #3E9B6B;  --success-700: #2C6E4C;
+  --warning-50:  #FCF3E2;  --warning-500: #E0A431;  --warning-700: #9C6E15;
+  --error-50:    #FBEDEA;  --error-500:   #D1503F;  --error-700:   #9B3527;
+  --info-50:     #EAF1F8;  --info-500:    #3E7CB1;  --info-700:    #2A567C;
+
+  /* =========================================================
+     2. SEMANTIC COLOR ROLES
+     ========================================================= */
+  --color-bg:            var(--paper);
+  --color-bg-elevated:   var(--white);
+  --color-bg-sunken:     var(--paper-deep);
+  --color-bg-inverse:    var(--ink-900);
+
+  --color-fg:            var(--ink-900);   /* fg1 — primary text */
+  --color-fg-muted:      var(--ink-600);   /* fg2 — secondary text */
+  --color-fg-subtle:     var(--ink-400);   /* fg3 — tertiary / captions */
+  --color-fg-on-brand:   var(--white);     /* text on terracotta */
+  --color-fg-on-inverse: var(--paper);     /* text on ink surfaces */
+
+  --color-brand:         var(--terracotta-500);
+  --color-brand-hover:   var(--terracotta-600);
+  --color-brand-press:   var(--terracotta-700);
+  --color-brand-subtle:  var(--terracotta-100);
+
+  --color-border:        var(--ink-200);   /* default hairline */
+  --color-border-strong: var(--ink-300);
+  --color-border-brand:  var(--terracotta-300);
+  --color-divider:       var(--ink-100);
+
+  --color-focus-ring:    rgba(220, 130, 68, 0.45);
+
+  /* =========================================================
+     3. TYPOGRAPHY — families, weights, leading
+     ========================================================= */
+  --font-display: "Poppins", "Segoe UI", system-ui, sans-serif;
+  --font-sans:    "Mulish", "Segoe UI", system-ui, sans-serif;
+  --font-mono:    "SFMono-Regular", "Roboto Mono", ui-monospace, Menlo, monospace;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-extra:    800;
+
+  --leading-tight:   1.1;
+  --leading-snug:    1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  --tracking-tight:  -0.02em;
+  --tracking-snug:   -0.01em;
+  --tracking-normal: 0em;
+  --tracking-wide:   0.04em;
+  --tracking-caps:   0.08em;   /* eyebrows / overlines */
+
+  /* Type scale (1.250 major-third-ish, tuned) */
+  --text-display: 4.5rem;   /* 72 */
+  --text-h1:      3rem;     /* 48 */
+  --text-h2:      2.25rem;  /* 36 */
+  --text-h3:      1.75rem;  /* 28 */
+  --text-h4:      1.375rem; /* 22 */
+  --text-h5:      1.125rem; /* 18 */
+  --text-lg:      1.125rem; /* 18 */
+  --text-base:    1rem;     /* 16 */
+  --text-sm:      0.875rem; /* 14 */
+  --text-xs:      0.75rem;  /* 12 */
+
+  /* =========================================================
+     4. SPACING, RADII, SHADOWS, MOTION
+     ========================================================= */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 24px;  --space-6: 32px;  --space-7: 48px;  --space-8: 64px;
+  --space-9: 96px;  --space-10: 128px;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* Soft, warm-tinted elevation (shadows carry a hint of ink, never pure black) */
+  --shadow-xs: 0 1px 2px rgba(24, 25, 28, 0.06);
+  --shadow-sm: 0 2px 6px rgba(24, 25, 28, 0.07);
+  --shadow-md: 0 8px 20px rgba(24, 25, 28, 0.09);
+  --shadow-lg: 0 18px 44px rgba(24, 25, 28, 0.12);
+  --shadow-brand: 0 10px 26px rgba(220, 130, 68, 0.28);
+
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1); /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* @kind other */
+  --dur-fast: 130ms; /* @kind other */
+  --dur: 220ms; /* @kind other */
+  --dur-slow: 380ms; /* @kind other */
+}
+
+/* ============================================================
+   5. SEMANTIC ELEMENT DEFAULTS
+   Apply these classes (or copy the rules) for consistent type.
+   ============================================================ */
+.rc-display {
+  font-family: var(--font-display); font-weight: var(--weight-bold);
+  font-size: var(--text-display); line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight); color: var(--color-fg);
+}
+.rc-h1 {
+  font-family: var(--font-display); font-weight: var(--weight-bold);
+  font-size: var(--text-h1); line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight); color: var(--color-fg);
+}
+.rc-h2 {
+  font-family: var(--font-display); font-weight: var(--weight-semibold);
+  font-size: var(--text-h2); line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug); color: var(--color-fg);
+}
+.rc-h3 {
+  font-family: var(--font-display); font-weight: var(--weight-semibold);
+  font-size: var(--text-h3); line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug); color: var(--color-fg);
+}
+.rc-h4 {
+  font-family: var(--font-display); font-weight: var(--weight-semibold);
+  font-size: var(--text-h4); line-height: var(--leading-snug); color: var(--color-fg);
+}
+.rc-h5 {
+  font-family: var(--font-display); font-weight: var(--weight-medium);
+  font-size: var(--text-h5); line-height: var(--leading-normal); color: var(--color-fg);
+}
+.rc-eyebrow {
+  font-family: var(--font-sans); font-weight: var(--weight-bold);
+  font-size: var(--text-xs); line-height: 1; letter-spacing: var(--tracking-caps);
+  text-transform: uppercase; color: var(--color-brand);
+}
+.rc-lead {
+  font-family: var(--font-sans); font-weight: var(--weight-regular);
+  font-size: var(--text-lg); line-height: var(--leading-relaxed); color: var(--color-fg-muted);
+}
+.rc-body {
+  font-family: var(--font-sans); font-weight: var(--weight-regular);
+  font-size: var(--text-base); line-height: var(--leading-relaxed); color: var(--color-fg);
+}
+.rc-small {
+  font-family: var(--font-sans); font-weight: var(--weight-medium);
+  font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--color-fg-muted);
+}
+.rc-caption {
+  font-family: var(--font-sans); font-weight: var(--weight-semibold);
+  font-size: var(--text-xs); line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-wide); color: var(--color-fg-subtle);
+}
+.rc-mono {
+  font-family: var(--font-mono); font-weight: var(--weight-regular);
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--color-fg);
+}

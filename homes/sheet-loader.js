@@ -1,0 +1,145 @@
+/* ============================================================
+   Recast Properties — Google Sheet loader
+   Fetches the published-CSV sheet (if RECAST_SHEET_CSV_URL is
+   set in data.js), parses it, and maps rows → listing objects.
+   Falls back to RECAST_SAMPLE_LISTINGS on any error or if blank.
+   No build step, no API key — uses Google's "Publish to web → CSV".
+   ============================================================ */
+(function () {
+  // --- RFC-4180-ish CSV parser (handles quotes, commas, newlines) ---
+  function parseCSV(text) {
+    const rows = [];
+    let row = [], field = "", i = 0, inQ = false;
+    text = text.replace(/^\uFEFF/, ""); // strip BOM
+    while (i < text.length) {
+      const c = text[i];
+      if (inQ) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          inQ = false; i++; continue;
+        }
+        field += c; i++; continue;
+      }
+      if (c === '"') { inQ = true; i++; continue; }
+      if (c === ",") { row.push(field); field = ""; i++; continue; }
+      if (c === "\r") { i++; continue; }
+      if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+      field += c; i++;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  const num = v => {
+    const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? 0 : n;
+  };
+  const list = v => String(v == null ? "" : v).split("|").map(s => s.trim()).filter(Boolean);
+  const slug = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  // accept a few header spellings → canonical key
+  const ALIAS = {
+    id: "id", status: "status", price: "price",
+    address: "address", street: "address",
+    city: "city", state: "state", zip: "zip", zipcode: "zip",
+    beds: "beds", bedrooms: "beds", baths: "baths", bathrooms: "baths",
+    sqft: "sqft", squarefeet: "sqft", lot: "lot", lotsize: "lot",
+    year: "year", yearbuilt: "year", type: "type", propertytype: "type",
+    tagline: "tagline", description: "description", desc: "description",
+    highlights: "highlights", features: "highlights",
+    mlsid: "mlsId", mls: "mlsId", photos: "photos", photourls: "photos"
+  };
+
+  function rowsToListings(rows) {
+    if (!rows.length) return [];
+    const headers = rows[0].map(h => ALIAS[h.trim().toLowerCase().replace(/[\s_]+/g, "")] || h.trim().toLowerCase());
+    const out = [];
+    for (let r = 1; r < rows.length; r++) {
+      const cells = rows[r];
+      if (!cells || cells.every(c => !String(c).trim())) continue; // skip blank rows
+      const o = {};
+      headers.forEach((h, idx) => { o[h] = cells[idx] != null ? cells[idx].trim() : ""; });
+      if (!o.address && !o.id) continue;
+      out.push({
+        id: o.id || slug((o.city || "") + "-" + (o.address || ("listing-" + r))),
+        status: (o.status || "available").toLowerCase(),
+        price: num(o.price),
+        address: o.address || "",
+        city: o.city || "", state: o.state || "TX", zip: o.zip || "",
+        beds: num(o.beds), baths: num(o.baths), sqft: num(o.sqft),
+        lot: o.lot || "—", year: o.year ? num(o.year) : "—",
+        type: o.type || "Single-family",
+        tagline: o.tagline || "",
+        description: o.description || "",
+        highlights: list(o.highlights),
+        mlsId: o.mlsId || "",
+        photos: /https?:\/\/|\|/.test(o.photos) ? list(o.photos) : [],
+        photoFolder: (/https?:\/\/|\|/.test(o.photos) ? "" : (o.photos || "")).trim()
+      });
+    }
+    return out;
+  }
+
+  async function loadListings() {
+    const url = (window.RECAST_SHEET_CSV_URL || "").trim();
+    const fallback = window.RECAST_SAMPLE_LISTINGS || [];
+    if (!url) return fallback;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const parsed = rowsToListings(parseCSV(await res.text()));
+      if (!parsed.length) throw new Error("no rows parsed");
+      window.RECAST_LISTINGS = parsed;
+      return parsed;
+    } catch (e) {
+      console.warn("[Recast] Google Sheet load failed — using built-in sample data.", e.message);
+      return fallback;
+    }
+  }
+
+  // --- Photo helpers (folder-based: photos/<folder>/1.jpg, 2.jpg, ...) ---
+  function photoBase() { return (window.RECAST_PHOTO_BASE || "../photos/"); }
+  function heroUrl(p) {
+    if (p.photos && p.photos.length) return p.photos[0];
+    if (p.photoFolder) return photoBase() + p.photoFolder + "/1.jpg";
+    return "";
+  }
+  // Direct URL for the i-th photo (0-indexed) without probing.
+  function urlAt(p, i) {
+    if (p.photos && p.photos.length) return p.photos[i] || "";
+    if (p.photoFolder) return photoBase() + p.photoFolder + "/" + (i + 1) + ".jpg";
+    return "";
+  }
+  // Probe contiguously-numbered images (1.jpg, 2.jpg, …) until one is missing.
+  function probeFolder(p, done) {
+    if (p.photos && p.photos.length) { done(p.photos.slice()); return; }
+    if (!p.photoFolder) { done([]); return; }
+    const base = photoBase() + p.photoFolder + "/";
+    const found = [];
+    (function tryNext(n) {
+      if (n > 60) { done(found); return; }
+      const img = new Image();
+      img.onload = function () { found.push(base + n + ".jpg"); tryNext(n + 1); };
+      img.onerror = function () { done(found); };
+      img.src = base + n + ".jpg";
+    })(1);
+  }
+
+  // Count contiguously-numbered images with lightweight HEAD requests.
+  function countFolder(p, done) {
+    if (p.photos && p.photos.length) { done(p.photos.length); return; }
+    if (!p.photoFolder) { done(0); return; }
+    const base = photoBase() + p.photoFolder + "/";
+    let n = 0;
+    (function tryNext(i) {
+      if (i > 60) { done(n); return; }
+      fetch(base + i + ".jpg", { method: "HEAD" })
+        .then(function (r) { if (r.ok) { n = i; tryNext(i + 1); } else { done(n); } })
+        .catch(function () { done(n); });
+    })(1);
+  }
+
+  window.RecastListings = { parseCSV, rowsToListings, loadListings };
+  window.RecastPhotos = { heroUrl, urlAt, probeFolder, countFolder };
+  window.loadListings = loadListings;
+})();

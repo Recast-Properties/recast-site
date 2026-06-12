@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!-- @dsCard group="UI Kit — Listings" name="Listings — portal landing" subtitle="Homes-for-sale grid w/ status filter + sort" viewport="1280x760" -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Available Properties — Recast Properties</title>
+<link rel="icon" type="image/png" sizes="192x192" href="../assets/favicon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="../assets/favicon-512.png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="../kit.css?v=14">
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  .nav-link { transition: color var(--dur) var(--ease-out); }
+  .nav-link:hover { color: var(--color-brand-press); }
+  .prop-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  @media (max-width: 980px) { .prop-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+  @media (max-width: 680px) {
+    .prop-grid { grid-template-columns: 1fr !important; }
+    .main-nav { display: none !important; }
+    .header-phone-label { display: none !important; }
+    .cta-band { flex-direction: column !important; align-items: flex-start !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="data.js?v=5"></script>
+<script src="sheet-loader.js?v=6"></script>
+<script type="text/babel" src="listing-components.jsx?v=13"></script>
+<script type="text/babel" src="landing.jsx?v=7"></script>
+<script type="text/babel">
+  function App({ properties }) {
+    React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+    return (
+      <React.Fragment>
+        <ListingHeader />
+        <main>
+          <ListingHero />
+          <ListingGrid properties={properties} />
+          <ListingCTA />
+        </main>
+        <ListingFooter />
+      </React.Fragment>
+    );
+  }
+  (async function () {
+    const properties = await window.loadListings();
+    ReactDOM.createRoot(document.getElementById("root")).render(<App properties={properties} />);
+  })();
+</script>
+</body>
+</html>

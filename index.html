@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- @dsCard group="UI Kit — Website" name="Website — marketing site" subtitle="Interactive cash-offer site (React) — hero, steps, offer modal" viewport="1280x760" -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recast Properties | We Buy Houses and Land in Ellis County &amp; Southern DFW</title>
+<meta name="description" content="We buy houses and land for cash across Ellis County and the southern Dallas-Fort Worth area. Any condition, on your timeline. No agents, no fees, no repairs.">
+<meta name="robots" content="max-snippet:-1, max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Recast Properties LLC">
+<meta property="og:title" content="Recast Properties | We Buy Houses & Land for Cash">
+<meta property="og:description" content="A faster, easier way to sell. We buy houses and land for cash in any condition across Ellis County and Southern DFW. No agents, no fees, no repairs.">
+<meta property="og:url" content="https://www.recast-properties.com">
+<meta property="og:image" content="https://www.recast-properties.com/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Recast Properties | We Buy Houses & Land for Cash">
+<meta name="twitter:description" content="A faster, easier way to sell. We buy houses and land for cash in any condition across Ellis County and Southern DFW.">
+<meta name="twitter:image" content="https://www.recast-properties.com/assets/og-image.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="assets/favicon-512.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="stylesheet" href="colors_and_type.css">
+<link rel="stylesheet" href="kit.css?v=44">
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="image-slot.js"></script>
+<script src="lead-config.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  .nav-link { transition: color var(--dur) var(--ease-out); }
+  .nav-link:hover { color: var(--color-brand-press); }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Recast Properties LLC",
+  "url": "https://www.recast-properties.com",
+  "logo": "https://www.recast-properties.com/assets/favicon-512.png",
+  "image": "https://www.recast-properties.com/assets/favicon-512.png",
+  "description": "Recast Properties buys houses and land for cash in any condition across Ellis County and Southern DFW.",
+  "telephone": "+1-945-245-8458",
+  "email": "info@recast-properties.com",
+  "areaServed": "Ellis County and Southern Dallas-Fort Worth, TX",
+  "address": {
+    "@type": "PostalAddress",
+    "addressLocality": "Waxahachie",
+    "addressRegion": "TX",
+    "addressCountry": "US"
+  }
+}
+</script>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Netlify Forms detection (hidden). The React modal posts to this form name. -->
+<form name="seller-offer" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="text" name="name" />
+  <input type="tel" name="phone" />
+  <input type="email" name="email" />
+  <input type="text" name="property-address" />
+  <input type="text" name="owner-relationship" />
+  <input type="text" name="reason" />
+  <input type="text" name="timeline" />
+  <input type="text" name="mortgage-balance" />
+  <input type="text" name="other-liens" />
+  <input type="text" name="preferred-call" />
+  <input type="text" name="bot-field" />
+</form>
+
+
+<script type="text/babel" src="components.jsx?v=45"></script>
+<script type="text/babel" src="sections.jsx?v=45"></script>
+<script type="text/babel" src="OfferModal.jsx?v=45"></script>
+<script type="text/babel">
+  function App() {
+    const [offerOpen, setOfferOpen] = React.useState(false);
+    const openOffer = () => setOfferOpen(true);
+
+    React.useEffect(() => {
+      if (window.lucide) window.lucide.createIcons();
+    });
+
+    return (
+      <React.Fragment>
+        <Header onOffer={openOffer} />
+        <main>
+          <Hero onOffer={openOffer} />
+          <TrustStrip />
+          <HowItWorks onOffer={openOffer} />
+          <Benefits />
+          <FAQ />
+          <ServiceArea />
+          <FinalCTA onOffer={openOffer} />
+        </main>
+        <Footer onOffer={openOffer} />
+        <OfferModal open={offerOpen} onClose={() => setOfferOpen(false)} />
+      </React.Fragment>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

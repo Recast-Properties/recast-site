@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- @dsCard group="UI Kit — Listings" name="Listings — property detail" subtitle="Per-property page: gallery, facts, inquiry form" viewport="1280x760" -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property — Recast Properties</title>
+<link rel="icon" type="image/png" sizes="192x192" href="../assets/favicon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="../assets/favicon-512.png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="../kit.css?v=14">
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  .nav-link { transition: color var(--dur) var(--ease-out); }
+  .nav-link:hover { color: var(--color-brand-press); }
+  .agent-pill:hover { background: var(--terracotta-600) !important; transform: translateY(-1px); }
+  @media (max-width: 860px) {
+    .gallery-spacer { display: none !important; }
+    .gallery-gap { height: 24px !important; }
+    .detail-cols { display: flex !important; flex-direction: column !important; gap: 20px !important; }
+    .inquiry-card { order: -1; position: static !important; width: 100% !important; }
+    .gallery-hint { display: inline-flex !important; }
+    .gallery { grid-template-columns: 1fr !important; height: auto !important; }
+    .gallery > div:not(.gallery-main) { display: none !important; }
+    .gallery-main { aspect-ratio: 3 / 2 !important; height: auto !important; }
+    .main-nav { display: none !important; }
+    .header-phone-label { display: none !important; }
+  }
+  /* Gallery modal — switch to stacked, full-bleed layout on phones */
+  @media (max-width: 760px) {
+    .gallery-modal-panel { width: 100% !important; box-shadow: none !important; }
+    .gallery-modal-body { display: block !important; padding: 0 !important; overflow-y: auto !important; }
+    .gallery-info { display: none !important; }
+    .gallery-bar-status { display: block !important; }
+    .gallery-mobile-bar { display: flex !important; }
+    .gallery-scroll { overflow: visible !important; padding: 0 0 8px !important; gap: 2px !important; }
+    .gallery-scroll img { border-radius: 0 !important; }
+    .gallery-modal-bar { padding: 14px 18px !important; }
+  }
+  /* Phones: tighten the photo-to-price gap the way it should read on a small screen */
+  @media (max-width: 520px) {
+    .gallery-gap { height: 16px !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Netlify Forms detection (hidden). The React inquiry form posts to this form name. -->
+<form name="property-inquiry" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="text" name="property" />
+  <input type="text" name="mls-id" />
+  <input type="text" name="name" />
+  <input type="tel" name="phone" />
+  <textarea name="message"></textarea>
+  <input type="text" name="bot-field" />
+</form>
+
+<script src="data.js?v=5"></script>
+<script src="sheet-loader.js?v=6"></script>
+<script src="../lead-config.js"></script>
+<script type="text/babel" src="listing-components.jsx?v=13"></script>
+<script type="text/babel" src="detail.jsx?v=22"></script>
+<script type="text/babel">
+  function App({ properties }) {
+    React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+    const id = new URLSearchParams(location.search).get("id");
+    const p = properties.find(x => x.id === id) || properties[0];
+    return (
+      <React.Fragment>
+        <ListingHeader />
+        <PropertyDetail p={p} />
+        <ListingFooter />
+      </React.Fragment>
+    );
+  }
+  (async function () {
+    const properties = await window.loadListings();
+    ReactDOM.createRoot(document.getElementById("root")).render(<App properties={properties} />);
+  })();
+</script>
+</body>
+</html>
