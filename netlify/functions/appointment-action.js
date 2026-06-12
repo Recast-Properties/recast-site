@@ -1928,3 +1928,13 @@ exports.handler = async function handler(event) {
     });
   }
 };
+
+// Test-only exports. Netlify uses only exports.handler above.
+// These do not change runtime behavior.
+exports._internals = {
+  parseRequestedWindow,
+  parseSelectedStartTime,
+  findRequestedDate,
+  normalizeSpokenTimeWords,
+  inferBusinessHour
+};
