@@ -5,94 +5,30 @@ const MAX_RETURNED_SLOTS = 3;
 const BUSINESS_START_HOUR = 9;
 const BUSINESS_END_HOUR = 18;
 
+// assistantControl is SILENT machine data for the assistant — never spoken.
+// It deliberately contains no human-readable prose: the only speakable field in
+// a response is messageForAssistant. (Earlier, speakable `instruction` strings
+// here were being read aloud by the voice model — that is the narration bug.)
 function buildAssistantControl(status) {
   const controls = {
-    needs_more_info: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "collect_more_information",
-      instruction:
-        "Ask the caller for the missing information requested in messageForAssistant. Do not confirm an appointment outcome."
-    },
-    needs_slot_selection: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "offer_available_slots",
-      instruction:
-        "Offer the returned slot options to the caller. If the caller accepts one, call appointment_action again with action=book and the exact selected start_time as requestedStartTime. Do not say the callback is scheduled yet."
-    },
-    conflict: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "ask_for_new_callback_window",
-      instruction:
-        "Tell the caller that window is not available and ask for another one-hour callback window. Do not confirm an appointment outcome."
-    },
-    possible_duplicate: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "confirm_existing_callback_before_duplicate_booking",
-      instruction:
-        "Tell the caller there may already be a future callback. Do not create another callback or confirm success unless the caller clearly confirms what they want to do next."
-    },
-    single_match_found: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "confirm_matched_appointment",
-      instruction:
-        "Use messageForAssistant to ask whether this is the appointment the caller means. If the caller confirms a reschedule, call appointment_action again with action=reschedule, appointmentId, nylasEventId if available, and the caller's requestedCallbackTime in natural language. Do not generate ISO dates. Use requestedStartTime only if it was copied from a backend-returned slot. If the caller confirms a cancel, call appointment_action again with action=cancel and appointmentId. Do not say the appointment was moved or cancelled yet."
-    },
-    multiple_matches_found: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "ask_caller_to_choose_appointment",
-      instruction:
-        "Ask which matched appointment the caller means. Do not change or confirm any appointment until one appointment is clearly selected."
-    },
-    not_found: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "collect_more_lookup_information",
-      instruction:
-        "Ask for more identifying information such as property address, callback number, or original appointment time. Do not confirm an appointment outcome."
-    },
-    booked: {
-      mayConfirmSuccess: true,
-      successState: true,
-      nextStep: "confirm_booking",
-      instruction:
-        "The backend created the calendar event. You may confirm the callback is scheduled using messageForAssistant."
-    },
-    rescheduled: {
-      mayConfirmSuccess: true,
-      successState: true,
-      nextStep: "confirm_reschedule",
-      instruction:
-        "The backend moved the calendar event. You may confirm the callback has been rescheduled using messageForAssistant."
-    },
-    cancelled: {
-      mayConfirmSuccess: true,
-      successState: true,
-      nextStep: "confirm_cancel",
-      instruction:
-        "The backend cancelled the callback. You may confirm the callback has been cancelled using messageForAssistant."
-    },
-    error: {
-      mayConfirmSuccess: false,
-      successState: false,
-      nextStep: "fallback_collect_info_for_team",
-      instruction:
-        "Tell the caller there was trouble checking the appointment system. Collect the request for the team. Do not confirm an appointment outcome."
-    }
+    needs_more_info: { mayConfirmSuccess: false, successState: false, nextStep: "collect_more_information" },
+    needs_slot_selection: { mayConfirmSuccess: false, successState: false, nextStep: "offer_available_slots" },
+    conflict: { mayConfirmSuccess: false, successState: false, nextStep: "ask_for_new_callback_window" },
+    possible_duplicate: { mayConfirmSuccess: false, successState: false, nextStep: "confirm_existing_callback_before_duplicate_booking" },
+    single_match_found: { mayConfirmSuccess: false, successState: false, nextStep: "confirm_matched_appointment" },
+    multiple_matches_found: { mayConfirmSuccess: false, successState: false, nextStep: "ask_caller_to_choose_appointment" },
+    not_found: { mayConfirmSuccess: false, successState: false, nextStep: "collect_more_lookup_information" },
+    booked: { mayConfirmSuccess: true, successState: true, nextStep: "confirm_booking" },
+    rescheduled: { mayConfirmSuccess: true, successState: true, nextStep: "confirm_reschedule" },
+    cancelled: { mayConfirmSuccess: true, successState: true, nextStep: "confirm_cancel" },
+    error: { mayConfirmSuccess: false, successState: false, nextStep: "fallback_collect_info_for_team" }
   };
 
   return (
     controls[status] || {
       mayConfirmSuccess: false,
       successState: false,
-      nextStep: "unknown_backend_status",
-      instruction:
-        "Follow messageForAssistant if present, but do not confirm any appointment outcome unless the backend status is booked, rescheduled, or cancelled."
+      nextStep: "unknown_backend_status"
     }
   );
 }
@@ -644,6 +580,15 @@ async function callNylasFreeBusy(start, end) {
   };
 }
 
+// Build the caller-facing slot offer INTO messageForAssistant so the assistant
+// never has to read the raw `slots` array aloud (which the privacy rule forbids).
+function buildSlotOfferMessage(slots) {
+  if (slots.length === 1) {
+    return `I can do ${slots[0].spoken_time}. Does that work for you?`;
+  }
+  return `I can do ${slots[0].spoken_time}, or ${slots[1].spoken_time}. Which works better for you?`;
+}
+
 async function handleAvailability(payload) {
   const requestedCallbackTime = payload.requestedCallbackTime || "";
   const now = new Date();
@@ -703,7 +648,7 @@ async function handleAvailability(payload) {
 
   return jsonResponse(200, {
     status: "needs_slot_selection",
-    messageForAssistant: "I have a time that could work — let me run it by you.",
+    messageForAssistant: buildSlotOfferMessage(slots),
     requestedWindow: {
       start_time: formatCentralIso(requestedWindow.start),
       end_time: formatCentralIso(requestedWindow.end)
@@ -1839,7 +1784,7 @@ async function handleBook(payload) {
       nylasEventId: duplicateCheck.event.id || "",
       matchedAppointmentSummary: summarizeDuplicateEvent(duplicateCheck.event),
       messageForAssistant:
-        "It looks like there may already be a future callback scheduled. Confirm with the caller before creating another callback."
+        "It looks like there may already be a callback scheduled for you. Would you like to keep that existing one?"
     });
   }
 
@@ -1988,5 +1933,7 @@ exports._internals = {
   parseSelectedStartTime,
   findRequestedDate,
   normalizeSpokenTimeWords,
-  inferBusinessHour
+  inferBusinessHour,
+  buildAssistantControl,
+  buildSlotOfferMessage
 };
