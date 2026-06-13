@@ -255,8 +255,19 @@ function findRequestedDate(requestedText, now) {
     return addDaysCentral(now, 1);
   }
 
-  if (text.includes("today")) {
-    return addDaysCentral(now, 0);
+  const sameDayPhrases = [
+    "today",
+    "same day",
+    "this morning",
+    "this afternoon",
+    "this evening",
+    "tonight"
+  ];
+
+  for (const phrase of sameDayPhrases) {
+    if (text.includes(phrase)) {
+      return addDaysCentral(now, 0);
+    }
   }
 
   const weekdayNames = [
@@ -285,7 +296,9 @@ function findRequestedDate(requestedText, now) {
     }
   }
 
-  return nextBusinessDayCentral(now, 1);
+  // No recognized date signal. Do not invent a date; the caller
+  // must be asked which day they mean.
+  return null;
 }
 
 function parseHourValue(rawHour, meridiem) {
@@ -347,7 +360,12 @@ function inferBusinessHour(rawHour, meridiem, originalText) {
 
   const text = String(originalText || "").toLowerCase();
 
-  if (hour >= 1 && hour <= 6 && !text.includes("morning") && !text.includes("am")) {
+  // Word-boundary matches only. text.includes("am") wrongly matched
+  // the "am" inside words like "same", which broke PM inference for
+  // phrases like "four o'clock same day".
+  const saysMorning = /\bmorning\b/.test(text) || /\bam\b/.test(text);
+
+  if (hour >= 1 && hour <= 6 && !saysMorning) {
     return hour + 12;
   }
 
@@ -422,7 +440,25 @@ function parseRequestedWindow(requestedText, now) {
     return null;
   }
 
-  startHour = Math.max(startHour, BUSINESS_START_HOUR);
+  if (!dateParts) {
+    // A time was given but no recognizable day. Do not invent a
+    // date; the caller must be asked which day they mean.
+    console.warn("Rejecting requestedCallbackTime with no recognized date signal", {
+      requestedText
+    });
+    return null;
+  }
+
+  if (startHour < BUSINESS_START_HOUR || startHour >= BUSINESS_END_HOUR) {
+    // Outside business hours. Reject instead of silently moving the
+    // caller's stated time; the caller must be offered valid hours.
+    console.warn("Rejecting requestedCallbackTime outside business hours", {
+      requestedText,
+      startHour
+    });
+    return null;
+  }
+
   endHour = Math.min(endHour, BUSINESS_END_HOUR);
 
   if (endHour <= startHour && endMinute <= startMinute) {
@@ -615,6 +651,7 @@ async function handleAvailability(payload) {
   const requestedWindow = parseRequestedWindow(requestedCallbackTime, now);
 
   if (
+    !requestedWindow ||
     !requestedWindow.start ||
     !requestedWindow.end ||
     requestedWindow.end <= requestedWindow.start
@@ -622,7 +659,7 @@ async function handleAvailability(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Ask the caller for a specific one-hour callback window during Monday through Friday, 9:00 AM to 6:00 PM Central."
+        "Ask the caller for a specific day and a one-hour callback window during Monday through Friday, 9:00 AM to 6:00 PM Central."
     });
   }
 
