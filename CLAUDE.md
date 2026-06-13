@@ -87,7 +87,27 @@ as calendar events with metadata; there is no separate database.
 - `recordCallEvent` (the logging feed) is the only new piece that belongs in
   `appointment-action.js`. SMS send + summary email live in `call-completed.js`.
 
+## NEXT PRIORITY — booking reliability (ahead of items 2-4)
+Surfaced live 2026-06-13 while verifying item 1. Booking is broken in production and
+takes priority over the summary email. Observed on a real booking call:
+- `inboundCallerId: null` on every `appointment-action` request — the carrier caller-ID
+  is never captured, so the callback number is only ever the SPOKEN `callbackNumber`
+  (caller said `214-555-1234`). This is the "wrong number" symptom.
+- A single call fired 1x `availability` then 3x `book` for the same slot
+  (`2026-06-17T09:00:00-05:00`), and NO calendar event was created — with no
+  error/Nylas/conflict/status line logged. The assistant never got a clean "booked"
+  back and kept retrying. Root cause unknown; `appointment-action.js` logs the inbound
+  payload but NOT its own response, so the book outcome isn't visible in logs yet.
+- First diagnostic step next session: surface the `handleBook` response/Nylas outcome
+  (it returns via `jsonResponse` without logging) to see why a valid `requestedStartTime`
+  produced no event + 3 retries. Investigate before changing code.
+- Related: the `callId` join key (item-2 prereq) stays blocked until booking is healthy.
+  The Telnyx tool edit to inject `{{call_control_id}}` must go in the tool's request
+  BODY as a templated value, NOT as a model-filled parameter (a parameter edit broke
+  booking once already and was reverted).
+
 ## Deferred (separate tickets — NOT in current scope)
+- Item 1 is CLOSED (commit 962d681 on branch `call-completed-trigger`; proven live).
 - Live proof of the call-completed trigger: real test hangup + join-key verification.
 - Ed25519 hardening already covers auth; no x-api-key/URL-token path on call-completed.
 - The legacy Apps Script (`apps-script/Code.gs`) is FROZEN — website form only. Do not
