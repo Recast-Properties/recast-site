@@ -95,8 +95,31 @@ as calendar events with metadata; there is no separate database.
   `appointment-action.js`. SMS send + summary email live in `call-completed.js`.
 
 ## NEXT PRIORITY — booking reliability (ahead of items 2-4)
-Surfaced live 2026-06-13 while verifying item 1. Booking is broken in production and
-takes priority over the summary email. Observed on a real booking call:
+Chosen direction: C (most robust). Being done in phases on branch `booking-rework`.
+
+PHASE 1 — DONE, proven live 2026-06-13 (transcript verified). Two coordinated changes:
+- Backend: `assistantControl` now carries only silent machine flags (no speakable
+  `instruction` prose); `messageForAssistant` is the single speakable field and the
+  availability slot offer is baked into it. (commit e1d04e3)
+- Assistant prompt: dropped "Follow assistantControl.instruction"; "speak only
+  messageForAssistant"; added Call context block injecting `inboundCallerId`=
+  `{{telnyx_end_user_target}}` and `callId`=`{{call_control_id}}`.
+- Result on a real call: narration gone; `inboundCallerId`/`callId` now populated
+  (join key fixed for free); clean availability→book→booked. Model stays Kimi-K2.5.
+
+PHASE 2 — NOT STARTED: signed slot tokens + idempotency nonce (in calendar metadata)
++ `forceToken` for legit duplicates. Makes retries/edge cases unable to double-book or
+loop. Coordinated tool-param change (book takes `slotToken` instead of requestedStartTime).
+PHASE 3 — NOT STARTED: prompt tightening, date-parsing breadth, latency, wording polish.
+
+OPEN OBSERVATIONS from the Phase-1 success call (address in Phase 2/3):
+- Tool-call latency ~5.2-5.5s perceived (Nylas free/busy + paged duplicate scan +
+  create). Long silence on a voice call. Optimize (the 5-page duplicate scan is costly).
+- Same phone (503-201-5250) booked twice across test calls without `possible_duplicate`
+  firing — verify duplicate detection vs. just-cleaned-up test events. Phase 2 idempotency
+  covers same-call double-book; cross-call dedupe needs confirming.
+
+Original break (pre-Phase-1), observed on a real booking call:
 - `inboundCallerId: null` on every `appointment-action` request — the carrier caller-ID
   is never captured, so the callback number is only ever the SPOKEN `callbackNumber`
   (caller said `214-555-1234`). This is the "wrong number" symptom.
