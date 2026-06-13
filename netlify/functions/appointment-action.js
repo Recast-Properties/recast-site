@@ -659,7 +659,7 @@ async function handleAvailability(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Ask the caller for a specific day and a one-hour callback window during Monday through Friday, 9:00 AM to 6:00 PM Central."
+        "What day works best for you? We schedule callbacks nine in the morning to six in the evening Central time."
     });
   }
 
@@ -677,7 +677,7 @@ async function handleAvailability(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble checking the calendar right now. Let me collect the preferred callback time and have the team follow up.",
+        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message ok?",
       error: "nylas_free_busy_failed"
     });
   }
@@ -693,7 +693,7 @@ async function handleAvailability(payload) {
     return jsonResponse(200, {
       status: "conflict",
       messageForAssistant:
-        "That window is not showing as available. Ask the caller for another one-hour window during Monday through Friday, 9:00 AM to 6:00 PM Central.",
+        "That time isn’t open. What other one-hour window works for you, nine to six Central time?",
       requestedWindow: {
         start_time: formatCentralIso(requestedWindow.start),
         end_time: formatCentralIso(requestedWindow.end)
@@ -703,7 +703,7 @@ async function handleAvailability(payload) {
 
   return jsonResponse(200, {
     status: "needs_slot_selection",
-    messageForAssistant: "Offer these times to the caller.",
+    messageForAssistant: "I have a time that could work — let me run it by you.",
     requestedWindow: {
       start_time: formatCentralIso(requestedWindow.start),
       end_time: formatCentralIso(requestedWindow.end)
@@ -1076,7 +1076,7 @@ async function handleAppointmentLookup(payload, requestedAction) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble checking the calendar for the existing callback right now. Collect the caller’s request and have the team follow up.",
+        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message ok?",
       error: "nylas_appointment_lookup_failed"
     });
   }
@@ -1086,7 +1086,7 @@ async function handleAppointmentLookup(payload, requestedAction) {
       status: "not_found",
       checkedEvents: lookup.checkedEvents,
       messageForAssistant:
-        "I could not find a matching future callback. Ask the caller for the property address, callback number, or the original appointment time so the team can confirm it."
+        "I’m not finding that callback yet. Can you provide the property address, the callback number, or the time the original callback was set for?"
     });
   }
 
@@ -1116,7 +1116,7 @@ async function handleAppointmentLookup(payload, requestedAction) {
       matchedAppointmentSummary: match.summary
     })),
     messageForAssistant:
-      "I found more than one possible future callback. Ask the caller which appointment they mean before making any changes."
+      "I’m seeing more than one callback that could match. Which one did you mean?"
   });
 }
 
@@ -1293,7 +1293,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Confirm which existing callback the caller wants to move before rescheduling it."
+        "Which callback would you like to move?"
     });
   }
 
@@ -1301,7 +1301,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Ask the caller which available callback time they want to move the appointment to."
+        "What day and time would you like to move it to?"
     });
   }
 
@@ -1316,7 +1316,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble finding that existing callback on the calendar right now. Collect the caller’s request and have the team follow up.",
+        "I’m having trouble finding that existing callback on the calendar right now. Would you like to set up a new callback appointment?",
       error: "nylas_event_fetch_failed_before_reschedule"
     });
   }
@@ -1330,7 +1330,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(200, {
       status: "not_found",
       messageForAssistant:
-        "I could not confirm that appointment as a Recast seller callback. Ask the caller for the property address, callback number, or original appointment time so the team can follow up."
+        "I’ve got your request and our team will take it from here and confirm with you shortly."
     });
   }
 
@@ -1347,7 +1347,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble confirming the calendar right now. Let me collect the preferred callback time and have the team follow up.",
+        "I’ve made a note of your preferred time and our team will follow up with you shortly. Is a text message to this number ok?",
       error: "nylas_free_busy_failed_before_reschedule"
     });
   }
@@ -1383,7 +1383,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(200, {
       status: "conflict",
       messageForAssistant:
-        "That time is not showing as available. Ask the caller for another one-hour callback window."
+        "That time isn’t open. What other one-hour window works for you?"
     });
   }
 
@@ -1403,7 +1403,7 @@ async function handleConfirmedReschedule(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble moving that callback on the calendar. Collect the preferred time and have the team follow up.",
+        "I’ve got your new time and our team will follow up with you shortly. Is a text message to this number ok?",
       error: "nylas_event_update_failed_for_reschedule"
     });
   }
@@ -1503,7 +1503,7 @@ async function handleConfirmedCancel(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Confirm which existing callback the caller wants to cancel before cancelling it."
+        "Which callback would you like to cancel?"
     });
   }
 
@@ -1518,7 +1518,7 @@ async function handleConfirmedCancel(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble finding that existing callback on the calendar right now. Collect the caller’s request and have the team follow up.",
+        "I’ve got your cancellation request and have passed it on to the team.",
       error: "nylas_event_fetch_failed_before_cancel"
     });
   }
@@ -1532,7 +1532,7 @@ async function handleConfirmedCancel(payload) {
     return jsonResponse(200, {
       status: "not_found",
       messageForAssistant:
-        "I could not confirm that appointment as a Recast seller callback. Ask the caller for the property address, callback number, or original appointment time so the team can follow up."
+        "I’ve got your cancellation request and have passed it on to the team."
     });
   }
 
@@ -1545,7 +1545,7 @@ async function handleConfirmedCancel(payload) {
       nylasEventId: appointmentId,
       cancelledStartTime: cleanValue(metadata.cancelled_appointment_start || metadata.scheduled_callback_time),
       messageForAssistant:
-        "That callback is already marked as cancelled."
+        "That callback is already cancelled, so you’re all set."
     });
   }
 
@@ -1560,7 +1560,7 @@ async function handleConfirmedCancel(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble cancelling that callback on the calendar. Collect the caller’s request and have the team follow up.",
+        "I’ve got your cancellation request and have passed it on to the team.",
       error: "nylas_event_update_failed_for_cancel"
     });
   }
@@ -1603,7 +1603,7 @@ async function handleRescheduleAction(payload) {
       appointmentId,
       nylasEventId: appointmentId,
       messageForAssistant:
-        "Ask the caller for the new callback day and time. I need a clear future callback time before I can move the appointment."
+        "What day and time would you like to move your callback to?"
     });
   }
 
@@ -1776,7 +1776,7 @@ async function handleBook(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Ask the caller which available callback time they want to schedule."
+        "Which of those times would you like me to book?"
     });
   }
 
@@ -1812,7 +1812,7 @@ async function handleBook(payload) {
     return jsonResponse(200, {
       status: "conflict",
       messageForAssistant:
-        "That time is no longer showing as available. Ask the caller for another one-hour callback window."
+        "That time just got taken. What other one-hour window works for you?"
     });
   }
 
@@ -1827,7 +1827,7 @@ async function handleBook(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble checking for an existing callback right now. Let me collect the preferred callback time and have the team follow up.",
+        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message to this number ok?",
       error: "nylas_duplicate_lookup_failed"
     });
   }
@@ -1858,7 +1858,7 @@ async function handleBook(payload) {
     return jsonResponse(502, {
       status: "error",
       messageForAssistant:
-        "I’m having trouble putting that callback on the calendar. Let me collect the preferred time and have the team follow up.",
+        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message to this number ok?",
       error: "nylas_event_creation_failed"
     });
   }
@@ -1948,7 +1948,7 @@ exports.handler = async function handler(event) {
     return jsonResponse(400, {
       status: "error",
       messageForAssistant:
-        "The appointment action was missing or invalid. Ask the caller for the callback request again.",
+        "Sorry, I didn’t catch that. Could you tell me again what you’d like to do about your callback?",
       receivedAction: action || null
     });
   } catch (error) {
@@ -1960,7 +1960,7 @@ exports.handler = async function handler(event) {
     return jsonResponse(500, {
       status: "error",
       messageForAssistant:
-        "Something went wrong checking the appointment system. Let me collect the preferred callback time and have the team follow up.",
+        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message to this number ok?",
       error: error.message
     });
   }
