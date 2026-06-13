@@ -74,6 +74,13 @@ as calendar events with metadata; there is no separate database.
    `CALL_LOG_ENABLED` unset (OFF). The in-call `recordCallEvent` feed (emitted from
    `appointment-action.js` terminal branches) is still DEFERRED.
 2. Summary email. Reads the events for a `callId` from `call-completed.js`; once per call.
+   POLICY DECISION (not yet made): the trigger (`conversation_insight_result`) fires on
+   EVERY ended call, including partial ones — a caller who hangs up before booking still
+   produces a call-completed row whose Summary captures whatever was gathered (verified
+   live: a cut-off call logged "conversation was cut off…"). Decide whether the email
+   sends on every ended call (captures partial seller leads — likely what we want) or
+   only above some completeness bar. `appointment-action` only logs when a scheduling
+   tool actually fired, so partial calls have a call-completed row but no booking events.
 3. SMS dry-run. Gated stub: assemble and log the exact payload, never send.
 4. Live SMS. Only after A2P 10DLC clears.
 
