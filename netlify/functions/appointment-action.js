@@ -1925,32 +1925,47 @@ exports.handler = async function handler(event) {
 
     const action = payload.action;
 
+    let result;
     if (action === "availability") {
-      return await handleAvailability(payload);
+      result = await handleAvailability(payload);
+    } else if (action === "book") {
+      result = await handleBook(payload);
+    } else if (action === "reschedule") {
+      result = await handleRescheduleAction(payload);
+    } else if (action === "cancel") {
+      result = await handleCancelAction(payload);
+    } else if (action === "nylas_test") {
+      result = await handleNylasTest();
+    } else {
+      result = jsonResponse(400, {
+        status: "error",
+        messageForAssistant:
+          "Sorry, I didn’t catch that. Could you tell me again what you’d like to do about your callback?",
+        receivedAction: action || null
+      });
     }
 
-    if (action === "book") {
-      return await handleBook(payload);
+    // Outcome logging (diagnostic only — does NOT alter the response). The flow
+    // was previously invisible past the inbound payload, so we couldn't tell
+    // whether a book returned booked / conflict / possible_duplicate / error.
+    try {
+      const outcome = JSON.parse(result.body);
+      console.log("appointment_action outcome", {
+        action: action || null,
+        httpStatus: result.statusCode,
+        status: outcome.status || null,
+        error: outcome.error || null,
+        slotsOffered: Array.isArray(outcome.slots) ? outcome.slots.length : undefined,
+        appointmentId: outcome.appointmentId || undefined,
+        scheduledStartTime: outcome.scheduledStartTime || undefined,
+        matchedAppointmentSummary: outcome.matchedAppointmentSummary || undefined,
+        messageForAssistant: outcome.messageForAssistant || undefined
+      });
+    } catch (logError) {
+      console.log("appointment_action outcome log error (ignored):", logError.message);
     }
 
-    if (action === "reschedule") {
-      return await handleRescheduleAction(payload);
-    }
-
-    if (action === "cancel") {
-      return await handleCancelAction(payload);
-    }
-
-    if (action === "nylas_test") {
-      return await handleNylasTest();
-    }
-
-    return jsonResponse(400, {
-      status: "error",
-      messageForAssistant:
-        "Sorry, I didn’t catch that. Could you tell me again what you’d like to do about your callback?",
-      receivedAction: action || null
-    });
+    return result;
   } catch (error) {
     console.error("appointment_action error", {
       message: error.message,
