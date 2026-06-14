@@ -62,9 +62,9 @@ function Header({ onOffer }) {
           ))}
         </nav>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="tel:9452458458" className="header-phone" style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15 }}>
+          <a href="tel:4695487253" className="header-phone" style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15 }}>
             <Icon name="phone" className="ic" style={{ width: 16, height: 16, color: "var(--color-brand)" }} />
-            945.245.8458
+            469.548.7253
           </a>
           <Button kind="primary" onClick={onOffer}>Get My Offer</Button>
         </div>
@@ -94,8 +94,8 @@ function Footer({ onOffer }) {
           </div>
           <div>
             <h5 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, margin: "0 0 16px" }}>Get in touch</h5>
-            <a href="tel:9452458458" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
-              <Icon name="phone" className="ic" style={{ width: 15, height: 15 }} />945.245.8458</a>
+            <a href="tel:4695487253" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
+              <Icon name="phone" className="ic" style={{ width: 15, height: 15 }} />469.548.7253</a>
             <a href="mailto:info@recast-properties.com" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
               <Icon name="mail" className="ic" style={{ width: 15, height: 15 }} />info@recast-properties.com</a>
             <div style={{ marginTop: 14 }}><Button kind="primary" onClick={onOffer}>Get My Offer</Button></div>

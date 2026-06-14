@@ -17,7 +17,7 @@ function Hero({ onOffer }) {
           </p>
           <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
             <Button kind="primary" size="lg" icon="hand-coins" onClick={onOffer}>Get My Offer</Button>
-            <a href="tel:9452458458" className="btn btn-secondary btn-lg"><Icon name="phone" className="ic" />Call 945.245.8458</a>
+            <a href="tel:4695487253" className="btn btn-secondary btn-lg"><Icon name="phone" className="ic" />Call 469.548.7253</a>
           </div>
           <div className="hero-trust" style={{ display: "flex", gap: 26, marginTop: 30 }}>
             {[["clock", "Offer in 24–48 hrs"], ["calendar", "Close on your timeline"], ["shield-check", "No obligation"]].map(([ic, t]) => (

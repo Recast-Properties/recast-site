@@ -25,7 +25,7 @@ const CONFIG = {
   NOTIFY_EMAIL: 'paul@recast-properties.com',
   FROM_ALIAS: 'info@recast-properties.com',
   REPLY_TO: 'info@recast-properties.com',
-  CONTACT_PHONE: '945-245-8458',
+  CONTACT_PHONE: '469-548-7253',
   DEFAULT_TIMEZONE: 'America/Chicago'
 };
 

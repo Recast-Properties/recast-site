@@ -80,12 +80,12 @@ function OfferModal({ open, onClose }) {
           setSelectedStart(""); setData(d => ({ ...d, callTime: "" }));
           loadAvailability();
         } else {
-          setSubmitMsg("Something went wrong booking that time. Please try again, or call us at 945-245-8458.");
+          setSubmitMsg("Something went wrong booking that time. Please try again, or call us at 469-548-7253.");
         }
       })
       .catch(() => {
         setSubmitting(false);
-        setSubmitMsg("Couldn't reach our scheduler. Please try again, or call us at 945-245-8458.");
+        setSubmitMsg("Couldn't reach our scheduler. Please try again, or call us at 469-548-7253.");
       });
   };
 
@@ -199,12 +199,12 @@ function OfferModal({ open, onClose }) {
               )}
               {!avail.loading && avail.error && (
                 <p style={{ color: "var(--color-fg-muted)", fontSize: 14.5, padding: "16px 0" }}>
-                  We couldn't load times right now. Please call us at 945-245-8458 and we'll get you scheduled.
+                  We couldn't load times right now. Please call us at 469-548-7253 and we'll get you scheduled.
                 </p>
               )}
               {!avail.loading && !avail.error && days.length === 0 && (
                 <p style={{ color: "var(--color-fg-muted)", fontSize: 14.5, padding: "16px 0" }}>
-                  No open times in the next couple weeks. Please call us at 945-245-8458.
+                  No open times in the next couple weeks. Please call us at 469-548-7253.
                 </p>
               )}
 
