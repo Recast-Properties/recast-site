@@ -63,4 +63,16 @@ test("slot offer is built into the message (multiple slots offers first two)", (
   assert.ok(!msg.includes("11 in the morning")); // only first two offered aloud
 });
 
+test("spokenCentralTime reads as 'Day at H AM/PM' (no 'in the morning')", () => {
+  // 2026-06-15 11:00 Central = 16:00 UTC (CDT, -05:00).
+  const elevenAmMon = new Date("2026-06-15T16:00:00Z");
+  const spoken = _internals.spokenCentralTime(elevenAmMon);
+  assert.strictEqual(spoken, "Monday at 11 AM");
+  assert.ok(!/in the morning|in the afternoon/.test(spoken));
+
+  // 2026-06-15 14:30 Central = 19:30 UTC -> "Monday at 2:30 PM"
+  const twoThirtyPm = new Date("2026-06-15T19:30:00Z");
+  assert.strictEqual(_internals.spokenCentralTime(twoThirtyPm), "Monday at 2:30 PM");
+});
+
 console.log(`\n${passed} passed`);

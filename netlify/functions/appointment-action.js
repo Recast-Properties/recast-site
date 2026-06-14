@@ -484,17 +484,22 @@ function getCentralOffset(date) {
 }
 
 function spokenCentralTime(date) {
-  return new Intl.DateTimeFormat("en-US", {
+  // e.g. "Monday at 11 AM" / "Monday at 2:30 PM"
+  const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone: CENTRAL_TIME_ZONE,
-    weekday: "long",
+    weekday: "long"
+  }).format(date);
+
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: CENTRAL_TIME_ZONE,
     hour: "numeric",
     minute: "2-digit",
     hour12: true
   })
     .format(date)
-    .replace(":00", "")
-    .replace(" AM", " in the morning")
-    .replace(" PM", " in the afternoon");
+    .replace(":00", ""); // "11:00 AM" -> "11 AM"; "2:30 PM" stays
+
+  return `${weekday} at ${time}`;
 }
 
 function generateAvailableSlots(windowStart, windowEnd, busySlots) {
@@ -1721,7 +1726,7 @@ async function handleBook(payload) {
     return jsonResponse(200, {
       status: "needs_more_info",
       messageForAssistant:
-        "Which of those times would you like me to book?"
+        "What day and time works best for your callback?"
     });
   }
 
@@ -1818,7 +1823,7 @@ async function handleBook(payload) {
     scheduledEndTime: createdEvent.scheduledEndIso,
     calendarId: eventData.calendar_id || process.env.CALENDAR_ID || "primary",
     messageForAssistant:
-      `Your callback is scheduled for ${spokenCentralTime(selectedStart)} Central.`
+      `Perfect — someone from the team will call you ${spokenCentralTime(selectedStart)}.`
   });
 }
 
@@ -1935,5 +1940,6 @@ exports._internals = {
   normalizeSpokenTimeWords,
   inferBusinessHour,
   buildAssistantControl,
-  buildSlotOfferMessage
+  buildSlotOfferMessage,
+  spokenCentralTime
 };
