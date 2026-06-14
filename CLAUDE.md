@@ -125,8 +125,12 @@ PHASE 2 — DONE, verified live 2026-06-14 (second appointment created on calend
   the tool's Body Parameters. Always verify a new param actually saved on the tool.
 
 DEFERRED (revisit when booking is reprioritized):
-- Latency ~5-6s on tool calls (Nylas free/busy + 5-page duplicate scan + create); the
-  "let me check, one moment" filler currently masks it. Optimize the duplicate scan.
+- Latency (perceived ~5-6s on tool calls). Backend is only ~half (~2s): book now runs
+  the duplicate scan + free/busy CONCURRENTLY (commit 468939f) — saved ~0.6-1s. The
+  remaining ~3.5s is the Telnyx VOICE PIPELINE (STT + Kimi-K2.5 LLM + TTS), tunable only
+  Telnyx-side: try a lower-latency model than Kimi-K2.5 and/or TTS "start-speaking" settings.
+  Note: Nylas metadata_pair only indexes key1-key5, so we can't server-side-filter the
+  scan by recast_booking without writing those keys (deferred — modest extra gain).
 - Nitpick wording (user-noted, deferred): "Central" appears on reschedule line but not
   booked line; model drops "Booking it now"; model sends a junk `timestamp` (unused);
   AM/PM clarification inconsistent ("Thursday at four" not clarified, "Three" was).
