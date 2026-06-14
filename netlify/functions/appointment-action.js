@@ -2131,5 +2131,15 @@ exports._internals = {
   buildSlotOfferMessage,
   spokenCentralTime,
   classifyBooking,
-  isAffirmative
+  isAffirmative,
+  // Shared scheduling/Nylas helpers reused by web-booking.js (additive; pure/stable).
+  getCentralDateParts,
+  centralDateToUtcDate,
+  addDaysCentral,
+  weekdayIndexFromCentralDate,
+  formatCentralIso,
+  rangesOverlap,
+  extractBusySlots,
+  callNylasFreeBusy,
+  buildCalendarTitle
 };

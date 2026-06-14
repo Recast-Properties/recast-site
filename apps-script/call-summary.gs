@@ -45,6 +45,22 @@ const CALL_HEADERS = [
   'Raw Payload'
 ];
 
+const WEBSITE_TAB_NAME = 'Website Leads';
+const WEBSITE_HEADERS = [
+  'Timestamp',
+  'Name',
+  'Phone',
+  'Email',
+  'Property Address',
+  'Owner Relationship',
+  'Reason',
+  'Timeline',
+  'Mortgage Balance',
+  'Other Liens',
+  'Scheduled Callback',
+  'Raw Payload'
+];
+
 function doGet() {
   return jsonResponse_({ ok: true, message: 'Recast call-summary sink is live.' });
 }
@@ -73,6 +89,12 @@ function doPost(e) {
     }
 
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+
+    // Website intake (from web-booking.js) -> Website Leads tab + email.
+    if (data.type === 'website_lead') {
+      return handleWebsiteLead_(data, ss);
+    }
+
     const sheet = getOrCreateSheet_(ss, CONFIG.TAB_NAME, CALL_HEADERS);
 
     sheet.appendRow([
@@ -100,6 +122,61 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (err) {}
   }
+}
+
+function handleWebsiteLead_(data, ss) {
+  const sheet = getOrCreateSheet_(ss, WEBSITE_TAB_NAME, WEBSITE_HEADERS);
+  sheet.appendRow([
+    clean_(data.timestamp || nowStamp_(ss)),
+    clean_(data.name),
+    clean_(data.phone),
+    clean_(data.email),
+    clean_(data.propertyAddress),
+    clean_(data.ownerRelationship),
+    clean_(data.reason),
+    clean_(data.timeline),
+    clean_(data.mortgageBalance),
+    clean_(data.otherLiens),
+    clean_(data.scheduledCallback),
+    safeJson_(data)
+  ]);
+  sendWebsiteEmail_(data, ss);
+  return jsonResponse_({ ok: true, message: 'Website lead appended and emailed.' });
+}
+
+function sendWebsiteEmail_(data, ss) {
+  const subjectParts = ['Website lead'];
+  if (data.name) subjectParts.push(cleanForSubject_(data.name));
+  if (data.propertyAddress) subjectParts.push(cleanForSubject_(data.propertyAddress));
+  const subject = subjectParts.join(' | ');
+
+  const rows = [
+    ['Name', data.name],
+    ['Phone', data.phone],
+    ['Email', data.email],
+    ['Property address', data.propertyAddress],
+    ['Owner relationship', data.ownerRelationship],
+    ['Reason', data.reason],
+    ['Timeline', data.timeline],
+    ['Mortgage balance', data.mortgageBalance],
+    ['Other liens', data.otherLiens],
+    ['Scheduled callback', data.scheduledCallback],
+    ['Spreadsheet', '<a href="' + ss.getUrl() + '">Open Call Sheet</a>']
+  ];
+
+  const plain = rows
+    .map(function (r) { return r[0] + ': ' + clean_(String(r[1]).replace(/<[^>]+>/g, '')); })
+    .join('\n');
+
+  const options = {
+    htmlBody: buildHtmlTable_('Website lead', rows),
+    name: 'Recast Properties Intake',
+    replyTo: CONFIG.REPLY_TO
+  };
+  if (GmailApp.getAliases().indexOf(CONFIG.FROM_ALIAS) !== -1) {
+    options.from = CONFIG.FROM_ALIAS;
+  }
+  GmailApp.sendEmail(CONFIG.NOTIFY_EMAIL, subject, plain, options);
 }
 
 function sendSummaryEmail_(data, ss) {
