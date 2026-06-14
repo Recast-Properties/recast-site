@@ -1840,12 +1840,26 @@ async function updateNylasEventConsent(existingEvent, consent) {
   const startDate = getEventStartDate(existingEvent);
   const endDate = getEventEndDate(existingEvent);
 
+  const scheduledStartIso = startDate
+    ? formatCentralIso(startDate)
+    : cleanValue(existingMetadata.scheduled_callback_time);
+  const scheduledEndIso = endDate ? formatCentralIso(endDate) : "";
+
+  // Rebuild the human-readable description so its "SMS Consent" line reflects the
+  // recorded value (it was written at book time as not_asked, before we ask).
+  const mergedPayload = buildPayloadFromEventMetadata(
+    existingEvent,
+    { smsConsent: consent },
+    scheduledStartIso
+  );
+
   const url =
     `https://api.us.nylas.com/v3/grants/${encodeURIComponent(nylasGrantId)}/events/${encodeURIComponent(eventId)}` +
     `?calendar_id=${encodeURIComponent(calendarId)}`;
 
   const body = {
     title: cleanValue(existingEvent.title, "Seller Call"),
+    description: buildCalendarDescription(mergedPayload, scheduledStartIso, scheduledEndIso),
     busy: true,
     metadata: {
       ...existingMetadata,
