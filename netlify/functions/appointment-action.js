@@ -1823,7 +1823,7 @@ async function handleBook(payload) {
     scheduledEndTime: createdEvent.scheduledEndIso,
     calendarId: eventData.calendar_id || process.env.CALENDAR_ID || "primary",
     messageForAssistant:
-      `Perfect — someone from the team will call you ${spokenCentralTime(selectedStart)}.`
+      `Perfect — that time is available. Booking it now. Someone from the team will call you ${spokenCentralTime(selectedStart)}.`
   });
 }
 
