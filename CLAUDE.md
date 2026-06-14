@@ -73,14 +73,21 @@ as calendar events with metadata; there is no separate database.
    `appointment-action.js` untouched. Env live in Netlify: `TELNYX_PUBLIC_KEY` set,
    `CALL_LOG_ENABLED` unset (OFF). The in-call `recordCallEvent` feed (emitted from
    `appointment-action.js` terminal branches) is still DEFERRED.
-2. Summary email. Reads the events for a `callId` from `call-completed.js`; once per call.
-   POLICY DECISION (not yet made): the trigger (`conversation_insight_result`) fires on
-   EVERY ended call, including partial ones — a caller who hangs up before booking still
-   produces a call-completed row whose Summary captures whatever was gathered (verified
-   live: a cut-off call logged "conversation was cut off…"). Decide whether the email
-   sends on every ended call (captures partial seller leads — likely what we want) or
-   only above some completeness bar. `appointment-action` only logs when a scheduling
-   tool actually fired, so partial calls have a call-completed row but no booking events.
+2. DONE — live 2026-06-14 (verified: email + Sheet row received end to end).
+   call-completed.js, on a verified Insights webhook, looks up the Nylas event by
+   call_id (= call_control_id join key), merges its structured lead fields with the
+   Insights Summary, and POSTs the row to a NEW standalone Apps Script
+   (`apps-script/call-summary.gs`) which appends to the Call Sheet "Call Intake" tab
+   and emails paul@ (from the info@ alias). Gated by `CALL_LOG_ENABLED` (now true).
+   Policy: sends on EVERY ended call (partial calls included — no booking event just
+   means structured fields are blank and the Summary narrative carries the lead).
+   Env (Netlify, all set): `CALL_SUMMARY_WEBHOOK_URL` (Apps Script /exec),
+   `CALL_SUMMARY_TOKEN` (== the script's WEBHOOK_SECRET property), `CALL_LOG_ENABLED=true`,
+   plus the existing `NYLAS_*`/`CALENDAR_*` reused for the event lookup.
+   The new Apps Script is SEPARATE from the frozen legacy one and does NOT touch the
+   calendar (Nylas owns it) or handle website leads.
+3. SMS to caller (items formerly 3-4): dry-run stub then live send — DEFERRED until
+   A2P 10DLC clears. Consent is already captured (record_consent -> event metadata).
 3. SMS dry-run. Gated stub: assemble and log the exact payload, never send.
 4. Live SMS. Only after A2P 10DLC clears.
 
