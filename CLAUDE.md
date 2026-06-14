@@ -94,8 +94,28 @@ as calendar events with metadata; there is no separate database.
 - `recordCallEvent` (the logging feed) is the only new piece that belongs in
   `appointment-action.js`. SMS send + summary email live in `call-completed.js`.
 
-## NEXT PRIORITY — booking reliability (ahead of items 2-4)
-Chosen direction: C (most robust). Being done in phases on branch `booking-rework`.
+## Booking reliability — STABLE / "fixed for now" (verified live 2026-06-14)
+Chosen direction was C (most robust); shipped Phase 1 + call-flow polish. Branch
+`booking-rework`. Verified working on real calls: book (specific-time direct book),
+reschedule (possible_duplicate -> move), and post-book SMS consent capture, with the
+caller-ID/callId join key populated and NO narration.
+
+KEY FIX that unblocked reschedule + consent: the Telnyx `appointment_action` tool was
+MISSING the `appointmentId` and `nylasEventId` body parameters, so Telnyx stripped them
+even when the model sent them. Added both params (Telnyx-side). Both now flow through.
+
+DEFERRED (revisit when booking is reprioritized):
+- Phase 2 determinism: signed slot tokens + idempotency nonce (same-call double-book) +
+  `forceToken` for GENUINE second bookings (today possible_duplicate only offers "keep
+  existing" / reschedule — no path to intentionally create a 2nd callback on one phone).
+- Latency ~5-6s on tool calls (Nylas free/busy + 5-page duplicate scan + create); the
+  "let me check, one moment" filler currently masks it. Optimize the duplicate scan.
+- Nitpick wording (user-noted, deferred): "Central" appears on reschedule line but not
+  booked line; model drops "Booking it now"; model sends a junk `timestamp` (unused);
+  AM/PM clarification inconsistent ("Thursday at four" not clarified, "Three" was).
+- Phase 3 prompt tightening + broader date parsing.
+
+### (historical) phased plan
 
 PHASE 1 — DONE, proven live 2026-06-13 (transcript verified). Two coordinated changes:
 - Backend: `assistantControl` now carries only silent machine flags (no speakable
