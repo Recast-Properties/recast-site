@@ -141,6 +141,45 @@ async function test(name, fn) {
     assert.strictEqual(res.statusCode, 200);
   });
 
+  await test("buildCallSummary merges booking metadata + Insights summary", async () => {
+    const row = {
+      occurredAt: "2026-06-14T00:46:00Z",
+      receivedAt: "2026-06-14T00:46:30Z",
+      from: "+15032015250",
+      conversationId: "conv-1",
+      callControlId: "v3:abc",
+      durationSec: 90,
+      results: [{ result: "Joe wants to sell 2225 NE 33rd, foreclosure." }]
+    };
+    const ev = {
+      metadata: {
+        call_id: "v3:abc",
+        caller_name: "Joe",
+        callback_number: "503-201-5250",
+        property_address: "2225 NE 33rd",
+        reason_situation: "Foreclosure",
+        amount_owed: "$200,000",
+        sms_consent: "yes",
+        scheduled_callback_time: "2026-06-17T14:00:00-05:00",
+        status: "rescheduled"
+      }
+    };
+    const s = _internals.buildCallSummary(row, ev);
+    assert.strictEqual(s.callerName, "Joe");
+    assert.strictEqual(s.callbackNumber, "503-201-5250");
+    assert.strictEqual(s.propertyAddress, "2225 NE 33rd");
+    assert.strictEqual(s.smsConsent, "yes");
+    assert.strictEqual(s.bestCallbackTime, "2026-06-17T14:00:00-05:00");
+    assert.strictEqual(s.callStatus, "rescheduled");
+    assert.ok(s.notes.includes("foreclosure"));
+
+    // No booking found -> still carries caller id + summary, status no_booking.
+    const partial = _internals.buildCallSummary(row, null);
+    assert.strictEqual(partial.callStatus, "no_booking");
+    assert.strictEqual(partial.inboundCallerId, "+15032015250");
+    assert.strictEqual(partial.callerName, "");
+  });
+
   await test("assembleCallEndRow extracts the right fields", async () => {
     const row = _internals.assembleCallEndRow(JSON.parse(SAMPLE_BODY), "2026-06-13T00:00:00Z");
     assert.strictEqual(row.eventType, "conversation_insight_result");

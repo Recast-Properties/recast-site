@@ -134,29 +134,134 @@ function assembleCallEndRow(parsed, receivedAt) {
   };
 }
 
-// Side-effect only. Gated by CALL_LOG_ENABLED (default OFF). Wrapped so it can
-// never throw a non-200 back at Telnyx once auth has passed.
-function recordCallEnd(row) {
+// Find the Nylas calendar event for this call so the summary carries the real
+// structured lead fields (name/address/owed/scheduled time) the booking wrote.
+// The join key: appointment-action stores metadata.call_id = the Telnyx
+// call_control_id, which is exactly row.callControlId here. Best-effort; returns
+// null (never throws) if nothing is found or env is missing.
+async function lookupBookingForCall(callId) {
+  const apiKey = process.env.NYLAS_API_KEY;
+  const grantId = process.env.NYLAS_GRANT_ID;
+  const calendarId = process.env.CALENDAR_ID || "primary";
+  if (!callId || !apiKey || !grantId) return null;
+
+  const now = Date.now();
+  const startUnix = Math.floor((now - 24 * 60 * 60 * 1000) / 1000);
+  const endUnix = Math.floor((now + 120 * 24 * 60 * 60 * 1000) / 1000);
+
+  const matches = [];
+  let pageToken = "";
+
   try {
-    const enabled = process.env.CALL_LOG_ENABLED === "true";
+    for (let page = 0; page < 5; page++) {
+      const params = new URLSearchParams({
+        calendar_id: calendarId,
+        start: String(startUnix),
+        end: String(endUnix),
+        limit: "50",
+        select: "id,title,when,metadata,status"
+      });
+      if (pageToken) params.set("page_token", pageToken);
 
-    // Diagnostic-first: always log the assembled row so the eventual sink is a
-    // swap, not a rewrite.
-    console.log(
-      "CALL-COMPLETED row (gate " + (enabled ? "ON" : "OFF") + "):",
-      JSON.stringify(row)
-    );
+      const url =
+        `https://api.us.nylas.com/v3/grants/${encodeURIComponent(grantId)}/events?` +
+        params.toString();
 
-    if (enabled) {
-      // Backlog item 1 is trigger + log only. The real Sheets/log sink and the
-      // summary email are later tickets; there is intentionally no send here yet.
-      console.log(
-        "CALL-COMPLETED: CALL_LOG_ENABLED is on, but no sink is wired yet " +
-          "(item 1 = trigger + log only)."
-      );
+      const resp = await fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json", Authorization: `Bearer ${apiKey}` }
+      });
+      const body = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        console.log("CALL-SUMMARY: Nylas event lookup failed", resp.status);
+        return null;
+      }
+
+      const events = Array.isArray(body.data) ? body.data : [];
+      for (const ev of events) {
+        const md = ev.metadata || {};
+        if (md.call_id && md.call_id === callId) matches.push(ev);
+      }
+
+      pageToken = body.next_cursor || "";
+      if (!pageToken) break;
     }
   } catch (error) {
-    console.log("CALL-COMPLETED recordCallEnd error (swallowed):", error.message);
+    console.log("CALL-SUMMARY: Nylas lookup error", error.message);
+    return null;
+  }
+
+  if (!matches.length) return null;
+
+  // Prefer a live (non-cancelled) booking; if several, the most recently updated.
+  const active = matches.filter(
+    (ev) => String((ev.metadata || {}).status || "").toLowerCase() !== "cancelled"
+  );
+  return (active.length ? active : matches).sort((a, b) => {
+    const au = Number((a.metadata || {}).last_updated_at_unix || 0);
+    const bu = Number((b.metadata || {}).last_updated_at_unix || 0);
+    return bu - au;
+  })[0];
+}
+
+// Assemble the Sheet/email payload (columns aligned to the "Call Intake" tab),
+// combining the booking event's structured metadata with the Insights Summary.
+function buildCallSummary(row, bookingEvent) {
+  const md = bookingEvent && bookingEvent.metadata ? bookingEvent.metadata : {};
+  const summaryText =
+    row.results && row.results[0] && row.results[0].result ? row.results[0].result : "";
+
+  return {
+    timestamp: row.occurredAt || row.receivedAt,
+    inboundCallerId: row.from || md.inbound_caller_id || "",
+    callbackNumber: md.callback_number || "",
+    callerName: md.caller_name || "",
+    propertyAddress: md.property_address || "",
+    reasonForSelling: md.reason_situation || "",
+    timeline: md.timeline_deadline || "",
+    bestCallbackTime: md.scheduled_callback_time || "",
+    owedAmount: md.amount_owed || "",
+    lienDetails: md.liens_issues || "",
+    smsConsent: md.sms_consent || "not_asked",
+    notes: summaryText,
+    // Context (lands in Raw Payload + the email; not its own Sheet column):
+    callStatus: bookingEvent ? md.status || "booked" : "no_booking",
+    conversationId: row.conversationId || "",
+    callId: row.callControlId || "",
+    durationSec: typeof row.durationSec === "number" ? row.durationSec : ""
+  };
+}
+
+// Gated delivery. OFF (default) = log the exact payload it would send. ON = POST
+// to the Apps Script web app (Sheet append + email). Never throws into the call.
+async function deliverCallSummary(row) {
+  try {
+    const booking = await lookupBookingForCall(row.callControlId);
+    const summary = buildCallSummary(row, booking);
+    const enabled = process.env.CALL_LOG_ENABLED === "true";
+    const url = process.env.CALL_SUMMARY_WEBHOOK_URL;
+
+    console.log(
+      "CALL-SUMMARY payload (gate " + (enabled ? "ON" : "OFF") + "):",
+      JSON.stringify(summary)
+    );
+
+    if (!enabled) return;
+    if (!url) {
+      console.log("CALL-SUMMARY: CALL_LOG_ENABLED on but CALL_SUMMARY_WEBHOOK_URL unset; not sending.");
+      return;
+    }
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: process.env.CALL_SUMMARY_TOKEN || "", ...summary })
+    });
+    const text = await resp.text().catch(() => "");
+    console.log("CALL-SUMMARY sent:", resp.status, text.slice(0, 200));
+  } catch (error) {
+    console.log("CALL-SUMMARY deliver error (swallowed):", error.message);
   }
 }
 
@@ -206,7 +311,7 @@ exports.handler = async function (event) {
 
     const receivedAt = new Date().toISOString();
     const row = assembleCallEndRow(parsed, receivedAt);
-    recordCallEnd(row);
+    await deliverCallSummary(row);
 
     console.log("==================== END: CALL-COMPLETED ====================");
     return jsonResponse(200, {
@@ -227,6 +332,7 @@ exports.handler = async function (event) {
 exports._internals = {
   verifyTelnyxSignature,
   assembleCallEndRow,
+  buildCallSummary,
   getRawBody,
   getHeader
 };
