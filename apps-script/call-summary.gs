@@ -25,6 +25,7 @@ const CONFIG = {
   NOTIFY_EMAIL: 'paul@recast-properties.com',
   FROM_ALIAS: 'info@recast-properties.com',
   REPLY_TO: 'info@recast-properties.com',
+  CONTACT_PHONE: '945-245-8458',
   DEFAULT_TIMEZONE: 'America/Chicago'
 };
 
@@ -141,7 +142,50 @@ function handleWebsiteLead_(data, ss) {
     safeJson_(data)
   ]);
   sendWebsiteEmail_(data, ss);
+  if (isValidEmail_(data.email)) sendWebsiteConfirmation_(data);
   return jsonResponse_({ ok: true, message: 'Website lead appended and emailed.' });
+}
+
+// Confirmation email to the seller (from the info@ alias), restoring the legacy behavior.
+function sendWebsiteConfirmation_(data) {
+  const first = (clean_(data.name) || 'there').split(' ')[0];
+  const whenLabel = formatScheduled_(data.scheduledCallback);
+  const addr = clean_(data.propertyAddress);
+  const subject = addr ? ('We received your info on ' + cleanForSubject_(addr)) : 'Thanks for reaching out to Recast Properties';
+  const callLine = whenLabel ? ('We have you down for a call on ' + whenLabel + '.') : '';
+
+  const html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#18191C">' +
+      '<p style="margin:0 0 14px">Hi ' + escapeHtml_(first) + ',</p>' +
+      '<p style="margin:0 0 14px">Thanks for reaching out to Recast Properties. We received your information' + (addr ? ' about ' + escapeHtml_(addr) : '') + '.</p>' +
+      (callLine ? '<p style="margin:0 0 14px">' + escapeHtml_(callLine) + '</p>' : '') +
+      '<p style="margin:0 0 14px">If you need to reschedule, call ' + escapeHtml_(CONFIG.CONTACT_PHONE) + '.</p>' +
+      '<p style="margin:0">Talk soon,<br>Recast Properties<br>' +
+        '<span style="color:#71757E">We buy houses and land for cash. No agents. No fees. No repairs.</span></p>' +
+    '</div>';
+
+  const plain =
+    'Hi ' + first + ',\n\n' +
+    'Thanks for reaching out to Recast Properties. We received your information' + (addr ? ' about ' + addr : '') + '.\n\n' +
+    (callLine ? callLine + '\n\n' : '') +
+    'If you need to reschedule, call ' + CONFIG.CONTACT_PHONE + '.\n\n' +
+    'Talk soon,\nRecast Properties\nWe buy houses and land for cash. No agents. No fees. No repairs.';
+
+  const options = { htmlBody: html, name: 'Recast Properties', replyTo: CONFIG.REPLY_TO };
+  if (GmailApp.getAliases().indexOf(CONFIG.FROM_ALIAS) !== -1) options.from = CONFIG.FROM_ALIAS;
+  GmailApp.sendEmail(clean_(data.email), subject, plain, options);
+}
+
+function isValidEmail_(email) {
+  return /\S+@\S+\.\S+/.test(String(email || ''));
+}
+
+function formatScheduled_(iso) {
+  const s = String(iso || '').trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  return Utilities.formatDate(d, CONFIG.DEFAULT_TIMEZONE, "EEE, MMM d 'at' h:mm a") + ' Central';
 }
 
 function sendWebsiteEmail_(data, ss) {
