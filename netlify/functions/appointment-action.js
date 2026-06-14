@@ -1761,12 +1761,16 @@ async function handleBook(payload) {
   const bookedMessage =
     "Perfect — that time is available. Booking it now. Is it okay if we send you a confirmation text?";
 
-  // Scan the caller's existing seller-callback events FIRST. This both:
-  //  - lets a retry of THIS call return its own booking (idempotent, no double-book), and
-  //  - surfaces a different prior call's callback as possible_duplicate.
-  // Doing it before free/busy avoids the caller's own just-booked event reading
-  // as a "conflict" on a retry.
-  const duplicateCheck = await findFutureDuplicateAppointment(payload, selectedStart);
+  // Run the duplicate scan and free/busy CONCURRENTLY — they're independent, so this
+  // drops one sequential Nylas round-trip from the common "create" path. The duplicate
+  // result decides the outcome (own-call retry = idempotent / different prior call =
+  // possible_duplicate / else create); free/busy is used only on the create path and
+  // harmlessly discarded otherwise. Gating on the duplicate result also keeps the
+  // caller's own just-booked event from reading as a free/busy "conflict" on a retry.
+  const [duplicateCheck, nylasAvailability] = await Promise.all([
+    findFutureDuplicateAppointment(payload, selectedStart),
+    callNylasFreeBusy(selectedStart, selectedEnd)
+  ]);
 
   if (!duplicateCheck.ok) {
     console.error("Nylas duplicate lookup error before booking", {
@@ -1817,9 +1821,7 @@ async function handleBook(payload) {
     });
   }
 
-  // decision === "create": validate the slot is open, then create.
-  const nylasAvailability = await callNylasFreeBusy(selectedStart, selectedEnd);
-
+  // decision === "create": the slot must be open (free/busy was fetched above).
   if (!nylasAvailability.ok) {
     console.error("Nylas Free/Busy error before booking", {
       statusCode: nylasAvailability.statusCode,
