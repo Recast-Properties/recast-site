@@ -75,4 +75,47 @@ test("spokenCentralTime reads as 'Day at H AM/PM' (no 'in the morning')", () => 
   assert.strictEqual(_internals.spokenCentralTime(twoThirtyPm), "Monday at 2:30 PM");
 });
 
+test("classifyBooking: own call's event -> idempotent (no double-book)", () => {
+  const matches = [{ id: "e1", metadata: { call_id: "v3:abc" } }];
+  const v = _internals.classifyBooking(matches, "v3:abc", false);
+  assert.strictEqual(v.decision, "idempotent");
+  assert.strictEqual(v.event.id, "e1");
+});
+
+test("classifyBooking: idempotent wins even if forceBook set", () => {
+  const matches = [{ id: "e1", metadata: { call_id: "v3:abc" } }];
+  assert.strictEqual(_internals.classifyBooking(matches, "v3:abc", true).decision, "idempotent");
+});
+
+test("classifyBooking: different prior call -> possible_duplicate", () => {
+  const matches = [{ id: "e9", metadata: { call_id: "v3:OTHER" } }];
+  const v = _internals.classifyBooking(matches, "v3:abc", false);
+  assert.strictEqual(v.decision, "possible_duplicate");
+  assert.strictEqual(v.event.id, "e9");
+});
+
+test("classifyBooking: forceBook overrides a different-call duplicate -> create", () => {
+  const matches = [{ id: "e9", metadata: { call_id: "v3:OTHER" } }];
+  assert.strictEqual(_internals.classifyBooking(matches, "v3:abc", true).decision, "create");
+});
+
+test("classifyBooking: no matches -> create", () => {
+  assert.strictEqual(_internals.classifyBooking([], "v3:abc", false).decision, "create");
+});
+
+test("classifyBooking: own match preferred over an other-call match", () => {
+  const matches = [
+    { id: "other", metadata: { call_id: "v3:OTHER" } },
+    { id: "mine", metadata: { call_id: "v3:abc" } }
+  ];
+  const v = _internals.classifyBooking(matches, "v3:abc", false);
+  assert.strictEqual(v.decision, "idempotent");
+  assert.strictEqual(v.event.id, "mine");
+});
+
+test("isAffirmative", () => {
+  ["yes", "YES", "true", "1"].forEach((t) => assert.ok(_internals.isAffirmative(t)));
+  ["no", "", "false", "0", undefined, null].forEach((t) => assert.ok(!_internals.isAffirmative(t)));
+});
+
 console.log(`\n${passed} passed`);

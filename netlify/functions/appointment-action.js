@@ -816,6 +816,7 @@ async function findFutureDuplicateAppointment(payload, selectedStart) {
 
   let pageToken = "";
   let checkedEvents = 0;
+  const matches = [];
 
   for (let page = 0; page < 5; page++) {
     const params = new URLSearchParams({
@@ -823,7 +824,7 @@ async function findFutureDuplicateAppointment(payload, selectedStart) {
       start: String(startTime),
       end: String(endTime),
       limit: "50",
-      select: "id,title,when,metadata,status,busy"
+      select: "id,title,when,metadata,status,busy,calendar_id"
     });
 
     if (pageToken) {
@@ -862,13 +863,11 @@ async function findFutureDuplicateAppointment(payload, selectedStart) {
         continue;
       }
 
+      // Collect ALL matching seller-callback events (same caller). The caller's
+      // own in-progress booking matches too — handleBook tells own-call (idempotent)
+      // from a different prior call (possible_duplicate) via call_id.
       if (isPossibleDuplicateEvent(event, payload)) {
-        return {
-          ok: true,
-          duplicateFound: true,
-          event,
-          checkedEvents
-        };
+        matches.push(event);
       }
     }
 
@@ -878,9 +877,36 @@ async function findFutureDuplicateAppointment(payload, selectedStart) {
 
   return {
     ok: true,
-    duplicateFound: false,
+    matches,
     checkedEvents
   };
+}
+
+// Affirmative flag from the assistant (e.g. forceBook "yes"/"true").
+function isAffirmative(value) {
+  const text = cleanValue(value).toLowerCase();
+  return text === "yes" || text === "true" || text === "1";
+}
+
+// Decide what a book request should do, given the caller's existing matching
+// events. Pure + testable.
+//   - own call already booked (same call_id)  -> idempotent (return that booking)
+//   - a different prior call's callback exists -> possible_duplicate (unless forced)
+//   - nothing matching, or forceBook           -> create
+function classifyBooking(matches, callId, forceBook) {
+  const list = Array.isArray(matches) ? matches : [];
+  const cid = cleanValue(callId);
+
+  const own = cid
+    ? list.find((ev) => cleanValue((ev && ev.metadata ? ev.metadata : {}).call_id) === cid)
+    : null;
+  if (own) return { decision: "idempotent", event: own };
+
+  if (list.length && !forceBook) {
+    return { decision: "possible_duplicate", event: list[0] };
+  }
+
+  return { decision: "create", event: null };
 }
 
 
@@ -1732,7 +1758,66 @@ async function handleBook(payload) {
   }
 
   const selectedEnd = addMinutes(selectedStart, DEFAULT_SLOT_MINUTES);
+  const bookedMessage =
+    "Perfect — that time is available. Booking it now. Is it okay if we send you a confirmation text?";
 
+  // Scan the caller's existing seller-callback events FIRST. This both:
+  //  - lets a retry of THIS call return its own booking (idempotent, no double-book), and
+  //  - surfaces a different prior call's callback as possible_duplicate.
+  // Doing it before free/busy avoids the caller's own just-booked event reading
+  // as a "conflict" on a retry.
+  const duplicateCheck = await findFutureDuplicateAppointment(payload, selectedStart);
+
+  if (!duplicateCheck.ok) {
+    console.error("Nylas duplicate lookup error before booking", {
+      statusCode: duplicateCheck.statusCode,
+      body: duplicateCheck.body
+    });
+
+    return jsonResponse(502, {
+      status: "error",
+      messageForAssistant:
+        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message to this number ok?",
+      error: "nylas_duplicate_lookup_failed"
+    });
+  }
+
+  const verdict = classifyBooking(
+    duplicateCheck.matches,
+    payload.callId,
+    isAffirmative(payload.forceBook)
+  );
+
+  // Idempotent: this call already created a booking — return it, never duplicate.
+  if (verdict.decision === "idempotent") {
+    const ev = verdict.event;
+    const startDate = getEventStartDate(ev);
+    const endDate = getEventEndDate(ev);
+    return jsonResponse(200, {
+      status: "booked",
+      appointmentId: ev.id || "",
+      nylasEventId: ev.id || "",
+      scheduledStartTime: startDate ? formatCentralIso(startDate) : "",
+      scheduledEndTime: endDate ? formatCentralIso(endDate) : "",
+      calendarId: ev.calendar_id || process.env.CALENDAR_ID || "primary",
+      messageForAssistant: bookedMessage
+    });
+  }
+
+  // A different prior call already has a callback for this caller. Offer keep /
+  // additional. The assistant re-calls book with forceBook=yes for an additional one.
+  if (verdict.decision === "possible_duplicate") {
+    return jsonResponse(200, {
+      status: "possible_duplicate",
+      appointmentId: verdict.event.id || "",
+      nylasEventId: verdict.event.id || "",
+      matchedAppointmentSummary: summarizeDuplicateEvent(verdict.event),
+      messageForAssistant:
+        "It looks like there may already be a callback scheduled for you. Would you like to keep that one, or set up an additional callback?"
+    });
+  }
+
+  // decision === "create": validate the slot is open, then create.
   const nylasAvailability = await callNylasFreeBusy(selectedStart, selectedEnd);
 
   if (!nylasAvailability.ok) {
@@ -1751,12 +1836,7 @@ async function handleBook(payload) {
 
   const busySlots = extractBusySlots(nylasAvailability.body);
   const hasConflict = busySlots.some((busy) =>
-    rangesOverlap(
-      selectedStart.getTime(),
-      selectedEnd.getTime(),
-      busy.startMs,
-      busy.endMs
-    )
+    rangesOverlap(selectedStart.getTime(), selectedEnd.getTime(), busy.startMs, busy.endMs)
   );
 
   if (hasConflict) {
@@ -1767,38 +1847,7 @@ async function handleBook(payload) {
     });
   }
 
-  const duplicateCheck = await findFutureDuplicateAppointment(payload, selectedStart);
-
-  if (!duplicateCheck.ok) {
-    console.error("Nylas duplicate lookup error before booking", {
-      statusCode: duplicateCheck.statusCode,
-      body: duplicateCheck.body
-    });
-
-    return jsonResponse(502, {
-      status: "error",
-      messageForAssistant:
-        "Let me make a note of your preferred time and have our team follow up with you shortly. Is a text message to this number ok?",
-      error: "nylas_duplicate_lookup_failed"
-    });
-  }
-
-  if (duplicateCheck.duplicateFound) {
-    return jsonResponse(200, {
-      status: "possible_duplicate",
-      appointmentId: duplicateCheck.event.id || "",
-      nylasEventId: duplicateCheck.event.id || "",
-      matchedAppointmentSummary: summarizeDuplicateEvent(duplicateCheck.event),
-      messageForAssistant:
-        "It looks like there may already be a callback scheduled for you. Would you like to keep that existing one?"
-    });
-  }
-
-  const createdEvent = await createNylasCalendarEvent(
-    payload,
-    selectedStart,
-    selectedEnd
-  );
+  const createdEvent = await createNylasCalendarEvent(payload, selectedStart, selectedEnd);
 
   if (!createdEvent.ok) {
     console.error("Nylas event creation error", {
@@ -1823,8 +1872,7 @@ async function handleBook(payload) {
     scheduledStartTime: createdEvent.scheduledStartIso,
     scheduledEndTime: createdEvent.scheduledEndIso,
     calendarId: eventData.calendar_id || process.env.CALENDAR_ID || "primary",
-    messageForAssistant:
-      "Perfect — that time is available. Booking it now. Is it okay if we send you a confirmation text?"
+    messageForAssistant: bookedMessage
   });
 }
 
@@ -2058,5 +2106,7 @@ exports._internals = {
   inferBusinessHour,
   buildAssistantControl,
   buildSlotOfferMessage,
-  spokenCentralTime
+  spokenCentralTime,
+  classifyBooking,
+  isAffirmative
 };
