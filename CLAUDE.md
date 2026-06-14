@@ -111,10 +111,20 @@ KEY FIX that unblocked reschedule + consent: the Telnyx `appointment_action` too
 MISSING the `appointmentId` and `nylasEventId` body parameters, so Telnyx stripped them
 even when the model sent them. Added both params (Telnyx-side). Both now flow through.
 
+PHASE 2 — DONE, verified live 2026-06-14 (second appointment created on calendar + Sheet):
+- Idempotency by callId: handleBook scans existing seller-callback events first;
+  classifyBooking() treats the caller's OWN in-call event (same call_id) as idempotent
+  (returns it, never double-books) and a different prior call's callback as possible_duplicate.
+- forceBook (tool param + "Possible duplicate handling" prompt block): caller can request
+  an ADDITIONAL callback; assistant re-books with forceBook=yes and the backend creates a
+  second appointment. Multiple callbacks per caller allowed by design.
+- Signed slot tokens DROPPED (free/busy already validates; direct-book has no availability
+  step to issue one — they'd fight the streamlined UX).
+- LESSON (hit twice): a tool param the model emits but the tool SCHEMA doesn't define is
+  silently STRIPPED by Telnyx. appointmentId/nylasEventId/forceBook all had to be added to
+  the tool's Body Parameters. Always verify a new param actually saved on the tool.
+
 DEFERRED (revisit when booking is reprioritized):
-- Phase 2 determinism: signed slot tokens + idempotency nonce (same-call double-book) +
-  `forceToken` for GENUINE second bookings (today possible_duplicate only offers "keep
-  existing" / reschedule — no path to intentionally create a 2nd callback on one phone).
 - Latency ~5-6s on tool calls (Nylas free/busy + 5-page duplicate scan + create); the
   "let me check, one moment" filler currently masks it. Optimize the duplicate scan.
 - Nitpick wording (user-noted, deferred): "Central" appears on reschedule line but not
