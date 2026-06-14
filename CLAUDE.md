@@ -88,12 +88,16 @@ as calendar events with metadata; there is no separate database.
    calendar (Nylas owns it) or handle website leads.
 3. DONE — verified live 2026-06-15 (end-to-end: calendar event + Website Leads row +
    summary email + seller confirmation all confirmed). Website intake form -> Nylas
-   booking. `web-booking.js` (availability + book; weekday 9-6 Central, 30-min, honeypot
-   + server validation, no dup detection) reuses appointment-action `_internals`.
-   OfferModal.jsx fetches real open slots and books via web-booking (cache-buster v46).
+   booking. `web-booking.js` (availability + book; weekday 9-6 Central, 30-min,
+   server-side slot validation, no dup detection) reuses appointment-action `_internals`.
+   OfferModal.jsx fetches real open slots and books via web-booking.
    call-summary.gs gained a `website_lead` route -> "Website Leads" tab + Paul summary +
    seller confirmation (from info@). Legacy recastSubmitLead/Apps-Script path retired for
-   the form. Deferred upgrade: Cloudflare Turnstile if bot spam appears.
+   the form.
+   NOTE: the honeypot was REMOVED 2026-06-15 — browser autofill filled the hidden
+   `company` field and blocked real bookings. Protection is now the strict slot
+   validation (must match a real open slot). Cloudflare Turnstile is the upgrade if
+   bot spam ever appears.
    (original scoping notes below, for history)
    NEXT TASK (done) — Website intake form -> Nylas booking (replaces the Apps-Script-only
    path for the web form). Today OfferModal.jsx generates time slots CLIENT-SIDE

@@ -4,7 +4,7 @@ function OfferModal({ open, onClose }) {
   const [step, setStep] = React.useState(0);
   const [data, setData] = React.useState({
     address: "", ownerRel: "", reason: "", timeline: "", mortgage: "", liens: "",
-    name: "", phone: "", email: "", callDay: "", callTime: "", company: "",
+    name: "", phone: "", email: "", callDay: "", callTime: "",
   });
   const set = (k, v) => setData(d => ({ ...d, [k]: v }));
 
@@ -64,7 +64,6 @@ function OfferModal({ open, onClose }) {
       timeline: data.timeline,
       mortgage: data.mortgage,
       liens: data.liens,
-      company: data.company, // honeypot — real users leave blank
     };
     fetch("/.netlify/functions/web-booking", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lead),
@@ -183,9 +182,6 @@ function OfferModal({ open, onClose }) {
                   <Field label="Best phone to call"><input value={data.phone} onChange={e => set("phone", e.target.value)} placeholder="214.000.0000" /></Field>
                   <Field label="Email (optional)"><input value={data.email} onChange={e => set("email", e.target.value)} placeholder="you@email.com" /></Field>
                 </div>
-                {/* honeypot — hidden from humans, bots tend to fill it */}
-                <input tabIndex="-1" autoComplete="off" value={data.company} onChange={e => set("company", e.target.value)}
-                  aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }} />
               </div>
             </div>
           )}

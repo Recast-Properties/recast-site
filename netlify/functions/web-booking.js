@@ -239,12 +239,10 @@ async function postWebsiteSummary(payload, start) {
 }
 
 async function handleBook(payload) {
-  // Honeypot: real users never fill `company`. Bots do — silently accept, do nothing.
-  if (clean(payload.company)) {
-    console.log("web-booking: honeypot tripped; dropping submission.");
-    return jsonResponse(200, { ok: true, status: "received" });
-  }
-
+  // (Honeypot removed: browser autofill filled the hidden field and blocked real
+  // bookings. Protection is the strict slot validation below — a booking must match
+  // a real open weekday business-hours slot. Cloudflare Turnstile is the upgrade if
+  // bot spam ever appears.)
   const name = clean(payload.name);
   const phone = clean(payload.phone);
   if (!name || !phone) {
