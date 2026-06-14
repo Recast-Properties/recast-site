@@ -86,10 +86,29 @@ as calendar events with metadata; there is no separate database.
    plus the existing `NYLAS_*`/`CALENDAR_*` reused for the event lookup.
    The new Apps Script is SEPARATE from the frozen legacy one and does NOT touch the
    calendar (Nylas owns it) or handle website leads.
-3. SMS to caller (items formerly 3-4): dry-run stub then live send — DEFERRED until
+3. NEXT TASK — Website intake form -> Nylas booking (replaces the Apps-Script-only
+   path for the web form). Today OfferModal.jsx generates time slots CLIENT-SIDE
+   (OfferModal.jsx:56-88): all 9-6 business hours INCLUDING weekends, never checks the
+   calendar, and only logs via the legacy Apps Script (window.recastSubmitLead in
+   lead-config.js) + Netlify Forms. No real booking.
+   Build: a new Netlify function `web-booking.js` with availability + book actions that
+   reuse the phone backend's Nylas helpers (planned: import appointment-action's exported
+   _internals — exact same battle-tested code, additive-only change to that file, no drift).
+   OfferModal calls availability to render only OPEN slots, and book to create the event.
+   DECISIONS (agreed 2026-06-14):
+   - Real booking: submit CREATES the Nylas event (true hold), like the phone flow.
+   - Business rules: weekdays only, 9-6 Central, 30-MIN appointments (phone is 60), NO
+     duplicate detection.
+   - Notifications: web-booking posts to the call-summary Apps Script (extend it with a
+     website route) -> new row in Call Sheet tab "Website Leads" + summary email to
+     paul@recast-properties.com in the SAME format as the call summary email. Retire the
+     legacy recastSubmitLead/Apps-Script path for the web form.
+   - Auth: public browser endpoint (no shared secret possible in-browser). Threat is bot
+     form-spam creating junk calendar events / spam emails / held slots. Plan: honeypot +
+     server-side validation in v1; Cloudflare Turnstile as an easy upgrade if spam appears.
+   - Shared code: web-booking reuses appointment-action helpers via expanded _internals.
+4. SMS to caller (items formerly 3-4): dry-run stub then live send — DEFERRED until
    A2P 10DLC clears. Consent is already captured (record_consent -> event metadata).
-3. SMS dry-run. Gated stub: assemble and log the exact payload, never send.
-4. Live SMS. Only after A2P 10DLC clears.
 
 ### Design decisions for the above (agreed, not yet built)
 - Per-channel gates (one for log/email, one for SMS), default OFF. The gate is the
