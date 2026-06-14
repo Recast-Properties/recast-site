@@ -1,5 +1,8 @@
 const CENTRAL_TIME_ZONE = "America/Chicago";
 const DEFAULT_SLOT_MINUTES = 60;
+// Hard cap on record_consent's Nylas work so it returns the closing well within the
+// Telnyx tool timeout even if Nylas is slow/hung (prevents a dropped call at the close).
+const RECORD_CONSENT_BUDGET_MS = 3500;
 const SLOT_INTERVAL_MINUTES = 30;
 const MAX_RETURNED_SLOTS = 3;
 const BUSINESS_START_HOUR = 9;
@@ -1958,25 +1961,43 @@ async function handleRecordConsent(payload) {
   let spokenWhen = "";
 
   if (appointmentId) {
-    const existing = await getNylasCalendarEventById(appointmentId);
+    // Time-boxed best-effort: a slow/hung Nylas call must NEVER exceed the Telnyx
+    // tool timeout and drop the call at the closing. If the work doesn't finish in
+    // RECORD_CONSENT_BUDGET_MS, return the close anyway (the consent write may not
+    // land — an acceptable tradeoff vs. hanging up on the caller).
+    const work = (async () => {
+      const existing = await getNylasCalendarEventById(appointmentId);
+      if (existing.ok && existing.event) {
+        const startDate = getEventStartDate(existing.event);
+        if (startDate) spokenWhen = spokenCentralTime(startDate);
 
-    if (existing.ok && existing.event) {
-      const startDate = getEventStartDate(existing.event);
-      if (startDate) spokenWhen = spokenCentralTime(startDate);
-
-      const update = await updateNylasEventConsent(existing.event, consent);
-      if (!update.ok) {
-        console.error("record_consent metadata update failed", {
-          statusCode: update.statusCode,
-          body: update.body
+        const update = await updateNylasEventConsent(existing.event, consent);
+        if (!update.ok) {
+          console.error("record_consent metadata update failed", {
+            statusCode: update.statusCode,
+            body: update.body
+          });
+        }
+      } else {
+        console.error("record_consent could not fetch event", {
+          appointmentId,
+          statusCode: existing.statusCode
         });
       }
-    } else {
-      console.error("record_consent could not fetch event", {
-        appointmentId,
-        statusCode: existing.statusCode
-      });
-    }
+    })().catch((error) => {
+      console.error("record_consent work error", error.message);
+    });
+
+    let timer;
+    const budget = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        console.warn("record_consent exceeded time budget; closing without confirming the write");
+        resolve();
+      }, RECORD_CONSENT_BUDGET_MS);
+    });
+
+    await Promise.race([work, budget]);
+    clearTimeout(timer);
   } else {
     console.warn("record_consent called without appointmentId");
   }
