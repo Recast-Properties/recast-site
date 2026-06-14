@@ -22,7 +22,7 @@ console.log("booking contract tests:");
 const STATUSES = [
   "needs_more_info", "needs_slot_selection", "conflict", "possible_duplicate",
   "single_match_found", "multiple_matches_found", "not_found",
-  "booked", "rescheduled", "cancelled", "error", "anything_unknown"
+  "booked", "consent_recorded", "rescheduled", "cancelled", "error", "anything_unknown"
 ];
 
 test("assistantControl has no speakable 'instruction' field, for every status", () => {
@@ -41,9 +41,9 @@ test("assistantControl values are short machine tokens, not prose (no spaces)", 
   }
 });
 
-test("only booked/rescheduled/cancelled may confirm success", () => {
+test("only booked/consent_recorded/rescheduled/cancelled may confirm success", () => {
   const successy = STATUSES.filter((s) => _internals.buildAssistantControl(s).mayConfirmSuccess);
-  assert.deepStrictEqual(successy.sort(), ["booked", "cancelled", "rescheduled"]);
+  assert.deepStrictEqual(successy.sort(), ["booked", "cancelled", "consent_recorded", "rescheduled"]);
 });
 
 test("slot offer is built into the message (single slot)", () => {

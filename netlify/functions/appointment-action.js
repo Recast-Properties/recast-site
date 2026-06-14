@@ -18,7 +18,8 @@ function buildAssistantControl(status) {
     single_match_found: { mayConfirmSuccess: false, successState: false, nextStep: "confirm_matched_appointment" },
     multiple_matches_found: { mayConfirmSuccess: false, successState: false, nextStep: "ask_caller_to_choose_appointment" },
     not_found: { mayConfirmSuccess: false, successState: false, nextStep: "collect_more_lookup_information" },
-    booked: { mayConfirmSuccess: true, successState: true, nextStep: "confirm_booking" },
+    booked: { mayConfirmSuccess: true, successState: true, nextStep: "ask_sms_consent" },
+    consent_recorded: { mayConfirmSuccess: true, successState: true, nextStep: "close_call" },
     rescheduled: { mayConfirmSuccess: true, successState: true, nextStep: "confirm_reschedule" },
     cancelled: { mayConfirmSuccess: true, successState: true, nextStep: "confirm_cancel" },
     error: { mayConfirmSuccess: false, successState: false, nextStep: "fallback_collect_info_for_team" }
@@ -1823,10 +1824,110 @@ async function handleBook(payload) {
     scheduledEndTime: createdEvent.scheduledEndIso,
     calendarId: eventData.calendar_id || process.env.CALENDAR_ID || "primary",
     messageForAssistant:
-      `Perfect — that time is available. Booking it now. Someone from the team will call you ${spokenCentralTime(selectedStart)}.`
+      "Perfect — that time is available. Booking it now. Is it okay if we send you a confirmation text?"
   });
 }
 
+
+// Update only the SMS-consent metadata on an existing event. Preserves the
+// event's title / time / busy so nothing else changes.
+async function updateNylasEventConsent(existingEvent, consent) {
+  const nylasApiKey = getRequiredEnv("NYLAS_API_KEY");
+  const nylasGrantId = getRequiredEnv("NYLAS_GRANT_ID");
+  const calendarId = process.env.CALENDAR_ID || "primary";
+  const eventId = cleanValue(existingEvent.id);
+  const existingMetadata = existingEvent && existingEvent.metadata ? existingEvent.metadata : {};
+  const startDate = getEventStartDate(existingEvent);
+  const endDate = getEventEndDate(existingEvent);
+
+  const url =
+    `https://api.us.nylas.com/v3/grants/${encodeURIComponent(nylasGrantId)}/events/${encodeURIComponent(eventId)}` +
+    `?calendar_id=${encodeURIComponent(calendarId)}`;
+
+  const body = {
+    title: cleanValue(existingEvent.title, "Seller Call"),
+    busy: true,
+    metadata: {
+      ...existingMetadata,
+      sms_consent: consent,
+      sms_consent_method: "voice",
+      sms_consent_timestamp: new Date().toISOString(),
+      last_updated_by: "recast_api",
+      last_updated_at_unix: String(Math.floor(Date.now() / 1000))
+    }
+  };
+
+  if (startDate && endDate) {
+    body.when = {
+      start_time: Math.floor(startDate.getTime() / 1000),
+      end_time: Math.floor(endDate.getTime() / 1000),
+      start_timezone: CENTRAL_TIME_ZONE,
+      end_timezone: CENTRAL_TIME_ZONE
+    };
+  }
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${nylasApiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  const responseBody = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return { ok: false, statusCode: response.status, body: responseBody };
+  }
+  return { ok: true, statusCode: response.status, body: responseBody };
+}
+
+// Record SMS consent AFTER booking, then deliver the (backend-grounded) close.
+// Best-effort: a recording failure is logged but never traps the caller — the
+// call still closes warmly.
+async function handleRecordConsent(payload) {
+  const appointmentId = cleanValue(payload.appointmentId || payload.nylasEventId);
+  const consent = cleanValue(payload.smsConsent, "not_asked");
+
+  let spokenWhen = "";
+
+  if (appointmentId) {
+    const existing = await getNylasCalendarEventById(appointmentId);
+
+    if (existing.ok && existing.event) {
+      const startDate = getEventStartDate(existing.event);
+      if (startDate) spokenWhen = spokenCentralTime(startDate);
+
+      const update = await updateNylasEventConsent(existing.event, consent);
+      if (!update.ok) {
+        console.error("record_consent metadata update failed", {
+          statusCode: update.statusCode,
+          body: update.body
+        });
+      }
+    } else {
+      console.error("record_consent could not fetch event", {
+        appointmentId,
+        statusCode: existing.statusCode
+      });
+    }
+  } else {
+    console.warn("record_consent called without appointmentId");
+  }
+
+  const closing = spokenWhen
+    ? `Great. That's everything I need. Thanks for calling Recast Properties. The team will reach out to you ${spokenWhen}. Take care, and goodbye for now.`
+    : "Great. That's everything I need. Thanks for calling Recast Properties. Take care, and goodbye for now.";
+
+  return jsonResponse(200, {
+    status: "consent_recorded",
+    appointmentId,
+    smsConsent: consent,
+    messageForAssistant: closing
+  });
+}
 
 async function handleNylasTest() {
   const now = new Date();
@@ -1880,6 +1981,8 @@ exports.handler = async function handler(event) {
       result = await handleAvailability(payload);
     } else if (action === "book") {
       result = await handleBook(payload);
+    } else if (action === "record_consent") {
+      result = await handleRecordConsent(payload);
     } else if (action === "reschedule") {
       result = await handleRescheduleAction(payload);
     } else if (action === "cancel") {
