@@ -24,6 +24,7 @@
     color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
   .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
     margin: 2px 0 16px; color: var(--ink-900, #18191c); }
+  .page-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
   .wrap { max-width: 920px; margin: 0 auto; padding: 22px 20px 80px; }
   .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
     border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
@@ -126,13 +127,19 @@
 <!-- APP: EDITOR -->
 <div id="editor" class="hidden">
   <div class="bar">
-    <button id="backBtn" class="btn sm">‹ Back</button>
-    <h1 id="editTitle">Edit listing</h1>
+    <a class="brand" href="../homes/index.html" target="_blank" rel="noopener" title="View live site">
+      <img src="../assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
     <span class="sp"></span>
     <button id="deleteBtn" class="btn danger sm hidden">Delete</button>
     <button id="saveBtn" class="btn primary">Save</button>
   </div>
   <div class="wrap">
+    <div class="page-head">
+      <button id="backBtn" class="btn sm">‹ Back</button>
+      <h1 class="page-title" id="editTitle" style="margin:0">Edit listing</h1>
+    </div>
     <div class="card">
       <div class="row">
         <div class="field"><label>Listing ID (also the photo folder)</label><input id="f_id" placeholder="e.g. 280sparkling"><div class="hint">Lowercase, no spaces. Can't be changed after first save.</div></div>
