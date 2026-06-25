@@ -217,6 +217,7 @@
     try {
       if (await tryLogin(pw)) {
         token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        $("pw").value = ""; // clear so Chrome stops re-prompting to save it
         $("login").classList.add("hidden");
         await showList();
       } else {
