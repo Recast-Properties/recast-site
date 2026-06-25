@@ -18,6 +18,12 @@
     background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
   .bar h1 { font-family: var(--font-display, sans-serif); font-size: 18px; margin: 0; font-weight: 700; }
   .bar .sp { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand img { height: 28px; display: block; }
+  .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
+    color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
+  .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
+    margin: 2px 0 16px; color: var(--ink-900, #18191c); }
   .wrap { max-width: 920px; margin: 0 auto; padding: 22px 20px 80px; }
   .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
     border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
@@ -102,12 +108,16 @@
 <!-- APP: LIST -->
 <div id="app" class="hidden">
   <div class="bar">
-    <h1>Listings</h1>
+    <a class="brand" href="../homes/index.html" target="_blank" rel="noopener" title="View live site">
+      <img src="../assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
     <span class="sp"></span>
     <button id="newBtn" class="btn primary">+ New listing</button>
     <button id="logoutBtn" class="btn sm">Sign out</button>
   </div>
   <div class="wrap">
+    <h1 class="page-title">Listings</h1>
     <div id="list"></div>
     <p id="listEmpty" class="muted hidden">No listings yet.</p>
   </div>
