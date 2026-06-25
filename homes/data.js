@@ -1,20 +1,13 @@
 /* ============================================================
-   Recast Properties — Listings data + Google Sheet config
+   Recast Properties — Listings data
    ------------------------------------------------------------
-   TO LOAD FROM A GOOGLE SHEET (no code needed after setup):
-     1. Make a sheet with the columns in listings-template.csv
-        (File ▸ Import ▸ Upload that CSV to get the headers + a
-        sample row, then just edit/add rows).
-     2. In Google Sheets: File ▸ Share ▸ Publish to web.
-        Choose the listings sheet/tab, format = "Comma-separated
-        values (.csv)", click Publish, copy the URL.
-     3. Paste that URL between the quotes below and save.
-
-   Leave the URL blank to use the built-in sample data.
-   If the sheet ever fails to load, the site falls back to the
-   sample data automatically (so it never breaks).
+   Listings are managed in the admin tool (recast-properties.com/admin)
+   and stored in Netlify Blobs. The site reads them from the /listings
+   function, which returns the same CSV shape this loader expects.
+   If that ever fails, the site falls back to the built-in sample data
+   below automatically (so it never breaks).
    ============================================================ */
-window.RECAST_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1lpCONle2BfovuOu7_9k17hYwCuDKxnvE0ddeQLdGI5k/gviz/tq?tqx=out:csv&gid=701320222"; // Recast listings sheet
+window.RECAST_SHEET_CSV_URL = "/.netlify/functions/listings"; // admin-managed listings feed
 
 /* Where the listing photo folders live, relative to the /homes pages.
    Structure:  photos/<folder-name>/1.jpg (hero), 2.jpg, 3.jpg, ...
