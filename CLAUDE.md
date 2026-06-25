@@ -1,5 +1,11 @@
 # Recast Scheduler — Project Context
 
+> **Scope:** this file covers the **scheduler / booking backend** (Telnyx voice +
+> website intake → Nylas calendar). The public **listings** pages and the
+> **`/admin`** tool that manages them are a separate system documented in
+> [`ADMIN.md`](ADMIN.md). They share this Netlify site and `netlify/functions/`
+> folder but nothing else.
+
 ## What this is
 Voice-assistant-driven callback scheduling for Recast Properties. A Telnyx AI voice
 assistant ("Jennifer") and the website form both call the same Netlify Functions
