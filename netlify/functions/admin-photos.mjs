@@ -2,17 +2,23 @@
 // under "<folder>/<n>.jpg", always contiguously numbered 1..n so the site's
 // folder-based loader (photos/<folder>/1.jpg, 2.jpg, …) finds them.
 //
+// Photos are uploaded ONE AT A TIME (each request stays well under Netlify's
+// ~6MB function body limit), then a final lightweight "arrange" sets the order.
+//
 // POST JSON actions (header x-admin-token must equal ADMIN_PASSWORD):
-//   { action:"list",   folder }                  -> { ok, count }
-//   { action:"commit", folder, items:[ ... ] }   -> { ok, count }
-//        items is the FINAL desired order; each item is either
-//          { keep: <currentIndex> }  (a photo already in the folder), or
-//          { dataUrl: "data:image/jpeg;base64,..." }  (a new upload)
-//        The folder is rewritten to exactly these, numbered 1..n.
-//   { action:"clear",  folder }                  -> { ok }
+//   { action:"list",    folder }                 -> { ok, count }
+//   { action:"add",     folder, dataUrl }        -> { ok, id }   (stages one photo)
+//   { action:"arrange", folder, order:[ ... ] }  -> { ok, count }
+//        order is the FINAL desired sequence; each item is either
+//          { keep: <currentIndex> }   (a photo already numbered in the folder), or
+//          { staged: "<id>" }         (a photo just uploaded via "add")
+//        The folder is rewritten to exactly these, numbered 1..n; staging cleared.
+//   { action:"clear",   folder }                 -> { ok }
 import { getStore } from "@netlify/blobs";
+import { randomUUID } from "node:crypto";
 
 const STORE = "listing-photos";
+const STG = "/.stg/"; // staging sub-path; never matches a numbered photo
 
 function authed(req) {
   const expected = process.env.ADMIN_PASSWORD || "";
@@ -21,17 +27,14 @@ function authed(req) {
 const slugFolder = (s) =>
   String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
-function indicesIn(listing) {
-  return (listing.blobs || [])
-    .map((b) => parseInt((b.key.split("/").pop() || "").replace(/\D/g, ""), 10))
-    .filter((n) => Number.isInteger(n) && n > 0)
-    .sort((a, b) => a - b);
+function numberedCount(listing, folder) {
+  return (listing.blobs || []).filter((b) => new RegExp("^" + folder + "/\\d+\\.jpg$").test(b.key)).length;
 }
 
 function decodeDataUrl(dataUrl) {
   const m = String(dataUrl || "").match(/^data:([^;]+);base64,(.*)$/s);
   if (!m) throw new Error("bad dataUrl");
-  return { type: m[1], bytes: Buffer.from(m[2], "base64") };
+  return Buffer.from(m[2], "base64");
 }
 
 export default async (req) => {
@@ -44,12 +47,13 @@ export default async (req) => {
   const folder = slugFolder(body.folder);
   if (!folder) return Response.json({ ok: false, error: "Missing folder" }, { status: 400 });
 
-  const store = getStore(STORE);
+  // Strong consistency: edits/reorders must be visible immediately on re-open.
+  const store = getStore({ name: STORE, consistency: "strong" });
 
   try {
     if (body.action === "list") {
       const listing = await store.list({ prefix: folder + "/" });
-      return Response.json({ ok: true, count: indicesIn(listing).length });
+      return Response.json({ ok: true, count: numberedCount(listing, folder) });
     }
 
     if (body.action === "clear") {
@@ -58,42 +62,36 @@ export default async (req) => {
       return Response.json({ ok: true });
     }
 
-    if (body.action === "commit") {
-      const items = Array.isArray(body.items) ? body.items : [];
-      if (!items.length) {
-        // empty commit == clear
-        const listing = await store.list({ prefix: folder + "/" });
-        await Promise.all((listing.blobs || []).map((b) => store.delete(b.key)));
-        return Response.json({ ok: true, count: 0 });
-      }
-      // 1) Resolve every item to bytes IN MEMORY first (avoids clobber on reorder).
-      const finalBytes = [];
-      for (const it of items) {
-        if (it && it.dataUrl) {
-          finalBytes.push(decodeDataUrl(it.dataUrl).bytes);
-        } else if (it && Number.isInteger(it.keep)) {
-          const buf = await store.get(`${folder}/${it.keep}.jpg`, { type: "arrayBuffer" });
-          if (!buf) throw new Error("missing photo " + it.keep);
-          finalBytes.push(Buffer.from(buf));
-        } else {
-          throw new Error("bad item");
-        }
-      }
-      // 2) Write contiguously 1..n as jpg.
+    if (body.action === "add") {
+      const bytes = decodeDataUrl(body.dataUrl);
+      const id = randomUUID();
+      await store.set(folder + STG + id + ".jpg", bytes, { metadata: { contentType: "image/jpeg" } });
+      return Response.json({ ok: true, id });
+    }
+
+    if (body.action === "arrange") {
+      const order = Array.isArray(body.order) ? body.order : [];
+      // Read every final photo's bytes into memory FIRST (clobber-free reorder).
+      const finalBytes = await Promise.all(
+        order.map(async (it) => {
+          const key = it && Number.isInteger(it.keep)
+            ? `${folder}/${it.keep}.jpg`
+            : (it && it.staged ? `${folder}${STG}${it.staged}.jpg` : null);
+          if (!key) throw new Error("bad order item");
+          const buf = await store.get(key, { type: "arrayBuffer" });
+          if (!buf) throw new Error("missing photo " + key);
+          return Buffer.from(buf);
+        })
+      );
+      // Write contiguously 1..n.
       for (let i = 0; i < finalBytes.length; i++) {
-        await store.set(`${folder}/${i + 1}.jpg`, finalBytes[i], {
-          metadata: { contentType: "image/jpeg" },
-        });
+        await store.set(`${folder}/${i + 1}.jpg`, finalBytes[i], { metadata: { contentType: "image/jpeg" } });
       }
-      // 3) Delete any leftovers beyond n (old higher indices / stray extensions).
+      // Delete anything that isn't one of the final numbered keys (old extras + all staging).
+      const keepKeys = new Set(finalBytes.map((_, i) => `${folder}/${i + 1}.jpg`));
       const after = await store.list({ prefix: folder + "/" });
       await Promise.all(
-        (after.blobs || [])
-          .filter((b) => {
-            const n = parseInt((b.key.split("/").pop() || "").replace(/\D/g, ""), 10);
-            return !(Number.isInteger(n) && n >= 1 && n <= finalBytes.length && b.key === `${folder}/${n}.jpg`);
-          })
-          .map((b) => store.delete(b.key))
+        (after.blobs || []).filter((b) => !keepKeys.has(b.key)).map((b) => store.delete(b.key))
       );
       return Response.json({ ok: true, count: finalBytes.length });
     }

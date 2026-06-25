@@ -321,11 +321,24 @@
     if (!listing.address) { toast("A street address is required.", true); return; }
     const btn = $("saveBtn"); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Saving…';
     try {
-      // 1) photos: commit the final ordered set to the folder (== id)
-      const items = photoItems.map((p) => (p.type === "new" ? { dataUrl: p.dataUrl } : { keep: p.index }));
-      // If folder changed (shouldn't, id is locked after first save) we still commit under id.
-      await api("admin-photos", { action: "commit", folder: listing.id, items: items });
-      // 2) row
+      // 1) Upload any NEW photos one at a time (each request stays small), tracking
+      //    a staged id on each so a retry never re-uploads. Small concurrency pool.
+      const news = photoItems.filter((p) => p.type === "new" && !p.staged);
+      let uploaded = 0;
+      const uploadOne = async (p) => {
+        const r = await api("admin-photos", { action: "add", folder: listing.id, dataUrl: p.dataUrl });
+        p.staged = r.id;
+        uploaded++;
+        btn.innerHTML = '<span class="spin"></span> Uploading ' + uploaded + '/' + news.length + '…';
+      };
+      for (let i = 0; i < news.length; i += 3) {
+        await Promise.all(news.slice(i, i + 3).map(uploadOne));
+      }
+      // 2) Set the final order (references only — no image bytes).
+      btn.innerHTML = '<span class="spin"></span> Saving…';
+      const order = photoItems.map((p) => (p.type === "new" ? { staged: p.staged } : { keep: p.index }));
+      await api("admin-photos", { action: "arrange", folder: listing.id, order: order });
+      // 3) Save the listing row.
       await api("admin-listings", { action: "save", listing: listing });
       toast("Saved.");
       await showList();
