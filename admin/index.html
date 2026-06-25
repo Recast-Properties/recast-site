@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Listings Admin</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="../kit.css">
+<style>
+  :root { --gap: 16px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c);
+    font-family: var(--font-sans, system-ui, sans-serif); }
+  a { color: var(--terracotta-600, #c2643a); }
+  .hidden { display: none !important; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
+  .bar h1 { font-family: var(--font-display, sans-serif); font-size: 18px; margin: 0; font-weight: 700; }
+  .bar .sp { flex: 1; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 22px 20px 80px; }
+  .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
+    padding: 9px 15px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--ink-50, #f6f7f9); }
+  .btn.primary { background: var(--terracotta-500, #d9743f); border-color: var(--terracotta-500, #d9743f); color: #fff; }
+  .btn.primary:hover { background: var(--terracotta-600, #c2643a); }
+  .btn.danger { color: #b3261e; border-color: #e5b4b1; }
+  .btn.danger:hover { background: #fbeceb; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  input, select, textarea { font-family: var(--font-sans, sans-serif); font-size: 14px; width: 100%;
+    border: 1px solid var(--ink-300, #c0c3cb); border-radius: 9px; padding: 9px 11px; background: #fff; color: var(--ink-900); }
+  textarea { resize: vertical; }
+  label { display: block; font-weight: 700; font-size: 12.5px; margin: 0 0 5px; color: var(--ink-700, #3a3d44); }
+  .card { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+  .row { display: grid; gap: var(--gap); grid-template-columns: 1fr 1fr; }
+  .row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .field { margin-bottom: var(--gap); }
+  @media (max-width: 620px) { .row, .row.three { grid-template-columns: 1fr; } }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .login .card { text-align: center; }
+  .login img { height: 34px; margin-bottom: 14px; }
+
+  /* listing list */
+  .listing { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--ink-200, #e1e4e9);
+    border-radius: 12px; margin-bottom: 10px; background: #fff; cursor: pointer; }
+  .listing:hover { border-color: var(--ink-400, #9498a1); }
+  .listing .thumb { width: 78px; height: 56px; border-radius: 8px; object-fit: cover; background: var(--ink-100, #eff1f4);
+    flex-shrink: 0; }
+  .listing .meta { flex: 1; min-width: 0; }
+  .listing .addr { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .listing .sub { color: var(--ink-600, #53575f); font-size: 13px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 999px; }
+  .pill.available { background: #e3f5e9; color: #1c7a3f; }
+  .pill.pending { background: #fdf0d9; color: #9a6a12; }
+  .pill.sold { background: #f1f0f2; color: #53575f; }
+
+  /* photos */
+  .dropzone { border: 2px dashed var(--ink-300, #c0c3cb); border-radius: 12px; padding: 22px; text-align: center;
+    color: var(--ink-600, #53575f); font-size: 13.5px; cursor: pointer; background: var(--ink-50, #f6f7f9); }
+  .dropzone.drag { border-color: var(--terracotta-500, #d9743f); background: #fcefe7; color: var(--ink-800); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 12px; }
+  .ph { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--ink-200, #e1e4e9);
+    background: var(--ink-100, #eff1f4); aspect-ratio: 4/3; cursor: grab; }
+  .ph img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .ph .num { position: absolute; left: 6px; top: 6px; background: rgba(24,25,28,.78); color: #fff; font-size: 11px;
+    font-weight: 800; padding: 2px 7px; border-radius: 999px; }
+  .ph .cover { position: absolute; left: 6px; top: 6px; background: var(--terracotta-500, #d9743f); }
+  .ph .x { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 999px; border: none;
+    background: rgba(24,25,28,.78); color: #fff; font-size: 14px; line-height: 22px; text-align: center; cursor: pointer; padding: 0; }
+  .ph.dragging { opacity: .4; }
+  .ph.over { outline: 2px solid var(--terracotta-500, #d9743f); outline-offset: -2px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink-900, #18191c);
+    color: #fff; padding: 11px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .toast.err { background: #b3261e; }
+  .muted { color: var(--ink-600, #53575f); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--ink-500, #71757e); margin-top: 4px; }
+  .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <div class="card">
+    <img src="../assets/recast-logo-horizontal-black.png" alt="Recast">
+    <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Listings Admin</h1>
+    <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
+    <div class="field"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <button id="loginBtn" class="btn primary" style="width:100%">Sign in</button>
+    <p id="loginErr" class="hint hidden" style="color:#b3261e"></p>
+  </div>
+</div>
+
+<!-- APP: LIST -->
+<div id="app" class="hidden">
+  <div class="bar">
+    <h1>Listings</h1>
+    <span class="sp"></span>
+    <button id="newBtn" class="btn primary">+ New listing</button>
+    <button id="logoutBtn" class="btn sm">Sign out</button>
+  </div>
+  <div class="wrap">
+    <div id="list"></div>
+    <p id="listEmpty" class="muted hidden">No listings yet.</p>
+  </div>
+</div>
+
+<!-- APP: EDITOR -->
+<div id="editor" class="hidden">
+  <div class="bar">
+    <button id="backBtn" class="btn sm">‹ Back</button>
+    <h1 id="editTitle">Edit listing</h1>
+    <span class="sp"></span>
+    <button id="deleteBtn" class="btn danger sm hidden">Delete</button>
+    <button id="saveBtn" class="btn primary">Save</button>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <div class="row">
+        <div class="field"><label>Listing ID (also the photo folder)</label><input id="f_id" placeholder="e.g. 280sparkling"><div class="hint">Lowercase, no spaces. Can't be changed after first save.</div></div>
+        <div class="field"><label>Status</label><select id="f_status"><option value="available">Available</option><option value="pending">Pending</option><option value="sold">Sold</option></select></div>
+      </div>
+      <div class="field"><label>Street address</label><input id="f_address" placeholder="280 Sparkling Springs Dr"></div>
+      <div class="row three">
+        <div class="field"><label>City</label><input id="f_city"></div>
+        <div class="field"><label>State</label><input id="f_state" value="TX"></div>
+        <div class="field"><label>ZIP</label><input id="f_zip"></div>
+      </div>
+      <div class="row three">
+        <div class="field"><label>Price</label><input id="f_price" placeholder="599,999"></div>
+        <div class="field"><label>Beds</label><input id="f_beds"></div>
+        <div class="field"><label>Baths</label><input id="f_baths"></div>
+      </div>
+      <div class="row three">
+        <div class="field"><label>Sq ft</label><input id="f_sqft"></div>
+        <div class="field"><label>Lot</label><input id="f_lot" placeholder="0.29 ac"></div>
+        <div class="field"><label>Year built</label><input id="f_year"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Type</label><input id="f_type" value="Single-family"></div>
+        <div class="field"><label>MLS #</label><input id="f_mlsId"></div>
+      </div>
+      <div class="field"><label>Tagline</label><input id="f_tagline" placeholder="One-line headline shown on the listing"></div>
+      <div class="field"><label>Description</label><textarea id="f_description" rows="7"></textarea></div>
+      <div class="field"><label>Highlights (one per line)</label><textarea id="f_highlights" rows="6" placeholder="2024 Build&#10;Dedicated Office&#10;EV Charging Port"></textarea></div>
+    </div>
+
+    <div class="card">
+      <label style="font-size:14px;margin-bottom:10px">Photos</label>
+      <p class="hint" style="margin:-4px 0 12px">First photo is the cover. Drag to reorder. New photos are auto-resized &amp; converted to JPG.</p>
+      <div id="dropzone" class="dropzone">
+        <strong>Drop photos here</strong> or click to choose<br>
+        <span class="muted">JPG, PNG, or WebP</span>
+      </div>
+      <input id="fileInput" type="file" accept="image/*" multiple class="hidden">
+      <div id="photoGrid" class="grid"></div>
+      <p id="photoStatus" class="hint"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const FN = "/.netlify/functions/";
+  let token = sessionStorage.getItem("recast_admin_token") || "";
+  let listings = [];
+  let current = null;        // listing being edited (null = new)
+  let photoItems = [];       // [{type:'keep',index} | {type:'new',dataUrl}], each with .src for preview
+  let origFolder = "";
+
+  function toast(msg, isErr) {
+    const t = document.createElement("div");
+    t.className = "toast" + (isErr ? " err" : "");
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), isErr ? 4200 : 2400);
+  }
+
+  async function api(fn, body) {
+    const res = await fetch(FN + fn, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-token": token },
+      body: JSON.stringify(body || {}),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (res.status === 401) { signOut(); throw new Error("Session expired — sign in again."); }
+    if (!res.ok || data.ok === false) throw new Error(data.error || ("Request failed (" + res.status + ")"));
+    return data;
+  }
+
+  const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+
+  // ---- auth ----
+  async function tryLogin(pw) {
+    const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    return res.ok;
+  }
+  function signOut() {
+    token = ""; sessionStorage.removeItem("recast_admin_token");
+    $("app").classList.add("hidden"); $("editor").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  $("loginBtn").onclick = async () => {
+    const pw = $("pw").value.trim();
+    if (!pw) return;
+    $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
+    try {
+      if (await tryLogin(pw)) {
+        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        $("login").classList.add("hidden");
+        await showList();
+      } else {
+        $("loginErr").textContent = "Wrong password."; $("loginErr").classList.remove("hidden");
+      }
+    } catch (e) {
+      $("loginErr").textContent = String(e.message || e); $("loginErr").classList.remove("hidden");
+    } finally { $("loginBtn").disabled = false; }
+  };
+  $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = signOut;
+
+  // ---- listings list ----
+  async function showList() {
+    $("editor").classList.add("hidden"); $("app").classList.remove("hidden");
+    $("list").innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const data = await api("admin-listings", { action: "list" });
+      listings = data.rows || [];
+    } catch (e) { $("list").innerHTML = ""; toast(String(e.message || e), true); return; }
+    renderList();
+  }
+  function renderList() {
+    const el = $("list"); el.innerHTML = "";
+    $("listEmpty").classList.toggle("hidden", listings.length > 0);
+    listings.forEach((row) => {
+      const folder = (row.photos || "").trim();
+      const status = (row.status || "available").toLowerCase();
+      const div = document.createElement("div");
+      div.className = "listing";
+      div.innerHTML =
+        '<img class="thumb" src="' + (folder ? "/photos/" + folder + "/1.jpg" : "") + '" onerror="this.style.visibility=\'hidden\'">' +
+        '<div class="meta"><div class="addr">' + esc(row.address || "(no address)") + '</div>' +
+        '<div class="sub">' + esc(row.city || "") + (row.price ? " · $" + esc(row.price) : "") +
+        (row.beds ? " · " + esc(row.beds) + "bd" : "") + (row.baths ? "/" + esc(row.baths) + "ba" : "") + '</div></div>' +
+        '<span class="pill ' + status + '">' + esc(status) + '</span>';
+      div.onclick = () => openEditor(row);
+      el.appendChild(div);
+    });
+  }
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---- editor ----
+  $("newBtn").onclick = () => openEditor(null);
+  $("backBtn").onclick = showList;
+
+  async function openEditor(row) {
+    current = row;
+    $("app").classList.add("hidden"); $("editor").classList.remove("hidden");
+    $("editTitle").textContent = row ? "Edit listing" : "New listing";
+    $("deleteBtn").classList.toggle("hidden", !row);
+    const g = (k) => (row && row[k] != null ? row[k] : "");
+    $("f_id").value = g("id"); $("f_id").readOnly = !!row;
+    $("f_status").value = (g("status") || "available").toLowerCase();
+    $("f_address").value = g("address"); $("f_city").value = g("city");
+    $("f_state").value = g("state") || "TX"; $("f_zip").value = g("zip");
+    $("f_price").value = g("price"); $("f_beds").value = g("beds"); $("f_baths").value = g("baths");
+    $("f_sqft").value = g("sqft"); $("f_lot").value = g("lot"); $("f_year").value = g("year");
+    $("f_type").value = g("type") || "Single-family"; $("f_mlsId").value = g("mlsId");
+    $("f_tagline").value = g("tagline"); $("f_description").value = g("description");
+    $("f_highlights").value = String(g("highlights") || "").split("|").map((s) => s.trim()).filter(Boolean).join("\n");
+
+    photoItems = []; origFolder = (g("photos") || g("id") || "").trim();
+    renderPhotos();
+    $("photoStatus").textContent = "";
+    if (origFolder) {
+      try {
+        const r = await api("admin-photos", { action: "list", folder: origFolder });
+        for (let i = 1; i <= r.count; i++) photoItems.push({ type: "keep", index: i, src: "/photos/" + origFolder + "/" + i + ".jpg" });
+        renderPhotos();
+      } catch (_) {}
+    }
+  }
+
+  function collectListing() {
+    const id = slug($("f_id").value);
+    return {
+      id: id,
+      status: $("f_status").value,
+      price: $("f_price").value.trim(),
+      address: $("f_address").value.trim(),
+      city: $("f_city").value.trim(),
+      state: $("f_state").value.trim(),
+      zip: $("f_zip").value.trim(),
+      beds: $("f_beds").value.trim(),
+      baths: $("f_baths").value.trim(),
+      sqft: $("f_sqft").value.trim(),
+      lot: $("f_lot").value.trim(),
+      year: $("f_year").value.trim(),
+      type: $("f_type").value.trim(),
+      tagline: $("f_tagline").value.trim(),
+      description: $("f_description").value.trim(),
+      highlights: $("f_highlights").value.split("\n").map((s) => s.trim()).filter(Boolean).join("|"),
+      mlsId: $("f_mlsId").value.trim(),
+      photos: id, // folder name == id
+    };
+  }
+
+  $("saveBtn").onclick = async () => {
+    const listing = collectListing();
+    if (!listing.id) { toast("A listing ID is required.", true); return; }
+    if (!listing.address) { toast("A street address is required.", true); return; }
+    const btn = $("saveBtn"); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Saving…';
+    try {
+      // 1) photos: commit the final ordered set to the folder (== id)
+      const items = photoItems.map((p) => (p.type === "new" ? { dataUrl: p.dataUrl } : { keep: p.index }));
+      // If folder changed (shouldn't, id is locked after first save) we still commit under id.
+      await api("admin-photos", { action: "commit", folder: listing.id, items: items });
+      // 2) row
+      await api("admin-listings", { action: "save", listing: listing });
+      toast("Saved.");
+      await showList();
+    } catch (e) {
+      toast(String(e.message || e), true);
+    } finally { btn.disabled = false; btn.textContent = "Save"; }
+  };
+
+  $("deleteBtn").onclick = async () => {
+    if (!current) return;
+    if (!confirm("Delete this listing and its photos? This can't be undone.")) return;
+    try {
+      await api("admin-listings", { action: "delete", id: current.id });
+      try { await api("admin-photos", { action: "clear", folder: current.photos || current.id }); } catch (_) {}
+      toast("Deleted.");
+      await showList();
+    } catch (e) { toast(String(e.message || e), true); }
+  };
+
+  // ---- photo manager ----
+  function renderPhotos() {
+    const grid = $("photoGrid"); grid.innerHTML = "";
+    photoItems.forEach((p, i) => {
+      const d = document.createElement("div");
+      d.className = "ph"; d.draggable = true; d.dataset.i = i;
+      d.innerHTML =
+        '<img src="' + p.src + '">' +
+        '<span class="num' + (i === 0 ? " cover" : "") + '">' + (i === 0 ? "Cover" : i + 1) + '</span>' +
+        '<button class="x" title="Remove">×</button>';
+      d.querySelector(".x").onclick = (e) => { e.stopPropagation(); photoItems.splice(i, 1); renderPhotos(); };
+      addDrag(d);
+      grid.appendChild(d);
+    });
+  }
+  let dragFrom = null;
+  function addDrag(el) {
+    el.addEventListener("dragstart", () => { dragFrom = +el.dataset.i; el.classList.add("dragging"); });
+    el.addEventListener("dragend", () => { dragFrom = null; el.classList.remove("dragging"); document.querySelectorAll(".ph.over").forEach((n) => n.classList.remove("over")); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("over"); });
+    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("drop", (e) => {
+      e.preventDefault(); el.classList.remove("over");
+      const to = +el.dataset.i;
+      if (dragFrom == null || dragFrom === to) return;
+      const moved = photoItems.splice(dragFrom, 1)[0];
+      photoItems.splice(to, 0, moved);
+      renderPhotos();
+    });
+  }
+
+  // dropzone wiring
+  const dz = $("dropzone"), fi = $("fileInput");
+  dz.onclick = () => fi.click();
+  fi.onchange = () => { handleFiles(fi.files); fi.value = ""; };
+  ["dragenter", "dragover"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add("drag"); }));
+  ["dragleave", "drop"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove("drag"); }));
+  dz.addEventListener("drop", (e) => { if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files); });
+
+  async function handleFiles(fileList) {
+    const files = Array.from(fileList || []).filter((f) => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name));
+    if (!files.length) return;
+    let done = 0, failed = 0;
+    $("photoStatus").textContent = "Processing 0/" + files.length + "…";
+    for (const f of files) {
+      try {
+        const dataUrl = await toJpegDataUrl(f);
+        photoItems.push({ type: "new", dataUrl: dataUrl, src: dataUrl });
+        renderPhotos();
+      } catch (_) { failed++; }
+      done++;
+      $("photoStatus").textContent = "Processing " + done + "/" + files.length + "…";
+    }
+    $("photoStatus").textContent = failed
+      ? (failed + " photo(s) couldn't be read (HEIC isn't supported on this browser — use JPG/PNG).")
+      : "";
+  }
+
+  // Resize to max 1600px long edge and re-encode as JPEG (quality 0.82).
+  async function toJpegDataUrl(file) {
+    let bmp = null, w = 0, h = 0, src = null;
+    try { bmp = await createImageBitmap(file); w = bmp.width; h = bmp.height; src = bmp; }
+    catch (_) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+        w = img.naturalWidth; h = img.naturalHeight; src = img;
+      } finally { URL.revokeObjectURL(url); }
+    }
+    if (!w || !h) throw new Error("decode failed");
+    const scale = Math.min(1, 1600 / Math.max(w, h));
+    const cw = Math.round(w * scale), ch = Math.round(h * scale);
+    const canvas = document.createElement("canvas"); canvas.width = cw; canvas.height = ch;
+    canvas.getContext("2d").drawImage(src, 0, 0, cw, ch);
+    if (bmp && bmp.close) bmp.close();
+    return canvas.toDataURL("image/jpeg", 0.82);
+  }
+
+  // ---- boot ----
+  (async function boot() {
+    if (token && (await tryLogin(token))) { $("login").classList.add("hidden"); await showList(); }
+  })();
+})();
+</script>
+</body>
+</html>

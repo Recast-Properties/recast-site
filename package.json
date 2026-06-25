@@ -1,0 +1,9 @@
+{
+  "name": "recast-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Recast Properties marketing + listings site (static) with Netlify Functions backend.",
+  "dependencies": {
+    "@netlify/blobs": "^8.2.0"
+  }
+}

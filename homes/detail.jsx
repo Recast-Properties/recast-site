@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 22", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 23", "color:#EA9B60;font-weight:700");
 
 /* Orange call pill — shared by the gallery viewer, sidebar callout, and mobile bar */
 function AgentPill({ compact }) {
@@ -204,7 +204,7 @@ function PropertyDetail({ p }) {
       <div className="gallery-gap" style={{ height: 44 }}></div>
       <div className="wrap detail-cols" style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: 40, padding: "0 28px 72px", alignItems: "start" }}>
         <div>
-          <p className="eyebrow" style={{ marginBottom: 18 }}>{p.tagline}</p>
+          <p className="eyebrow" style={{ marginBottom: 18, color: "var(--color-fg)" }}>{p.tagline}</p>
           <FactGrid p={p} />
           <h2 className="rc-h4" style={{ margin: "32px 0 10px" }}>About this home</h2>
           <p className="rc-body" style={{ color: "var(--color-fg-muted)", maxWidth: 620 }}>{p.description}</p>

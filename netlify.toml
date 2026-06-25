@@ -1,0 +1,21 @@
+# Recast Properties site config.
+# Static site published from the repo root; Netlify Functions in netlify/functions.
+# No build step — the site is plain files. The package.json exists only so the
+# functions can use @netlify/blobs (bundled into each function at deploy time).
+
+[build]
+  publish = "."
+  # No build command: nothing to compile. Netlify still runs `npm install` so the
+  # functions can bundle their dependencies.
+
+[functions]
+  directory = "netlify/functions"
+
+# Serve ALL listing photos from Netlify Blobs (uploaded via the admin page).
+# force=true so the function wins over any leftover static files at /photos/*.
+# Existing photos were migrated into Blobs before this was enabled.
+[[redirects]]
+  from = "/photos/*"
+  to = "/.netlify/functions/photo/:splat"
+  status = 200
+  force = true
