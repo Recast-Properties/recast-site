@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Receipts Queue</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="../kit.css">
+<style>
+  :root { --gap: 16px; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c);
+    font-family: var(--font-sans, system-ui, sans-serif); }
+  a { color: var(--terracotta-600, #c2643a); }
+  .hidden { display: none !important; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
+  .bar h1 { font-family: var(--font-display, sans-serif); font-size: 18px; margin: 0; font-weight: 700; }
+  .bar .sp { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand img { height: 28px; display: block; }
+  .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
+    color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
+  .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
+    margin: 2px 0 4px; color: var(--ink-900, #18191c); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 22px 20px 80px; }
+  .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
+    padding: 9px 15px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--ink-50, #f6f7f9); }
+  .btn.primary { background: var(--terracotta-500, #d9743f); border-color: var(--terracotta-500, #d9743f); color: #fff; }
+  .btn.primary:hover { background: var(--terracotta-600, #c2643a); }
+  .btn.ok { background: #1c7a3f; border-color: #1c7a3f; color: #fff; }
+  .btn.ok:hover { background: #176333; }
+  .btn.danger { color: #b3261e; border-color: #e5b4b1; }
+  .btn.danger:hover { background: #fbeceb; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  input, select { font-family: var(--font-sans, sans-serif); font-size: 14px; width: 100%;
+    border: 1px solid var(--ink-300, #c0c3cb); border-radius: 9px; padding: 9px 11px; background: #fff; color: var(--ink-900); }
+  label { display: block; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+    margin: 0 0 4px; color: var(--ink-600, #53575f); }
+  .card { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+  .muted { color: var(--ink-600, #53575f); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--ink-500, #71757e); margin-top: 4px; }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .login .card { text-align: center; }
+  .login img { height: 34px; margin-bottom: 14px; }
+
+  /* view tabs */
+  .tabs { display: flex; gap: 8px; margin: 14px 0 18px; }
+  .tab { font-weight: 700; font-size: 13px; padding: 7px 13px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--ink-200, #e1e4e9); background: #fff; color: var(--ink-700, #3a3d44); }
+  .tab.active { background: var(--ink-900, #18191c); color: #fff; border-color: var(--ink-900, #18191c); }
+  .tab .n { opacity: .7; font-weight: 800; }
+
+  /* receipt row */
+  .rcard { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 12px;
+    padding: 14px; margin-bottom: 12px; }
+  .rgrid { display: grid; gap: 12px; align-items: end;
+    grid-template-columns: 1.2fr 0.9fr 1.6fr 0.8fr 1.3fr; }
+  .rfoot { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+  .rinfo { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .rlink { text-decoration: none; font-weight: 700; font-size: 13px; }
+  .taxchk { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 600;
+    text-transform: none; letter-spacing: 0; color: var(--ink-700, #3a3d44); cursor: pointer; }
+  .taxchk input { width: auto; margin: 0; cursor: pointer; }
+  .tofinal { font-size: 13px; color: var(--ink-700, #3a3d44); }
+  .tofinal b { color: var(--ink-900, #18191c); }
+  .ractions { display: flex; gap: 8px; margin-left: auto; }
+  .src { display: inline-block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-500, #71757e); border: 1px solid var(--ink-200, #e1e4e9); border-radius: 999px; padding: 1px 7px; margin-left: 8px; }
+  .rcard.done { opacity: .72; }
+  @media (max-width: 760px) {
+    .rgrid { grid-template-columns: 1fr 1fr; }
+    .rgrid .wide { grid-column: 1 / -1; }
+  }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink-900, #18191c);
+    color: #fff; padding: 11px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .toast.err { background: #b3261e; }
+  .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <div class="card">
+    <img src="../assets/recast-logo-horizontal-black.png" alt="Recast">
+    <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Receipts Queue</h1>
+    <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
+    <div style="margin-bottom:12px"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <button id="loginBtn" class="btn primary" style="width:100%">Sign in</button>
+    <p id="loginErr" class="hint hidden" style="color:#b3261e"></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="bar">
+    <a class="brand" href="../homes/index.html" target="_blank" rel="noopener" title="View live site">
+      <img src="../assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
+    <span class="sp"></span>
+    <button id="seedBtn" class="btn sm">Load test items</button>
+    <button id="logoutBtn" class="btn sm">Sign out</button>
+  </div>
+  <div class="wrap">
+    <h1 class="page-title">Receipts Queue</h1>
+    <p class="muted">Assign a category to each item, then Approve to send it to the sheet, or Dismiss to drop it.</p>
+
+    <div class="tabs">
+      <div class="tab active" data-view="pending">Pending <span class="n" id="nPending">0</span></div>
+      <div class="tab" data-view="approved">Approved <span class="n" id="nApproved">0</span></div>
+      <div class="tab" data-view="dismissed">Dismissed <span class="n" id="nDismissed">0</span></div>
+    </div>
+
+    <div id="list"></div>
+    <p id="listEmpty" class="muted hidden">Nothing here.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const FN = "/.netlify/functions/";
+  // The 11 destination blocks on the sheet. Order matches Paul's list.
+  // Interest is intentionally excluded — Paul enters those manually (specific cases).
+  const CATEGORIES = ["Tools","Materials","Marketing","Meals","Travel","Office","Gas/Truck/Trailer","Subscriptions","Website","Business"];
+  const TAX_RATE = 0.0825; // 8.25% state sales tax, applied per-item when checked
+
+  const num = (a) => { const n = parseFloat(String(a == null ? "" : a).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; };
+  const sheetAmount = (amount, taxable) => { const n = num(amount); return taxable ? n * (1 + TAX_RATE) : n; };
+  const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2);
+
+  let token = sessionStorage.getItem("recast_admin_token") || "";
+  let rows = [];
+  let view = "pending";
+
+  function toast(msg, isErr) {
+    const t = document.createElement("div");
+    t.className = "toast" + (isErr ? " err" : "");
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), isErr ? 4200 : 2400);
+  }
+
+  async function api(fn, body) {
+    const res = await fetch(FN + fn, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-token": token },
+      body: JSON.stringify(body || {}),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (res.status === 401) { signOut(); throw new Error("Session expired — sign in again."); }
+    if (!res.ok || data.ok === false) throw new Error(data.error || ("Request failed (" + res.status + ")"));
+    return data;
+  }
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---- auth ----
+  async function tryLogin(pw) {
+    const res = await fetch(FN + "receipts-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    return res.ok;
+  }
+  function signOut() {
+    token = ""; sessionStorage.removeItem("recast_admin_token");
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  $("loginBtn").onclick = async () => {
+    const pw = $("pw").value.trim();
+    if (!pw) return;
+    $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
+    try {
+      if (await tryLogin(pw)) {
+        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        $("pw").value = "";
+        $("login").classList.add("hidden");
+        await load();
+      } else {
+        $("loginErr").textContent = "Wrong password."; $("loginErr").classList.remove("hidden");
+      }
+    } catch (e) {
+      $("loginErr").textContent = String(e.message || e); $("loginErr").classList.remove("hidden");
+    } finally { $("loginBtn").disabled = false; }
+  };
+  $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = signOut;
+
+  // ---- tabs ----
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.onclick = () => {
+      view = t.dataset.view;
+      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+      render();
+    };
+  });
+
+  // ---- data ----
+  async function load() {
+    $("app").classList.remove("hidden");
+    $("list").innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const data = await api("receipts-data", { action: "list" });
+      rows = data.rows || [];
+    } catch (e) { $("list").innerHTML = ""; toast(String(e.message || e), true); return; }
+    render();
+  }
+
+  function counts() {
+    const c = { pending: 0, approved: 0, dismissed: 0 };
+    rows.forEach((r) => { c[r.status] = (c[r.status] || 0) + 1; });
+    $("nPending").textContent = c.pending;
+    $("nApproved").textContent = c.approved;
+    $("nDismissed").textContent = c.dismissed;
+  }
+
+  function render() {
+    counts();
+    const el = $("list"); el.innerHTML = "";
+    const items = rows.filter((r) => r.status === view);
+    $("listEmpty").classList.toggle("hidden", items.length > 0);
+    if (view === "pending" && rows.length === 0) {
+      $("listEmpty").textContent = "Queue is empty. Click “Load test items” to try it out.";
+    } else {
+      $("listEmpty").textContent = "Nothing here.";
+    }
+
+    items.forEach((r) => {
+      const pending = view === "pending";
+      const taxable = r.taxable !== false; // default true
+      const card = document.createElement("div");
+      card.className = "rcard" + (pending ? "" : " done");
+      const opts = ['<option value="">— pick —</option>']
+        .concat(CATEGORIES.map((c) => '<option value="' + esc(c) + '"' + (r.category === c ? " selected" : "") + ">" + esc(c) + "</option>"))
+        .join("");
+      const ro = pending ? "" : "disabled";
+      card.innerHTML =
+        '<div class="rgrid">' +
+          '<div><label>Vendor</label><input data-f="vendor" value="' + esc(r.vendor) + '" ' + ro + '></div>' +
+          '<div><label>Date</label><input data-f="date" value="' + esc(r.date) + '" ' + ro + '></div>' +
+          '<div class="wide"><label>Item</label><input data-f="item" value="' + esc(r.item) + '" ' + ro + '></div>' +
+          '<div><label>Amount</label><input data-f="amount" value="' + esc(r.amount) + '" ' + ro + '></div>' +
+          '<div><label>Category</label><select data-f="category" ' + ro + '>' + opts + '</select></div>' +
+        '</div>';
+
+      // Footer: receipt link · tax checkbox · "goes to sheet" amount · actions
+      const foot = document.createElement("div");
+      foot.className = "rfoot";
+      const info = document.createElement("div");
+      info.className = "rinfo";
+      if (r.sourceUrl) {
+        const a = document.createElement("a");
+        a.className = "rlink"; a.href = r.sourceUrl; a.target = "_blank"; a.rel = "noopener";
+        a.textContent = "🧾 Receipt";
+        info.appendChild(a);
+      }
+      const taxLabel = document.createElement("label");
+      taxLabel.className = "taxchk";
+      taxLabel.innerHTML = '<input type="checkbox" data-f="taxable"' + (taxable ? " checked" : "") + " " + ro + "> +8.25% tax";
+      info.appendChild(taxLabel);
+      const readout = document.createElement("span");
+      readout.className = "tofinal";
+      info.appendChild(readout);
+      foot.appendChild(info);
+
+      const amtInput = card.querySelector('[data-f="amount"]');
+      const taxBox = taxLabel.querySelector('[data-f="taxable"]');
+      const refresh = () => { readout.innerHTML = "→ Sheet: <b>" + money(sheetAmount(amtInput.value, taxBox.checked)) + "</b>"; };
+      refresh();
+
+      if (pending) {
+        const patch = () => {
+          const p = {};
+          card.querySelectorAll("[data-f]").forEach((inp) => { p[inp.dataset.f] = inp.type === "checkbox" ? inp.checked : inp.value; });
+          p.taxable = taxBox.checked;
+          return p;
+        };
+        amtInput.addEventListener("input", refresh);
+        taxBox.addEventListener("change", refresh);
+        // Persist edits on change (blur / select / checkbox).
+        card.querySelectorAll("[data-f]").forEach((inp) => {
+          inp.addEventListener("change", async () => {
+            try { await api("receipts-data", { action: "update", id: r.id, patch: patch() }); }
+            catch (e) { toast(String(e.message || e), true); }
+          });
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "ractions";
+        const dismiss = document.createElement("button");
+        dismiss.className = "btn danger sm"; dismiss.textContent = "Dismiss";
+        dismiss.onclick = async () => {
+          try { await api("receipts-data", { action: "dismiss", id: r.id }); toast("Dismissed."); await load(); }
+          catch (e) { toast(String(e.message || e), true); }
+        };
+        const approve = document.createElement("button");
+        approve.className = "btn ok sm"; approve.textContent = "Approve → sheet";
+        approve.onclick = async () => {
+          const p = patch();
+          if (!p.category) { toast("Pick a category first.", true); return; }
+          approve.disabled = true; approve.innerHTML = '<span class="spin"></span> Approving…';
+          try { await api("receipts-data", { action: "approve", id: r.id, patch: p }); toast("Approved."); await load(); }
+          catch (e) { toast(String(e.message || e), true); approve.disabled = false; approve.textContent = "Approve → sheet"; }
+        };
+        actions.appendChild(dismiss); actions.appendChild(approve);
+        foot.appendChild(actions);
+      } else {
+        const meta = document.createElement("span");
+        meta.className = "tofinal";
+        meta.innerHTML = "· " + (r.category ? "<b>" + esc(r.category) + "</b>" : "(no category)") +
+          (r.source ? '<span class="src">' + esc(r.source) + "</span>" : "");
+        info.appendChild(meta);
+      }
+
+      card.appendChild(foot);
+      el.appendChild(card);
+    });
+  }
+
+  // ---- seed (Task 1 testing) ----
+  $("seedBtn").onclick = async () => {
+    try {
+      const r = await api("receipts-data", { action: "seed", force: rows.length > 0 });
+      toast("Loaded " + r.count + " test items.");
+      await load();
+    } catch (e) { toast(String(e.message || e), true); }
+  };
+
+  // ---- boot ----
+  (async function boot() {
+    if (token && (await tryLogin(token))) { $("login").classList.add("hidden"); await load(); }
+  })();
+})();
+</script>
+</body>
+</html>

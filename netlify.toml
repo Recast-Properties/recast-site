@@ -19,3 +19,10 @@
   to = "/.netlify/functions/photo/:splat"
   status = 200
   force = true
+
+# The receipts queue is an actively-iterated internal tool — never let the
+# browser serve a stale copy of the page.
+[[headers]]
+  for = "/receipts/*"
+  [headers.values]
+    cache-control = "no-store"
