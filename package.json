@@ -6,5 +6,12 @@
   "dependencies": {
     "@netlify/blobs": "^8.2.0",
     "heic-convert": "^2.1.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@babel/preset-react": "^7.24.0"
+  },
+  "scripts": {
+    "build": "node build.mjs"
   }
 }

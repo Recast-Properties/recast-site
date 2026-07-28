@@ -47,7 +47,9 @@
     year: "year", yearbuilt: "year", type: "type", propertytype: "type",
     tagline: "tagline", description: "description", desc: "description",
     highlights: "highlights", features: "highlights",
-    mlsid: "mlsId", mls: "mlsId", photos: "photos", photourls: "photos"
+    mlsid: "mlsId", mls: "mlsId", photos: "photos", photourls: "photos",
+    agentname: "agentName", agent: "agentName",
+    agentphone: "agentPhone", agentnumber: "agentPhone"
   };
 
   function rowsToListings(rows) {
@@ -73,6 +75,8 @@
         description: o.description || "",
         highlights: list(o.highlights),
         mlsId: o.mlsId || "",
+        agentName: o.agentName || "",
+        agentPhone: o.agentPhone || "",
         photos: /https?:\/\/|\|/.test(o.photos) ? list(o.photos) : [],
         photoFolder: (/https?:\/\/|\|/.test(o.photos) ? "" : (o.photos || "")).trim()
       });
@@ -99,9 +103,22 @@
 
   // --- Photo helpers (folder-based: photos/<folder>/1.jpg, 2.jpg, ...) ---
   function photoBase() { return (window.RECAST_PHOTO_BASE || "../photos/"); }
+
+  // Route a same-origin photo through Netlify's Image CDN so it's resized to the
+  // size actually displayed and re-encoded as WebP (a 700 KB / 1600px hero becomes
+  // a ~60 KB card-sized WebP), and the transformed result is cached hard at the
+  // edge. External photo URLs are left untouched (they'd need remote_images config)
+  // and an empty src passes through so the placeholder still shows.
+  function cdnImg(src, width) {
+    if (!src || /^https?:\/\//i.test(src)) return src;
+    var abs = String(src).replace(/^(?:\.\.\/)+/, "/"); // ../photos/x/1.jpg -> /photos/x/1.jpg
+    if (abs.charAt(0) !== "/") abs = "/" + abs;
+    return "/.netlify/images?url=" + encodeURIComponent(abs) + "&w=" + width + "&fm=webp&q=72";
+  }
+
   function heroUrl(p) {
     if (p.photos && p.photos.length) return p.photos[0];
-    if (p.photoFolder) return photoBase() + p.photoFolder + "/1.jpg";
+    if (p.photoFolder) return cdnImg(photoBase() + p.photoFolder + "/1.jpg", 800);
     return "";
   }
   // Direct URL for the i-th photo (0-indexed) without probing.
@@ -125,21 +142,33 @@
     })(1);
   }
 
-  // Count contiguously-numbered images with lightweight HEAD requests.
-  function countFolder(p, done) {
-    if (p.photos && p.photos.length) { done(p.photos.length); return; }
-    if (!p.photoFolder) { done(0); return; }
-    const base = photoBase() + p.photoFolder + "/";
-    let n = 0;
-    (function tryNext(i) {
-      if (i > 60) { done(n); return; }
-      fetch(base + i + ".jpg", { method: "HEAD" })
-        .then(function (r) { if (r.ok) { n = i; tryNext(i + 1); } else { done(n); } })
-        .catch(function () { done(n); });
-    })(1);
+  // How many photos a listing has, in ONE request. The manifest endpoint reads the
+  // photo Blob store and returns the count; if it's unavailable we fall back to a
+  // fast PARALLEL probe (all HEADs at once, not the old one-at-a-time walk that
+  // cost ~6s and blocked the lightbox). Returns a Promise<number>.
+  async function manifest(p) {
+    if (p.photos && p.photos.length) return p.photos.length;
+    if (!p.photoFolder) return 0;
+    try {
+      const r = await fetch("/.netlify/functions/photos-list?folder=" + encodeURIComponent(p.photoFolder));
+      if (r.ok) { const j = await r.json(); if (j && typeof j.count === "number") return j.count; }
+    } catch (e) { /* fall through to probe */ }
+    return parallelCount(p);
   }
+  function parallelCount(p) {
+    if (!p.photoFolder) return Promise.resolve(0);
+    const base = photoBase() + p.photoFolder + "/";
+    const MAX = 60;
+    return Promise.all(
+      Array.from({ length: MAX }, function (_, i) {
+        return fetch(base + (i + 1) + ".jpg", { method: "HEAD" }).then(function (r) { return r.ok; }).catch(function () { return false; });
+      })
+    ).then(function (oks) { let n = 0; while (oks[n]) n++; return n; });
+  }
+  // Back-compat callback wrapper (older callers passed a done() callback).
+  function countFolder(p, done) { manifest(p).then(done); }
 
   window.RecastListings = { parseCSV, rowsToListings, loadListings };
-  window.RecastPhotos = { heroUrl, urlAt, probeFolder, countFolder };
+  window.RecastPhotos = { heroUrl, urlAt, probeFolder, countFolder, manifest, cdnImg };
   window.loadListings = loadListings;
 })();

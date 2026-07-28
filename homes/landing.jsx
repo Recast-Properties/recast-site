@@ -13,7 +13,7 @@ function Stat({ icon, value, label }) {
 function PropertyCard({ p }) {
   const sold = p.status === "sold";
   return (
-    <a href={"detail.html?id=" + p.id} className="prop-card" style={{ display: "block", background: "var(--white)",
+    <a href={"/homes/" + p.id} className="prop-card" style={{ display: "block", background: "var(--white)",
       borderRadius: "var(--radius-lg)", boxShadow: "var(--shadow-sm)", overflow: "hidden",
       transition: "transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out)" }}>
       <div style={{ position: "relative" }}>

@@ -3,3 +3,13 @@ node_modules/
 .env
 .env.*
 .DS_Store
+
+# Compiled from *.jsx by `npm run build` (build artifacts, not source).
+/components.js
+/OfferModal.js
+/app-home.js
+/homes/listing-components.js
+/homes/landing.js
+/homes/app-index.js
+/homes/detail.js
+/homes/app-detail.js

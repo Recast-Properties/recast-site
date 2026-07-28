@@ -1,11 +1,22 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 23", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 27", "color:#EA9B60;font-weight:700");
+
+/* Resolve the agent to show for a listing: prefer the per-property name/phone set
+   in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
+function agentFor(p) {
+  const def = window.RECAST_AGENT || { name: "Recast Properties", phone: "214.906.4992", tel: "2149064992" };
+  const name = String((p && p.agentName) || "").trim();
+  const phone = String((p && p.agentPhone) || "").trim();
+  if (!name && !phone) return def;
+  const displayPhone = phone || def.phone;
+  return { name: name || def.name, phone: displayPhone, tel: displayPhone.replace(/[^0-9]/g, "") };
+}
 
 /* Orange call pill — shared by the gallery viewer, sidebar callout, and mobile bar */
-function AgentPill({ compact }) {
-  const a = window.RECAST_AGENT || { name: "Recast Properties", phone: "214.906.4992", tel: "2149064992" };
+function AgentPill({ compact, p }) {
+  const a = agentFor(p);
   return (
     <a href={"tel:" + a.tel} className="agent-pill" style={{ display: "inline-flex", alignItems: "center", gap: 14,
       background: "var(--terracotta-500)", color: "#fff", borderRadius: 14, padding: compact ? "10px 18px" : "13px 22px",
@@ -26,7 +37,13 @@ function AgentPill({ compact }) {
 /* Full-screen photo viewer — photos scroll vertically in numeric order. */
 function GalleryViewer({ p, count, onClose }) {
   const photos = [];
-  const url = i => window.RecastPhotos ? window.RecastPhotos.urlAt(p, i) : ((p.photos || [])[i] || "");
+  const raw = i => window.RecastPhotos ? window.RecastPhotos.urlAt(p, i) : ((p.photos || [])[i] || "");
+  // Serve each viewer photo through the Image CDN (WebP, sized to the viewer) so a
+  // ~1 MB JPEG becomes ~200 KB — the big-image versions of the grid fix.
+  const url = i => {
+    const u = raw(i);
+    return (window.RecastPhotos && window.RecastPhotos.cdnImg) ? window.RecastPhotos.cdnImg(u, 1400) : u;
+  };
   for (let i = 0; i < count; i++) photos.push(url(i));
 
   React.useEffect(() => {
@@ -60,8 +77,16 @@ function GalleryViewer({ p, count, onClose }) {
         flex: 1, minHeight: 0, width: "100%", padding: "24px 32px 0" }}>
         <div className="gallery-scroll" style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 14, paddingBottom: 28 }}>
           {photos.map((src, i) => (
-            <img key={i} src={src} alt={p.address + " photo " + (i + 1)} loading={i < 3 ? "eager" : "lazy"}
-              style={{ width: "100%", display: "block", borderRadius: "var(--radius-md)" }} />
+            <img key={i} src={src} alt={p.address + " photo " + (i + 1)}
+              loading={i < 3 ? "eager" : "lazy"} decoding="async"
+              /* aspect-ratio reserves each slot's height BEFORE the image loads, so
+                 off-screen photos no longer collapse to 0px and get counted as
+                 "in view" all at once — which is why the old gallery fetched all ~39
+                 full-size photos on open. With height reserved, loading="lazy" now
+                 defers the off-screen ones and the top images load first. `auto 3/2`:
+                 use the photo's real ratio once known (no crop), 3:2 as placeholder. */
+              style={{ width: "100%", display: "block", borderRadius: "var(--radius-md)",
+                       aspectRatio: "auto 3 / 2", background: "var(--paper-deep)" }} />
           ))}
         </div>
         <div className="gallery-info" style={{ paddingBottom: 28 }}>
@@ -69,7 +94,7 @@ function GalleryViewer({ p, count, onClose }) {
           <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 36, letterSpacing: "-0.02em", margin: "2px 0 6px" }}>{fmtPrice(p.price)}</div>
           <div style={{ marginBottom: 22 }}><StatusBadge status={p.status} /></div>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Call for a showing or more info</div>
-          <AgentPill />
+          <AgentPill p={p} />
         </div>
       </div>
 
@@ -78,7 +103,7 @@ function GalleryViewer({ p, count, onClose }) {
         padding: "14px 18px calc(14px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--color-divider)",
         background: "var(--white)", flexShrink: 0 }}>
         <span style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.35 }}>Call for a showing<br />or more info</span>
-        <AgentPill compact />
+        <AgentPill compact p={p} />
       </div>
       </div>
     </div>
@@ -89,14 +114,34 @@ function Gallery({ p }) {
   const [count, setCount] = React.useState(0);
   const [open, setOpen] = React.useState(false);
 
-  const url = i => window.RecastPhotos ? window.RecastPhotos.urlAt(p, i) : ((p.photos || [])[i] || "");
+  // The 3-up preview also goes through the Image CDN (WebP, sized to the tiles).
+  const raw = i => window.RecastPhotos ? window.RecastPhotos.urlAt(p, i) : ((p.photos || [])[i] || "");
+  const url = i => {
+    const u = raw(i);
+    return (window.RecastPhotos && window.RecastPhotos.cdnImg) ? window.RecastPhotos.cdnImg(u, 900) : u;
+  };
 
-  // Count photos in the background (lightweight HEAD requests).
+  // Photo count in ONE request (was a ~6s sequential probe that blocked the
+  // lightbox from rendering its image slots — the real cause of the slow gallery).
   React.useEffect(() => {
     let cancelled = false;
     setCount(0);
-    if (window.RecastPhotos) window.RecastPhotos.countFolder(p, n => { if (!cancelled) setCount(n); });
+    if (window.RecastPhotos && window.RecastPhotos.manifest)
+      window.RecastPhotos.manifest(p).then(n => { if (!cancelled) setCount(n); });
     return () => { cancelled = true; };
+  }, [p.id]);
+
+  // Warm the first three FULL-SIZE (viewer) images in the background while the user
+  // is still on the detail page, so the lightbox opens on already-loaded top photos.
+  React.useEffect(() => {
+    for (let i = 0; i < 3; i++) {
+      const u = raw(i);
+      if (!u) continue;
+      const big = (window.RecastPhotos && window.RecastPhotos.cdnImg) ? window.RecastPhotos.cdnImg(u, 1400) : u;
+      const im = new Image();
+      if (i === 0) { try { im.fetchPriority = "high"; } catch (e) {} }
+      im.src = big;
+    }
   }, [p.id]);
 
   React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [open, count]);
@@ -164,7 +209,7 @@ function InquiryCard({ p }) {
       <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 34, letterSpacing: "-0.02em", margin: "2px 0 4px" }}>{fmtPrice(p.price)}</div>
       <div style={{ marginBottom: 20 }}><StatusBadge status={p.status} /></div>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Call for a showing or more info</div>
-      <AgentPill />
+      <AgentPill p={p} />
     </div>
   );
 }
@@ -207,7 +252,9 @@ function PropertyDetail({ p }) {
           <p className="eyebrow" style={{ marginBottom: 18, color: "var(--color-fg)" }}>{p.tagline}</p>
           <FactGrid p={p} />
           <h2 className="rc-h4" style={{ margin: "32px 0 10px" }}>About this home</h2>
-          <p className="rc-body" style={{ color: "var(--color-fg-muted)", maxWidth: 620 }}>{p.description}</p>
+          {String(p.description || "").split(/\n{2,}/).map((para, i) => (
+            <p key={i} className="rc-body" style={{ color: "var(--color-fg-muted)", maxWidth: 620, whiteSpace: "pre-line", marginBottom: 14 }}>{para}</p>
+          ))}
 
           <h2 className="rc-h4" style={{ margin: "30px 0 14px" }}>Highlights</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

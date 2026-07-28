@@ -5,11 +5,20 @@
 
 [build]
   publish = "."
-  # No build command: nothing to compile. Netlify still runs `npm install` so the
-  # functions can bundle their dependencies.
+  # Precompile the site's JSX to plain .js (so the browser no longer runs
+  # @babel/standalone at load). Netlify runs `npm install` (functions' deps) then
+  # this. CLI deploys can build locally + `--no-build`; git/CI deploys run this.
+  command = "npm run build"
 
 [functions]
   directory = "netlify/functions"
+
+# The server-rendered listing pages transform the SAME html the site ships, so
+# bundle those templates into the functions that read them.
+[functions."listing-page"]
+  included_files = ["homes/detail.html"]
+[functions."homes-index"]
+  included_files = ["homes/index.html"]
 
 # Serve ALL listing photos from Netlify Blobs (uploaded via the admin page).
 # force=true so the function wins over any leftover static files at /photos/*.
@@ -19,6 +28,44 @@
   to = "/.netlify/functions/photo/:splat"
   status = 200
   force = true
+
+# ---- Crawlable (server-rendered) listing pages ------------------------------
+# Old query-param detail URLs -> clean /homes/<id> (301). force=true + a query
+# condition so it only fires when ?id=… is present (overriding the static file).
+[[redirects]]
+  from = "/homes/detail.html"
+  to = "/homes/:id"
+  status = 301
+  force = true
+  [redirects.query]
+    id = ":id"
+
+# Canonicalize the grid to the directory root.
+[[redirects]]
+  from = "/homes/index.html"
+  to = "/homes/"
+  status = 301
+  force = true
+
+# Grid + sitemap are rendered from Blobs (force=true to beat the static files).
+[[redirects]]
+  from = "/homes/"
+  to = "/.netlify/functions/homes-index"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
+  status = 200
+  force = true
+
+# Clean listing URL -> server-rendered detail page. NOT forced, so real static
+# files under /homes/ (index.html, detail.html, *.jsx, *.js) win over this and
+# only a bare id like /homes/136bowlinggreen falls through to the function.
+[[redirects]]
+  from = "/homes/:id"
+  to = "/.netlify/functions/listing-page/:id"
+  status = 200
 
 # The receipts queue is an actively-iterated internal tool — never let the
 # browser serve a stale copy of the page.
