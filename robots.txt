@@ -3,3 +3,5 @@
 # PerplexityBot, ClaudeBot, Google-Extended). Nothing is disallowed.
 User-agent: *
 Allow: /
+
+Sitemap: https://recast-properties.com/sitemap.xml
