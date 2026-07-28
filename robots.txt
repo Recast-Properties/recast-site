@@ -1,0 +1,5 @@
+# recast-properties.com
+# All crawlers welcome, including AI search (GPTBot, OAI-SearchBot,
+# PerplexityBot, ClaudeBot, Google-Extended). Nothing is disallowed.
+User-agent: *
+Allow: /
