@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 27", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 28", "color:#EA9B60;font-weight:700");
 
 /* Resolve the agent to show for a listing: prefer the per-property name/phone set
    in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
@@ -220,15 +220,15 @@ function PropertyDetail({ p }) {
       <div className="wrap" style={{ padding: "90px 0", textAlign: "center" }}>
         <h1 className="rc-h2">Property not found</h1>
         <p style={{ color: "var(--color-fg-muted)" }}>This listing may have been removed.</p>
-        <a href="index.html" className="btn btn-primary" style={{ marginTop: 8 }}><LIcon name="arrow-left" className="ic" />Back to all homes</a>
+        <a href="/homes/" className="btn btn-primary" style={{ marginTop: 8 }}><LIcon name="arrow-left" className="ic" />Back to all homes</a>
       </div>
     );
   }
   return (
     <main>
       <div className="wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
-        <a href="index.html" style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 700, color: "var(--color-fg-muted)" }}>
-          <LIcon name="arrow-left" className="ic" style={{ width: 16, height: 16 }} />All properties
+        <a href="/homes/" className="btn btn-secondary">
+          <LIcon name="arrow-left" className="ic" style={{ width: 18, height: 18 }} />All properties
         </a>
       </div>
       <div className="wrap" style={{ paddingBottom: 8 }}>
