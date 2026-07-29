@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 28", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 29", "color:#EA9B60;font-weight:700");
 
 /* Resolve the agent to show for a listing: prefer the per-property name/phone set
    in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
@@ -228,7 +228,7 @@ function PropertyDetail({ p }) {
     <main>
       <div className="wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
         <a href="/homes/" className="btn btn-secondary">
-          <LIcon name="arrow-left" className="ic" style={{ width: 18, height: 18 }} />All properties
+          <LIcon name="arrow-left" className="ic" style={{ width: 19, height: 19, color: "var(--color-brand)", strokeWidth: 3 }} />All properties
         </a>
       </div>
       <div className="wrap" style={{ paddingBottom: 8 }}>
