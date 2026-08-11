@@ -28,7 +28,7 @@ password-gated with the same password as `/admin` (`ADMIN_PASSWORD`). It is
 currently published to a stable Netlify **alias** (see *Deploy* below), not the
 production domain.
 
-**Categories** (the 4-column blocks on the sheet): Tools, Materials, Marketing,
+**Categories** (the 5-column blocks on the sheet): Tools, Materials, Marketing,
 Meals, Travel, Office, Gas/Truck/Trailer, Subscriptions, Website, Business.
 *Interest* is intentionally **not** offered — those are entered by hand.
 
@@ -117,8 +117,10 @@ stored in the repo):
 The poller has the ingest URL hard-coded in `CONFIG.INGEST_URL`.
 
 **The sheet:** id `1isEbfNKPO32Wpf08EtLkNHX85c0rTIl8tpH9bUdgQbs`, tab `RECAST BIZ`.
-Each category is a 4-column block (Vendor | Date | Item | Amount) under a header
-row that carries the running total.
+Each category is a 5-column block (Vendor | Date | Description | Link | Price)
+under a header row that carries the running total. **Link** is a clickable
+`HYPERLINK` to the source email (one-time migration: `addLinkColumns_` in
+`receipts-sheet.gs`).
 
 ---
 
@@ -164,7 +166,7 @@ Currently published to a **stable Netlify alias** so the page has one permanent,
 no-cache URL while it's iterated on:
 
 ```
-netlify deploy --no-build --alias receipts   # from /Users/paulbjork/Desktop/recast-site
+netlify deploy --no-build --alias receipts   # from /Users/paulbjork/Desktop/Claude/Recast-site
 ```
 
 This serves `https://receipts--incomparable-raindrop-8f3d22.netlify.app/receipts/`
@@ -187,3 +189,6 @@ before deploying so it's bundled into the function.
 - **2026-06-26** — Image-receipt hardening: include inline images, HEIC→JPEG
   conversion, never-silently-drop review placeholders, a poller lock against
   overlapping runs, and `[ingest]` diagnostic logging.
+- **2026-06-27** — Added a **Link** column to each block (Vendor | Date |
+  Description | Link | Price); approving now writes a clickable `HYPERLINK` to
+  the source email. One-time `addLinkColumns_` migration inserted the column.

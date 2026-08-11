@@ -17,7 +17,7 @@ as calendar events with metadata; there is no separate database.
 - Netlify Functions (Node, native fetch). Functions live in `netlify/functions/`.
 - Nylas v3 -> Google Calendar (paul@recast-properties.com primary calendar).
 - Telnyx voice assistant calls `appointment-action` as a tool.
-- Deploy: `netlify deploy --prod` from the repo root (`/Users/paulbjork/Desktop/recast-site`).
+- Deploy: `netlify deploy --prod` from the repo root (`/Users/paulbjork/Desktop/Claude/Recast-site`).
   There is no package.json at the root.
 - Tests: `node tests/parser.test.js` (12/12 green; parser-only) and
   `node tests/call-completed.test.js` (9/9 green; Telnyx Ed25519 verify + row assembly).

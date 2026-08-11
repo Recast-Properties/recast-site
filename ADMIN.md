@@ -149,7 +149,7 @@ public on the live site, so nothing secret is exposed; the password only gates
   `listing-components.jsx`, `landing.jsx`, `app-index.jsx`, `detail.jsx`,
   `app-detail.jsx`. (`sections.jsx` is unused/dead.) **Editing a `.jsx` requires a
   rebuild** — bump its `?v=` in the HTML too.
-- **Deploy:** from `/Users/paulbjork/Desktop/recast-site Claude`, either
+- **Deploy:** from `/Users/paulbjork/Desktop/Claude/Recast-site`, either
   `npm run build && netlify deploy --prod --no-build`, or `netlify deploy --prod`
   (which runs the build). Git/CI deploys run the build command automatically.
 - **Local dev:** `netlify dev` (Blobs is emulated locally). Note: Blobs-dependent
