@@ -29,23 +29,36 @@ Every admin page is `noindex, nofollow` and served `cache-control: no-store`
 ### Email setup (`/admin/email/` + `email-setup.mjs`)
 
 One form: pick the **mailbox** (paul@ / properties@ — hardcoded allowlist),
-type an alias name, confirm, and the function does three steps, reporting each
-one separately (a failed step shows red — never a green "done"):
+type an alias name, confirm, and the function runs the steps, reporting each
+one separately (a failed step shows red — never a green "done").
 
-1. **Workspace alias** on the mailbox (Admin Directory API). If the address
-   already belongs to the *other* user, the error names the owner.
-2. **Gmail label** named after the alias, in that mailbox.
-3. **Filter** `to:<alias>` → apply label, skip inbox, in that mailbox.
+**The two mailboxes use DIFFERENT models** (matching how each was historically
+set up — discovered 2026-08-12 when properties@ "didn't work"):
 
-Re-running is safe: already-existing alias/label/filter count as success.
-The page also lists the chosen mailbox's current aliases.
+- **paul@ — ALIAS model:** ① Workspace alias on the user (if the address
+  already belongs to someone else, the error names the owner) → ② Gmail label
+  named after the alias → ③ filter `to:<alias>` → label, skip inbox.
+- **properties@ — GROUP model** (each property email is a **Google Group**,
+  properties@ is just a member; the form adds a required **Property name**
+  field, e.g. "320 Elm"): ① Google Group `<alias>@` with the property name as
+  its group name → ② group settings: anyone can post, no moderation/spam
+  quarantine, invited-only join → ③ properties@ added as MEMBER → ④ Gmail
+  label named the **property name** (not the alias), in properties@ →
+  ⑤ filter `query:<groupEmail>` → label, skip inbox **and spam**.
+  Which mailbox is group-model is the `GROUP_MAILBOXES` list in the function
+  (mirrored by `isGroup()` in the page).
 
-**Removal:** each alias in the list has a **Remove** button (confirm step, then
-per-step report like create). It undoes all three pieces in reverse order —
-filter, label, then the Workspace alias — so mail to the address bounces
+Re-running is safe: already-existing pieces count as success. The page lists
+the chosen mailbox's current property emails (aliases for paul@; groups the
+mailbox is a member of, with their names, for properties@).
+
+**Removal:** each entry in the list has a **Remove** button (confirm step, then
+per-step report like create). It undoes the pieces in reverse order — paul@:
+filter → label → Workspace alias (if the alias actually lives on the *other*
+mailbox the error names the owner); properties@: filter → label (looked up via
+the group's name) → the Google Group itself. Mail to the address bounces
 afterward; old messages stay in the mailbox but lose the label grouping.
-Already-gone pieces count as success (safe to re-run), and if the alias
-actually lives on the *other* mailbox the error names the owner.
+Already-gone pieces count as success (safe to re-run).
 `info@recast-properties.com` is **protected** (hardcoded `PROTECTED` list in
 `email-setup.mjs`) — it's the FROM address for the call-summary/confirmation
 emails; the UI shows a "protected" tag instead of a button and the function
@@ -54,16 +67,22 @@ refuses it server-side.
 **The old Apps Script dialogs:** the paul@ one ("Create Property Email",
 bound to its sheet) was retired 2026-08-11 — its code was replaced with a
 retirement comment, so the "Recast Tools → Email Setup" menu no longer
-appears. The properties@ twin lives under the properties@ account's
-script.google.com and still needs the same treatment.
+appears. The properties@ one ("Add Property Email", under the properties@
+account's script.google.com) is **not** a twin — it's the group-model script
+this tool now mirrors. Retire it the same way once the group model is
+verified working end to end here.
 
 **How it authenticates to Google:** a **service account with domain-wide
-delegation**. The function hand-rolls the RS256 JWT → token exchange (native
-`crypto`, no googleapis dependency) and impersonates `GOOGLE_ADMIN_USER` for
-the Directory call and the target mailbox for the Gmail calls. The DWD grant
+delegation** (`email-setup@recast-admin.iam.gserviceaccount.com`). The function
+hand-rolls the RS256 JWT → token exchange (native `crypto`, no googleapis
+dependency) and impersonates `GOOGLE_ADMIN_USER` for the Directory/Groups
+calls and the target mailbox for the Gmail calls. The DWD grant
 (admin.google.com → Security → API controls → Domain-wide delegation) must
-authorize the service account's client ID for exactly:
-`admin.directory.user.alias`, `gmail.labels`, `gmail.settings.basic`.
+authorize the service account's client ID for exactly these five scopes:
+`admin.directory.user.alias`, `gmail.labels`, `gmail.settings.basic`, plus for
+the group model `admin.directory.group` and `apps.groups.settings`. The group
+model also needs the **Groups Settings API** enabled on the `recast-admin` GCP
+project (Admin SDK is already on).
 
 **Env vars (Netlify):** `GOOGLE_SA_EMAIL` (service-account client_email),
 `GOOGLE_SA_KEY` (its PEM private key; `\n`-escaped is fine),
@@ -142,7 +161,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `homes-index.mjs` | **public** | Server-renders **`/homes/`** — meta + `ItemList` JSON-LD + a linked list of every listing; injects `window.__LISTINGS__`. Template: `homes/index.html`. |
 | `sitemap.mjs` | **public** | **`/sitemap.xml`** generated from Blobs, so every current listing URL is included automatically. |
 | `admin-migrate-photos.mjs` | auth | One-time import of the original static `photos/` folders into Blobs (already run). |
-| `email-setup.mjs` | auth | Property-email creator (see "Email setup" above): `list` aliases / `create` alias + label + filter / `remove` (reverse order, `info@` protected) via a Google service account with domain-wide delegation. |
+| `email-setup.mjs` | auth | Property-email creator/remover (see "Email setup" above): `list` / `create` / `remove`, alias model for paul@ and Google-Group model for properties@, via a Google service account with domain-wide delegation. `info@` protected. |
 
 Shared server code lives in **`netlify/lib/listings.mjs`** (not a function — imported by
 the three above): reads the Blob, normalizes to the same shape `sheet-loader.js`
@@ -224,6 +243,21 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
+- **2026-08-12** — **properties@ = GROUP model.** Removal "worked for paul@ but
+  not properties@": turned out properties@'s property emails are **Google
+  Groups** (per its old Apps Script "Add Property Email": group + external
+  posting + properties@ as member + label named the property name + filter
+  `query:<group>` skipping inbox+spam) — the 2026-08-11 tool had wrongly
+  assumed aliases for both, and its SA had no group scopes (verified by API
+  probe: properties@ is a real user with zero aliases). `email-setup.mjs` now
+  branches on `GROUP_MAILBOXES`: list/create/remove use the group model for
+  properties@ (create takes a required property-name label; group-create
+  failure blocks the rest, other steps run independently; settings step retries
+  while a fresh group provisions), alias model unchanged for paul@. `list`
+  returns `{mode, entries:[{address,name}]}`. UI: property-name field +
+  group-aware copy/preview/list. **Needs two manual grants** (see "How it
+  authenticates"): DWD scopes `admin.directory.group` + `apps.groups.settings`,
+  and the Groups Settings API enabled on `recast-admin`.
 - **2026-08-12** — **Email removal.** `/admin/email/` alias list gained a
   per-alias **Remove** button; `email-setup.mjs` gained the `remove` action
   (filter → label → alias, idempotent, per-step report) and a hardcoded

@@ -1,25 +1,35 @@
-// Email Setup — create a property email address in one shot:
-//   1. Workspace alias on the chosen mailbox   (Admin Directory API, as GOOGLE_ADMIN_USER)
-//   2. Gmail label named after the alias       (Gmail API, as the mailbox)
-//   3. Filter: to:<alias> -> label, skip inbox (Gmail API, as the mailbox)
+// Email Setup — create/remove a property email address in one shot.
+//
+// TWO MODELS, keyed by the mailbox (mirrors how each account was historically set up):
+//   paul@       ALIAS model: Workspace alias on the user + Gmail label (named after
+//               the alias) + filter to:<alias> -> label, skip inbox.
+//   properties@ GROUP model (matches the retired Apps Script "Add Property Email"):
+//               a Google GROUP <alias>@ (name = the human property label) with
+//               external posting allowed, properties@ as a MEMBER, plus a Gmail
+//               label (named the property label) in properties@ and a filter
+//               query:<groupEmail> -> label, skip inbox AND spam.
 //
 // Auth in:  x-admin-token header == ADMIN_PASSWORD (same as every /admin function).
 // Auth out: Google service account with DOMAIN-WIDE DELEGATION. We hand-roll the
 //   RS256 JWT -> access-token exchange with native crypto (no googleapis dep),
-//   impersonating GOOGLE_ADMIN_USER for the Directory call and the target mailbox
-//   for the Gmail calls. DWD scopes that must be authorized in admin.google.com:
+//   impersonating GOOGLE_ADMIN_USER for Directory/Groups calls and the target
+//   mailbox for the Gmail calls. DWD scopes that must be authorized in
+//   admin.google.com (Security -> API controls -> Domain-wide delegation):
 //     https://www.googleapis.com/auth/admin.directory.user.alias
 //     https://www.googleapis.com/auth/gmail.labels
 //     https://www.googleapis.com/auth/gmail.settings.basic
+//     https://www.googleapis.com/auth/admin.directory.group        (group model)
+//     https://www.googleapis.com/auth/apps.groups.settings         (group model)
+//   The group model also needs the "Groups Settings API" enabled on the SA's
+//   GCP project (Admin SDK is already on).
 //
 // POST contract:
-//   { action:"list",   mailbox }        -> { ok, aliases:[...], protectedAliases:[...] }
-//   { action:"create", mailbox, alias } -> { ok, steps:[{name, ok, detail}] }
-//   { action:"remove", mailbox, alias } -> { ok, steps:[{name, ok, detail}] }
+//   { action:"list",   mailbox }               -> { ok, mode, entries:[{address,name}], protectedAliases }
+//   { action:"create", mailbox, alias, label } -> { ok, steps:[{name, ok, detail}] }   (label: group model only)
+//   { action:"remove", mailbox, alias }        -> { ok, steps:[{name, ok, detail}] }
 //     ok is true only if ALL steps succeeded; steps always reports each one.
-//     Safe to re-run: create treats existing alias on the SAME mailbox / existing
-//     label / existing filter as success; remove treats already-gone as success.
-//     remove refuses PROTECTED aliases (in-use sending addresses).
+//     Safe to re-run: already-existing (create) / already-gone (remove) pieces
+//     count as success. remove refuses PROTECTED addresses.
 //
 // Env: ADMIN_PASSWORD, GOOGLE_SA_EMAIL, GOOGLE_SA_KEY (PEM; \n-escaped ok),
 //      GOOGLE_ADMIN_USER (super-admin, e.g. paul@recast-properties.com)
@@ -29,15 +39,24 @@ import crypto from "node:crypto";
 const DOMAIN = "recast-properties.com";
 // Fail-closed allowlist: the only mailboxes this tool may touch.
 const MAILBOXES = [`paul@${DOMAIN}`, `properties@${DOMAIN}`];
-// Aliases that must never be removed: info@ is the FROM address for the
+// Mailboxes whose property emails are Google GROUPS delivering to the mailbox
+// (the properties@ model), not Workspace aliases on the user.
+const GROUP_MAILBOXES = [`properties@${DOMAIN}`];
+const isGroupMode = (mailbox) => GROUP_MAILBOXES.includes(mailbox);
+// Addresses that must never be removed: info@ is the FROM address for the
 // call-summary and seller-confirmation emails (apps-script/call-summary.gs).
 const PROTECTED = [`info@${DOMAIN}`];
 
 const DIR = "https://admin.googleapis.com/admin/directory/v1";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
+const GSETTINGS = "https://www.googleapis.com/groups/v1/groups";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE_ALIAS = "https://www.googleapis.com/auth/admin.directory.user.alias";
+const SCOPE_GROUP = "https://www.googleapis.com/auth/admin.directory.group";
+const SCOPE_GSET = "https://www.googleapis.com/auth/apps.groups.settings";
 const SCOPE_GMAIL = "https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.settings.basic";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function authed(req) {
   const expected = process.env.ADMIN_PASSWORD || "";
@@ -149,14 +168,87 @@ async function createLabel(mailbox, name) {
   return { ok: false, detail: gErr(r) };
 }
 
-async function createFilter(mailbox, fullAlias, labelId) {
-  const r = await gapi(mailbox, SCOPE_GMAIL, "POST", `${GMAIL}/settings/filters`, {
+async function createFilter(mailbox, fullAlias, labelId, groupMode) {
+  // Alias model filters on to:<alias>; the group model (matching the old Apps
+  // Script) filters on query:<groupEmail> and also keeps group mail out of spam.
+  const r = await gapi(mailbox, SCOPE_GMAIL, "POST", `${GMAIL}/settings/filters`, groupMode ? {
+    criteria: { query: fullAlias },
+    action: { addLabelIds: [labelId], removeLabelIds: ["INBOX", "SPAM"] },
+  } : {
     criteria: { to: fullAlias },
     action: { addLabelIds: [labelId], removeLabelIds: ["INBOX"] },
   });
-  if (r.ok) return { ok: true, detail: "to:" + fullAlias + " → label, skip inbox" };
+  if (r.ok) return { ok: true, detail: (groupMode ? "query:" : "to:") + fullAlias + " → label, skip inbox" + (groupMode ? " & spam" : "") };
   if (r.status === 400 && /already exists/i.test(gErr(r))) {
     return { ok: true, detail: "filter already existed — kept as is" };
+  }
+  return { ok: false, detail: gErr(r) };
+}
+
+// ---- group-model steps (properties@ — mirrors apps-script "Add Property Email") ----
+async function getGroup(fullAlias) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  const r = await gapi(admin, SCOPE_GROUP, "GET", `${DIR}/groups/${encodeURIComponent(fullAlias)}`);
+  return r.ok ? r.data : null;
+}
+
+async function listGroups(mailbox) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  if (!admin) throw new Error("GOOGLE_ADMIN_USER not configured.");
+  const r = await gapi(admin, SCOPE_GROUP, "GET", `${DIR}/groups?userKey=${encodeURIComponent(mailbox)}&maxResults=200`);
+  if (!r.ok) throw new Error("Couldn't list groups: " + gErr(r));
+  return (r.data.groups || [])
+    .map((g) => ({ address: g.email, name: g.name || "" }))
+    .sort((a, b) => a.address.localeCompare(b.address));
+}
+
+async function createGroup(fullAlias, label) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  if (!admin) return { ok: false, detail: "GOOGLE_ADMIN_USER not configured." };
+  const r = await gapi(admin, SCOPE_GROUP, "POST", `${DIR}/groups`, {
+    email: fullAlias, name: label,
+    description: "Receipts and correspondence for " + label + ".",
+  });
+  if (r.ok) return { ok: true, created: true, detail: "group " + fullAlias + " (\"" + label + "\")" };
+  if (r.status === 409) {
+    const existing = await getGroup(fullAlias);
+    if (existing) return { ok: true, created: false, detail: "group already existed — kept as is" };
+    return { ok: false, detail: "address already in use (not as a group) — is it an alias on a user?" };
+  }
+  return { ok: false, detail: gErr(r) };
+}
+
+async function setGroupSettings(fullAlias, justCreated) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  // A fresh group can take a few seconds to provision; retry instead of a blind sleep.
+  for (let attempt = 1; ; attempt++) {
+    const r = await gapi(admin, SCOPE_GSET, "PATCH", `${GSETTINGS}/${encodeURIComponent(fullAlias)}?alt=json`, {
+      whoCanPostMessage: "ANYONE_CAN_POST",
+      messageModerationLevel: "MODERATE_NONE",
+      spamModerationLevel: "ALLOW",
+      whoCanJoin: "INVITED_CAN_JOIN",
+    });
+    if (r.ok) return { ok: true, detail: "external senders allowed, no moderation" };
+    if (justCreated && r.status === 404 && attempt < 4) { await sleep(1500); continue; }
+    return { ok: false, detail: gErr(r) };
+  }
+}
+
+async function addMember(fullAlias, memberEmail) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  const r = await gapi(admin, SCOPE_GROUP, "POST",
+    `${DIR}/groups/${encodeURIComponent(fullAlias)}/members`, { email: memberEmail, role: "MEMBER" });
+  if (r.ok) return { ok: true, detail: memberEmail + " added as member" };
+  if (r.status === 409) return { ok: true, detail: memberEmail + " already a member — kept as is" };
+  return { ok: false, detail: gErr(r) };
+}
+
+async function removeGroup(fullAlias) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  if (!admin) return { ok: false, detail: "GOOGLE_ADMIN_USER not configured." };
+  const r = await gapi(admin, SCOPE_GROUP, "DELETE", `${DIR}/groups/${encodeURIComponent(fullAlias)}`);
+  if (r.ok || r.status === 404) {
+    return { ok: true, detail: r.status === 404 ? "didn't exist — nothing to remove" : fullAlias + " deleted — mail to it now bounces" };
   }
   return { ok: false, detail: gErr(r) };
 }
@@ -166,7 +258,8 @@ async function createFilter(mailbox, fullAlias, labelId) {
 async function removeFilter(mailbox, fullAlias) {
   const all = await gapi(mailbox, SCOPE_GMAIL, "GET", `${GMAIL}/settings/filters`);
   if (!all.ok) return { ok: false, detail: "couldn't list filters: " + gErr(all) };
-  const matches = (all.data.filter || []).filter((f) => f.criteria && f.criteria.to === fullAlias);
+  const matches = (all.data.filter || []).filter((f) =>
+    f.criteria && (f.criteria.to === fullAlias || f.criteria.query === fullAlias));
   if (!matches.length) return { ok: true, detail: "no filter found — nothing to remove" };
   for (const f of matches) {
     const r = await gapi(mailbox, SCOPE_GMAIL, "DELETE", `${GMAIL}/settings/filters/${encodeURIComponent(f.id)}`);
@@ -216,9 +309,21 @@ export default async (req) => {
     return Response.json({ ok: false, error: "Unknown mailbox. Allowed: " + MAILBOXES.join(", ") }, { status: 400 });
   }
 
+  const groupMode = isGroupMode(mailbox);
+
   try {
     if (body.action === "list") {
-      return Response.json({ ok: true, aliases: await listAliases(mailbox), protectedAliases: PROTECTED });
+      const entries = groupMode
+        ? await listGroups(mailbox)
+        : (await listAliases(mailbox)).map((a) => ({ address: a, name: "" }));
+      return Response.json({
+        ok: true,
+        mode: groupMode ? "group" : "alias",
+        entries,
+        // kept for anything still reading the old shape
+        aliases: entries.map((e) => e.address),
+        protectedAliases: PROTECTED,
+      });
     }
 
     if (body.action === "create") {
@@ -227,18 +332,43 @@ export default async (req) => {
       const fullAlias = alias + "@" + DOMAIN;
       const steps = [];
 
-      const aliasStep = await createAlias(mailbox, fullAlias);
-      steps.push({ name: "Workspace alias", ok: aliasStep.ok, detail: aliasStep.detail });
+      if (groupMode) {
+        const label = String(body.label || "").trim();
+        if (!label) return Response.json({ ok: false, error: "Property name (label) required for " + mailbox + "." }, { status: 400 });
 
-      const labelStep = aliasStep.ok
-        ? await createLabel(mailbox, alias)
-        : { ok: false, detail: "skipped — alias step failed" };
-      steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+        const groupStep = await createGroup(fullAlias, label);
+        steps.push({ name: "Google Group", ok: groupStep.ok, detail: groupStep.detail });
 
-      const filterStep = labelStep.ok
-        ? await createFilter(mailbox, fullAlias, labelStep.id)
-        : { ok: false, detail: aliasStep.ok ? "skipped — no label to attach" : "skipped — alias step failed" };
-      steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+        // Group-create failure blocks everything; the rest run independently so a
+        // re-run can repair any single failed piece.
+        const skipped = { ok: false, detail: "skipped — group step failed" };
+        const setStep = groupStep.ok ? await setGroupSettings(fullAlias, groupStep.created) : skipped;
+        steps.push({ name: "Group settings", ok: setStep.ok, detail: setStep.detail });
+
+        const memberStep = groupStep.ok ? await addMember(fullAlias, mailbox) : skipped;
+        steps.push({ name: "Mailbox member", ok: memberStep.ok, detail: memberStep.detail });
+
+        const labelStep = groupStep.ok ? await createLabel(mailbox, label) : skipped;
+        steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+
+        const filterStep = labelStep.ok
+          ? await createFilter(mailbox, fullAlias, labelStep.id, true)
+          : { ok: false, detail: groupStep.ok ? "skipped — no label to attach" : "skipped — group step failed" };
+        steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+      } else {
+        const aliasStep = await createAlias(mailbox, fullAlias);
+        steps.push({ name: "Workspace alias", ok: aliasStep.ok, detail: aliasStep.detail });
+
+        const labelStep = aliasStep.ok
+          ? await createLabel(mailbox, alias)
+          : { ok: false, detail: "skipped — alias step failed" };
+        steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+
+        const filterStep = labelStep.ok
+          ? await createFilter(mailbox, fullAlias, labelStep.id, false)
+          : { ok: false, detail: aliasStep.ok ? "skipped — no label to attach" : "skipped — alias step failed" };
+        steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+      }
 
       return Response.json({ ok: steps.every((s) => s.ok), steps });
     }
@@ -252,18 +382,34 @@ export default async (req) => {
       }
       const steps = [];
 
-      const filterStep = await removeFilter(mailbox, fullAlias);
-      steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+      if (groupMode) {
+        // Look the group up first: its name is the Gmail label name.
+        const group = await getGroup(fullAlias);
 
-      const labelStep = filterStep.ok
-        ? await removeLabel(mailbox, alias)
-        : { ok: false, detail: "skipped — remove the filter first (it references the label)" };
-      steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+        const filterStep = await removeFilter(mailbox, fullAlias);
+        steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
 
-      const aliasStep = labelStep.ok
-        ? await removeAlias(mailbox, fullAlias)
-        : { ok: false, detail: "skipped — earlier step failed" };
-      steps.push({ name: "Workspace alias", ok: aliasStep.ok, detail: aliasStep.detail });
+        const labelStep = group
+          ? await removeLabel(mailbox, group.name || alias)
+          : { ok: true, detail: "group not found — no label name to look up" };
+        steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+
+        const groupStep = await removeGroup(fullAlias);
+        steps.push({ name: "Google Group", ok: groupStep.ok, detail: groupStep.detail });
+      } else {
+        const filterStep = await removeFilter(mailbox, fullAlias);
+        steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+
+        const labelStep = filterStep.ok
+          ? await removeLabel(mailbox, alias)
+          : { ok: false, detail: "skipped — remove the filter first (it references the label)" };
+        steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+
+        const aliasStep = labelStep.ok
+          ? await removeAlias(mailbox, fullAlias)
+          : { ok: false, detail: "skipped — earlier step failed" };
+        steps.push({ name: "Workspace alias", ok: aliasStep.ok, detail: aliasStep.detail });
+      }
 
       return Response.json({ ok: steps.every((s) => s.ok), steps });
     }

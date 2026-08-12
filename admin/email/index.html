@@ -114,9 +114,11 @@
 
     <!-- FORM -->
     <div id="form" class="card">
-      <p class="muted" style="margin:0 0 16px">Creates a property email address: a Workspace
-        alias on the chosen mailbox, plus a Gmail label and a skip-inbox filter in that
-        mailbox. One tool for both accounts — check the mailbox before you hit create.</p>
+      <p class="muted" style="margin:0 0 16px">Creates a property email address — on
+        <strong>properties@</strong> that's a Google Group (external senders allowed,
+        properties@ as member); on <strong>paul@</strong> it's a Workspace alias. Both also
+        get a Gmail label and a skip-inbox filter in the mailbox. Check the mailbox before
+        you hit create.</p>
       <div class="field">
         <label>Mailbox (where the mail lands)</label>
         <select id="mailbox">
@@ -129,7 +131,12 @@
         <input id="alias" placeholder="e.g. 206whiterock" autocomplete="off">
         <div class="hint">Lowercase letters and digits only — anything else is stripped.</div>
       </div>
-      <div class="preview"><span id="pvAlias">…</span>@recast-properties.com → <span class="mb" id="pvMailbox">properties@</span></div>
+      <div class="field" id="labelField">
+        <label>Property name (label)</label>
+        <input id="plabel" placeholder="e.g. 206 White Rock" autocomplete="off">
+        <div class="hint">Used as the Google Group's name and the Gmail label in properties@.</div>
+      </div>
+      <div class="preview"><span id="pvAlias">…</span>@recast-properties.com → <span id="pvVia"></span><span class="mb" id="pvMailbox">properties@</span></div>
       <button id="createBtn" class="btn primary" style="width:100%">Create</button>
 
       <div id="confirm" class="hidden" style="margin-top:14px">
@@ -150,14 +157,14 @@
 
     <!-- EXISTING ALIASES -->
     <div class="card">
-      <label style="font-size:14px">Existing aliases on <span id="alMailbox">…</span></label>
+      <label style="font-size:14px"><span id="alKind">Existing aliases</span> on <span id="alMailbox">…</span></label>
       <ul id="aliases" class="aliases"><li class="muted" style="border:none">Loading…</li></ul>
 
       <div id="rmConfirm" class="hidden" style="margin-top:14px">
         <div class="banner err">
-          Remove <strong id="rmAddr"></strong>? Mail sent to it will <strong>bounce</strong>,
-          and its label and skip-inbox filter are deleted (old messages stay in the mailbox
-          but lose the label grouping).
+          Remove <strong id="rmAddr"></strong>? Mail sent to it will <strong>bounce</strong> —
+          <span id="rmWhat">its label and skip-inbox filter are deleted</span> (old messages
+          stay in the mailbox but lose the label grouping).
         </div>
         <div style="display:flex;gap:10px">
           <button id="rmConfirmBtn" class="btn danger" style="flex:1">Yes, remove it</button>
@@ -228,10 +235,15 @@
   $("logoutBtn").onclick = signOut;
 
   // ---- form ----
+  // properties@ uses the GROUP model (a Google Group per property email);
+  // paul@ uses the alias model. Must match GROUP_MAILBOXES in email-setup.mjs.
+  const isGroup = () => $("mailbox").value === "properties@recast-properties.com";
   const cleanAlias = () => $("alias").value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
   function syncPreview() {
     $("pvAlias").textContent = cleanAlias() || "…";
+    $("pvVia").textContent = isGroup() ? "Group → " : "";
     $("pvMailbox").textContent = $("mailbox").value;
+    $("labelField").classList.toggle("hidden", !isGroup());
   }
   $("alias").addEventListener("input", syncPreview);
   $("mailbox").addEventListener("change", async () => {
@@ -243,8 +255,9 @@
   $("createBtn").onclick = () => {
     const alias = cleanAlias();
     if (!alias) { $("alias").focus(); return; }
+    if (isGroup() && !$("plabel").value.trim()) { $("plabel").focus(); return; }
     $("result").classList.add("hidden");
-    $("cfAddr").textContent = alias + "@" + DOMAIN;
+    $("cfAddr").textContent = alias + "@" + DOMAIN + (isGroup() ? " (a Group, \"" + $("plabel").value.trim() + "\")" : "");
     $("cfMailbox").textContent = $("mailbox").value;
     $("confirm").classList.remove("hidden");
     $("createBtn").disabled = true;
@@ -260,7 +273,7 @@
     const btn = $("confirmBtn");
     btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Creating…';
     try {
-      const data = await api({ action: "create", mailbox: mailbox, alias: alias });
+      const data = await api({ action: "create", mailbox: mailbox, alias: alias, label: $("plabel").value.trim() });
       renderResult(data, alias, mailbox);
       await loadAliases();
     } catch (e) {
@@ -287,7 +300,9 @@
     const banner = $("resultBanner");
     if (data.ok) {
       banner.className = "banner okay";
-      banner.textContent = alias + "@" + DOMAIN + " is live — mail delivers to " + mailbox + ", labeled \"" + alias + "\", skipping the inbox.";
+      const labelName = isGroup() ? $("plabel").value.trim() : alias;
+      banner.textContent = alias + "@" + DOMAIN + " is live" + (isGroup() ? " (Google Group)" : "") +
+        " — mail delivers to " + mailbox + ", labeled \"" + labelName + "\", skipping the inbox.";
     } else {
       banner.className = "banner err";
       banner.textContent = "Not fully set up" + (data.error ? ": " + data.error : " — see the steps below. Fix and re-run; completed steps are safe to repeat.");
@@ -302,6 +317,9 @@
     rmAlias = fullAlias.split("@")[0];
     $("rmResult").classList.add("hidden");
     $("rmAddr").textContent = fullAlias;
+    $("rmWhat").textContent = isGroup()
+      ? "the Google Group is deleted, along with its label and skip-inbox filter in properties@"
+      : "its label and skip-inbox filter are deleted";
     $("rmConfirm").classList.remove("hidden");
     $("rmConfirm").scrollIntoView({ block: "nearest" });
   }
@@ -339,26 +357,33 @@
   async function loadAliases() {
     const mailbox = $("mailbox").value;
     $("alMailbox").textContent = mailbox;
+    $("alKind").textContent = isGroup() ? "Property groups delivering" : "Existing aliases";
     const ul = $("aliases");
     ul.innerHTML = '<li class="muted" style="border:none">Loading…</li>';
     try {
       const data = await api({ action: "list", mailbox: mailbox });
-      const rows = data.aliases || [];
+      const rows = data.entries || (data.aliases || []).map((a) => ({ address: a, name: "" }));
       const prot = data.protectedAliases || [];
-      ul.innerHTML = rows.length ? "" : '<li class="muted" style="border:none">No aliases.</li>';
-      rows.forEach((a) => {
+      ul.innerHTML = rows.length ? "" : '<li class="muted" style="border:none">' +
+        (data.mode === "group" ? "No property groups." : "No aliases.") + "</li>";
+      rows.forEach((e) => {
         const li = document.createElement("li");
         const addr = document.createElement("span");
-        addr.className = "addr"; addr.textContent = a;
+        addr.className = "addr"; addr.textContent = e.address;
         li.appendChild(addr);
-        if (prot.includes(a)) {
+        if (e.name) {
+          const nm = document.createElement("span");
+          nm.className = "tag"; nm.textContent = e.name;
+          li.appendChild(nm);
+        }
+        if (prot.includes(e.address)) {
           const tag = document.createElement("span");
           tag.className = "tag"; tag.textContent = "protected"; tag.title = "In-use sending address — can't be removed here.";
           li.appendChild(tag);
         } else {
           const btn = document.createElement("button");
           btn.className = "btn sm danger"; btn.textContent = "Remove";
-          btn.onclick = () => askRemove(a);
+          btn.onclick = () => askRemove(e.address);
           li.appendChild(btn);
         }
         ul.appendChild(li);
