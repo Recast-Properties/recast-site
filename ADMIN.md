@@ -40,6 +40,17 @@ one separately (a failed step shows red — never a green "done"):
 Re-running is safe: already-existing alias/label/filter count as success.
 The page also lists the chosen mailbox's current aliases.
 
+**Removal:** each alias in the list has a **Remove** button (confirm step, then
+per-step report like create). It undoes all three pieces in reverse order —
+filter, label, then the Workspace alias — so mail to the address bounces
+afterward; old messages stay in the mailbox but lose the label grouping.
+Already-gone pieces count as success (safe to re-run), and if the alias
+actually lives on the *other* mailbox the error names the owner.
+`info@recast-properties.com` is **protected** (hardcoded `PROTECTED` list in
+`email-setup.mjs`) — it's the FROM address for the call-summary/confirmation
+emails; the UI shows a "protected" tag instead of a button and the function
+refuses it server-side.
+
 **The old Apps Script dialogs:** the paul@ one ("Create Property Email",
 bound to its sheet) was retired 2026-08-11 — its code was replaced with a
 retirement comment, so the "Recast Tools → Email Setup" menu no longer
@@ -131,7 +142,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `homes-index.mjs` | **public** | Server-renders **`/homes/`** — meta + `ItemList` JSON-LD + a linked list of every listing; injects `window.__LISTINGS__`. Template: `homes/index.html`. |
 | `sitemap.mjs` | **public** | **`/sitemap.xml`** generated from Blobs, so every current listing URL is included automatically. |
 | `admin-migrate-photos.mjs` | auth | One-time import of the original static `photos/` folders into Blobs (already run). |
-| `email-setup.mjs` | auth | Property-email creator (see "Email setup" above): `list` aliases / `create` alias + label + filter via a Google service account with domain-wide delegation. |
+| `email-setup.mjs` | auth | Property-email creator (see "Email setup" above): `list` aliases / `create` alias + label + filter / `remove` (reverse order, `info@` protected) via a Google service account with domain-wide delegation. |
 
 Shared server code lives in **`netlify/lib/listings.mjs`** (not a function — imported by
 the three above): reads the Blob, normalizes to the same shape `sheet-loader.js`
@@ -213,6 +224,11 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
+- **2026-08-12** — **Email removal.** `/admin/email/` alias list gained a
+  per-alias **Remove** button; `email-setup.mjs` gained the `remove` action
+  (filter → label → alias, idempotent, per-step report) and a hardcoded
+  `PROTECTED` list (`info@`) it refuses to delete. `list` now also returns
+  `protectedAliases` so the UI can hide the button. No new DWD scopes needed.
 - **2026-08-11** — **Admin hub + email setup.** `/admin` became the hub landing
   page; the listings tool moved to `/admin/listings/` (same code, absolute
   paths, new nav bar). New `/admin/email/` + `email-setup.mjs`: one tool creates

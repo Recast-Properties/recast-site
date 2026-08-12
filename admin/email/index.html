@@ -67,8 +67,13 @@
   .steps .fail .detail { color: #b3261e; }
   .steps .detail { color: var(--ink-600, #53575f); font-size: 13px; }
   .aliases { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13.5px; }
-  .aliases li { padding: 6px 0; border-top: 1px solid var(--ink-100, #eff1f4);
-    font-family: var(--font-mono, monospace); }
+  .aliases li { display: flex; align-items: center; gap: 10px; padding: 6px 0;
+    border-top: 1px solid var(--ink-100, #eff1f4); font-family: var(--font-mono, monospace); }
+  .aliases .addr { flex: 1; word-break: break-all; }
+  .aliases .tag { font-family: var(--font-sans, sans-serif); font-size: 11px; font-weight: 700;
+    color: var(--ink-500, #71757e); background: var(--ink-100, #eff1f4); border-radius: 6px; padding: 2px 7px; }
+  .btn.danger { color: #b3261e; border-color: #e5b4b1; }
+  .btn.danger:hover { background: #fbeceb; }
   .banner { border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; }
   .banner.err { background: #fbeceb; color: #b3261e; border: 1px solid #e5b4b1; }
   .banner.okay { background: #e3f5e9; color: #1c7a3f; border: 1px solid #b5dfc3; }
@@ -147,6 +152,23 @@
     <div class="card">
       <label style="font-size:14px">Existing aliases on <span id="alMailbox">…</span></label>
       <ul id="aliases" class="aliases"><li class="muted" style="border:none">Loading…</li></ul>
+
+      <div id="rmConfirm" class="hidden" style="margin-top:14px">
+        <div class="banner err">
+          Remove <strong id="rmAddr"></strong>? Mail sent to it will <strong>bounce</strong>,
+          and its label and skip-inbox filter are deleted (old messages stay in the mailbox
+          but lose the label grouping).
+        </div>
+        <div style="display:flex;gap:10px">
+          <button id="rmConfirmBtn" class="btn danger" style="flex:1">Yes, remove it</button>
+          <button id="rmCancelBtn" class="btn" style="flex:1">Cancel</button>
+        </div>
+      </div>
+
+      <div id="rmResult" class="hidden" style="margin-top:14px">
+        <div id="rmResultBanner" class="banner"></div>
+        <ul id="rmSteps" class="steps"></ul>
+      </div>
     </div>
   </div>
 </div>
@@ -212,7 +234,11 @@
     $("pvMailbox").textContent = $("mailbox").value;
   }
   $("alias").addEventListener("input", syncPreview);
-  $("mailbox").addEventListener("change", async () => { syncPreview(); await loadAliases(); });
+  $("mailbox").addEventListener("change", async () => {
+    syncPreview();
+    $("rmConfirm").classList.add("hidden"); $("rmResult").classList.add("hidden"); rmAlias = "";
+    await loadAliases();
+  });
 
   $("createBtn").onclick = () => {
     const alias = cleanAlias();
@@ -246,6 +272,17 @@
     }
   };
 
+  function renderSteps(ulId, steps) {
+    const ul = $(ulId); ul.innerHTML = "";
+    (steps || []).forEach((s) => {
+      const li = document.createElement("li");
+      li.className = s.ok ? "ok" : "fail";
+      li.innerHTML = '<span class="st">' + (s.ok ? "✓" : "✗") + '</span><span><strong>' + esc(s.name) + '</strong>' +
+        (s.detail ? ' <span class="detail">— ' + esc(s.detail) + "</span>" : "") + "</span>";
+      ul.appendChild(li);
+    });
+  }
+
   function renderResult(data, alias, mailbox) {
     const banner = $("resultBanner");
     if (data.ok) {
@@ -255,16 +292,47 @@
       banner.className = "banner err";
       banner.textContent = "Not fully set up" + (data.error ? ": " + data.error : " — see the steps below. Fix and re-run; completed steps are safe to repeat.");
     }
-    const ul = $("steps"); ul.innerHTML = "";
-    (data.steps || []).forEach((s) => {
-      const li = document.createElement("li");
-      li.className = s.ok ? "ok" : "fail";
-      li.innerHTML = '<span class="st">' + (s.ok ? "✓" : "✗") + '</span><span><strong>' + esc(s.name) + '</strong>' +
-        (s.detail ? ' <span class="detail">— ' + esc(s.detail) + "</span>" : "") + "</span>";
-      ul.appendChild(li);
-    });
+    renderSteps("steps", data.steps);
     $("result").classList.remove("hidden");
   }
+
+  // ---- remove flow ----
+  let rmAlias = ""; // local part pending removal
+  function askRemove(fullAlias) {
+    rmAlias = fullAlias.split("@")[0];
+    $("rmResult").classList.add("hidden");
+    $("rmAddr").textContent = fullAlias;
+    $("rmConfirm").classList.remove("hidden");
+    $("rmConfirm").scrollIntoView({ block: "nearest" });
+  }
+  $("rmCancelBtn").onclick = () => { $("rmConfirm").classList.add("hidden"); rmAlias = ""; };
+  $("rmConfirmBtn").onclick = async () => {
+    const alias = rmAlias;
+    const mailbox = $("mailbox").value;
+    if (!alias) return;
+    const btn = $("rmConfirmBtn");
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Removing…';
+    let data;
+    try {
+      data = await api({ action: "remove", mailbox: mailbox, alias: alias });
+    } catch (e) {
+      data = { ok: false, error: String(e.message || e), steps: [] };
+    }
+    btn.disabled = false; btn.textContent = "Yes, remove it";
+    $("rmConfirm").classList.add("hidden");
+    rmAlias = "";
+    const banner = $("rmResultBanner");
+    if (data.ok) {
+      banner.className = "banner okay";
+      banner.textContent = alias + "@" + DOMAIN + " is removed — mail to it now bounces.";
+    } else {
+      banner.className = "banner err";
+      banner.textContent = "Not fully removed" + (data.error ? ": " + data.error : " — see the steps below. Fix and re-run; completed steps are safe to repeat.");
+    }
+    renderSteps("rmSteps", data.steps);
+    $("rmResult").classList.remove("hidden");
+    await loadAliases();
+  };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // ---- alias list ----
@@ -276,10 +344,23 @@
     try {
       const data = await api({ action: "list", mailbox: mailbox });
       const rows = data.aliases || [];
+      const prot = data.protectedAliases || [];
       ul.innerHTML = rows.length ? "" : '<li class="muted" style="border:none">No aliases.</li>';
       rows.forEach((a) => {
         const li = document.createElement("li");
-        li.textContent = a;
+        const addr = document.createElement("span");
+        addr.className = "addr"; addr.textContent = a;
+        li.appendChild(addr);
+        if (prot.includes(a)) {
+          const tag = document.createElement("span");
+          tag.className = "tag"; tag.textContent = "protected"; tag.title = "In-use sending address — can't be removed here.";
+          li.appendChild(tag);
+        } else {
+          const btn = document.createElement("button");
+          btn.className = "btn sm danger"; btn.textContent = "Remove";
+          btn.onclick = () => askRemove(a);
+          li.appendChild(btn);
+        }
         ul.appendChild(li);
       });
     } catch (e) {

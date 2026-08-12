@@ -13,11 +13,13 @@
 //     https://www.googleapis.com/auth/gmail.settings.basic
 //
 // POST contract:
-//   { action:"list",   mailbox }        -> { ok, aliases:[...] }
+//   { action:"list",   mailbox }        -> { ok, aliases:[...], protectedAliases:[...] }
 //   { action:"create", mailbox, alias } -> { ok, steps:[{name, ok, detail}] }
+//   { action:"remove", mailbox, alias } -> { ok, steps:[{name, ok, detail}] }
 //     ok is true only if ALL steps succeeded; steps always reports each one.
-//     Safe to re-run: existing alias on the SAME mailbox / existing label / existing
-//     filter are treated as success.
+//     Safe to re-run: create treats existing alias on the SAME mailbox / existing
+//     label / existing filter as success; remove treats already-gone as success.
+//     remove refuses PROTECTED aliases (in-use sending addresses).
 //
 // Env: ADMIN_PASSWORD, GOOGLE_SA_EMAIL, GOOGLE_SA_KEY (PEM; \n-escaped ok),
 //      GOOGLE_ADMIN_USER (super-admin, e.g. paul@recast-properties.com)
@@ -27,6 +29,9 @@ import crypto from "node:crypto";
 const DOMAIN = "recast-properties.com";
 // Fail-closed allowlist: the only mailboxes this tool may touch.
 const MAILBOXES = [`paul@${DOMAIN}`, `properties@${DOMAIN}`];
+// Aliases that must never be removed: info@ is the FROM address for the
+// call-summary and seller-confirmation emails (apps-script/call-summary.gs).
+const PROTECTED = [`info@${DOMAIN}`];
 
 const DIR = "https://admin.googleapis.com/admin/directory/v1";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -156,6 +161,48 @@ async function createFilter(mailbox, fullAlias, labelId) {
   return { ok: false, detail: gErr(r) };
 }
 
+// ---- removal steps (reverse order of create: filter -> label -> alias, so a
+// label is never deleted out from under a filter that still references it) ----
+async function removeFilter(mailbox, fullAlias) {
+  const all = await gapi(mailbox, SCOPE_GMAIL, "GET", `${GMAIL}/settings/filters`);
+  if (!all.ok) return { ok: false, detail: "couldn't list filters: " + gErr(all) };
+  const matches = (all.data.filter || []).filter((f) => f.criteria && f.criteria.to === fullAlias);
+  if (!matches.length) return { ok: true, detail: "no filter found — nothing to remove" };
+  for (const f of matches) {
+    const r = await gapi(mailbox, SCOPE_GMAIL, "DELETE", `${GMAIL}/settings/filters/${encodeURIComponent(f.id)}`);
+    if (!r.ok) return { ok: false, detail: gErr(r) };
+  }
+  return { ok: true, detail: "removed to:" + fullAlias + " filter" + (matches.length > 1 ? "s (" + matches.length + ")" : "") };
+}
+
+async function removeLabel(mailbox, name) {
+  const all = await gapi(mailbox, SCOPE_GMAIL, "GET", `${GMAIL}/labels`);
+  if (!all.ok) return { ok: false, detail: "couldn't list labels: " + gErr(all) };
+  const found = (all.data.labels || []).find((l) => l.name === name);
+  if (!found) return { ok: true, detail: "no label found — nothing to remove" };
+  const r = await gapi(mailbox, SCOPE_GMAIL, "DELETE", `${GMAIL}/labels/${encodeURIComponent(found.id)}`);
+  if (r.ok || r.status === 404) return { ok: true, detail: "removed label \"" + name + "\" (messages keep their mail, lose the grouping)" };
+  return { ok: false, detail: gErr(r) };
+}
+
+async function removeAlias(mailbox, fullAlias) {
+  const admin = process.env.GOOGLE_ADMIN_USER || "";
+  if (!admin) return { ok: false, detail: "GOOGLE_ADMIN_USER not configured." };
+  const r = await gapi(admin, SCOPE_ALIAS, "DELETE",
+    `${DIR}/users/${encodeURIComponent(mailbox)}/aliases/${encodeURIComponent(fullAlias)}`);
+  if (r.ok) return { ok: true, detail: fullAlias + " removed — mail to it now bounces" };
+  if (r.status === 404) {
+    // Not on this mailbox — is it on the other one? Same owner lookup create uses.
+    const who = await gapi(admin, SCOPE_ALIAS, "GET", `${DIR}/users/${encodeURIComponent(fullAlias)}/aliases`)
+      .catch(() => null);
+    const owned = who && who.ok && (who.data.aliases || []).some((a) => a.alias === fullAlias);
+    const owner = owned ? (who.data.aliases.find((a) => a.alias === fullAlias) || {}).primaryEmail : null;
+    if (owner && owner !== mailbox) return { ok: false, detail: "belongs to " + owner + " — switch the mailbox and re-run" };
+    return { ok: true, detail: "didn't exist — nothing to remove" };
+  }
+  return { ok: false, detail: gErr(r) };
+}
+
 // ---- handler ----
 export default async (req) => {
   if (req.method !== "POST") return Response.json({ ok: false, error: "POST only" }, { status: 405 });
@@ -171,7 +218,7 @@ export default async (req) => {
 
   try {
     if (body.action === "list") {
-      return Response.json({ ok: true, aliases: await listAliases(mailbox) });
+      return Response.json({ ok: true, aliases: await listAliases(mailbox), protectedAliases: PROTECTED });
     }
 
     if (body.action === "create") {
@@ -192,6 +239,31 @@ export default async (req) => {
         ? await createFilter(mailbox, fullAlias, labelStep.id)
         : { ok: false, detail: aliasStep.ok ? "skipped — no label to attach" : "skipped — alias step failed" };
       steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+
+      return Response.json({ ok: steps.every((s) => s.ok), steps });
+    }
+
+    if (body.action === "remove") {
+      const alias = String(body.alias || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!alias) return Response.json({ ok: false, error: "Alias required (letters/digits)." }, { status: 400 });
+      const fullAlias = alias + "@" + DOMAIN;
+      if (PROTECTED.includes(fullAlias)) {
+        return Response.json({ ok: false, error: fullAlias + " is protected — it's an in-use sending address." }, { status: 400 });
+      }
+      const steps = [];
+
+      const filterStep = await removeFilter(mailbox, fullAlias);
+      steps.push({ name: "Skip-inbox filter", ok: filterStep.ok, detail: filterStep.detail });
+
+      const labelStep = filterStep.ok
+        ? await removeLabel(mailbox, alias)
+        : { ok: false, detail: "skipped — remove the filter first (it references the label)" };
+      steps.push({ name: "Gmail label", ok: labelStep.ok, detail: labelStep.detail });
+
+      const aliasStep = labelStep.ok
+        ? await removeAlias(mailbox, fullAlias)
+        : { ok: false, detail: "skipped — earlier step failed" };
+      steps.push({ name: "Workspace alias", ok: aliasStep.ok, detail: aliasStep.detail });
 
       return Response.json({ ok: steps.every((s) => s.ok), steps });
     }
