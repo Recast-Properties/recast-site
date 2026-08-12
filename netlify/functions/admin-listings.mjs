@@ -6,13 +6,16 @@
 //   { action:"list" }                 -> { ok, rows }
 //   { action:"save", listing:{...} }  -> { ok, id }   (upsert by id)
 //   { action:"delete", id }           -> { ok }
+//   { action:"reorder", ids:[...] }   -> { ok, count } (store listings in this
+//                                        id order; unmentioned ids keep their
+//                                        position at the end)
 //   { action:"seed", force? }         -> { ok, count } (one-time import from the
 //                                        old published Google Sheet CSV)
 import { getStore } from "@netlify/blobs";
 
 const STORE = "listings-data";
 const KEY = "listings.json";
-const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","photos"];
+const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","photos"];
 // One-time seed source: the previously-published listings sheet.
 const SEED_CSV_URL = "https://docs.google.com/spreadsheets/d/1lpCONle2BfovuOu7_9k17hYwCuDKxnvE0ddeQLdGI5k/gviz/tq?tqx=out:csv&gid=701320222";
 
@@ -88,6 +91,20 @@ export default async (req) => {
       const next = arr.filter((r) => clean(r.id) !== id);
       await writeAll(store, next);
       return Response.json({ ok: true, id, removed: arr.length - next.length });
+    }
+
+    if (body.action === "reorder") {
+      const ids = Array.isArray(body.ids) ? body.ids.map(clean).filter(Boolean) : [];
+      if (!ids.length) return Response.json({ ok: false, error: "No ids given" }, { status: 400 });
+      const arr = await readAll(store);
+      const byId = new Map(arr.map((r) => [clean(r.id), r]));
+      const next = [];
+      ids.forEach((id) => {
+        if (byId.has(id)) { next.push(byId.get(id)); byId.delete(id); }
+      });
+      byId.forEach((r) => next.push(r)); // ids the client didn't know about stay, at the end
+      await writeAll(store, next);
+      return Response.json({ ok: true, count: next.length });
     }
 
     if (body.action === "seed") {

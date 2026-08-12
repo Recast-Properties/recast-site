@@ -150,6 +150,7 @@ export default async (req) => {
               vendor: item.vendor,
               date: item.date,
               item: item.item,
+              link: item.sourceUrl,        // clickable link to the source email
               amount: sheetAmount(item),   // tax-inclusive when taxable
               subtotal: item.amount,
               taxable: item.taxable,

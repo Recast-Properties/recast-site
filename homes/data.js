@@ -14,8 +14,10 @@ window.RECAST_SHEET_CSV_URL = "/.netlify/functions/listings"; // admin-managed l
    The "photos" column in the sheet holds just the <folder-name>. */
 window.RECAST_PHOTO_BASE = "../photos/";
 
-/* Listing agent shown on the price callout + photo gallery.
-   Change name / phone here and it updates everywhere. */
+/* Default listing agent shown on the price callout + photo gallery (AgentPill),
+   used ONLY when a listing has no per-property agentName/agentPhone set in the
+   admin. Per-property values override this. The header "Call for a showing"
+   number has its own default (214.906.4992) in listing-components.jsx. */
 window.RECAST_AGENT = { name: "Dennis Little", phone: "214.906.4994", tel: "2149064994" };
 
 /* ---- Built-in sample data (fallback + default) ----

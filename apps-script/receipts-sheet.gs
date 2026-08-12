@@ -6,11 +6,12 @@
  * appends an approved line item into the matching CATEGORY BLOCK on the
  * expense sheet.
  *
- * The sheet is a grid of 4-column blocks: each block has a header row
- * [ Category , (blank) , (blank) , Total ] and data rows
- * [ Vendor , Date , Item , Amount ]. We locate a block by its header text and
- * write into the first empty row inside that block's 4 columns — we NEVER
- * insert a full sheet row (that would shove neighboring blocks sideways).
+ * The sheet is a grid of 5-column blocks: each block has a header row
+ * [ Category , (blank) , (blank) , (blank) , Total ] and data rows
+ * [ Vendor , Date , Description , Link , Price ]. We locate a block by its header
+ * text and write into the first empty row inside that block's 5 columns — we
+ * NEVER insert a full sheet row (that would shove neighboring blocks sideways).
+ * "Link" is a clickable HYPERLINK to the source email.
  *
  * Auth: a shared token (Script Property WEBHOOK_SECRET) sent in the POST body,
  * matching RECEIPTS_SHEET_TOKEN on the Netlify side.
@@ -23,7 +24,7 @@
  *
  * Actions (POST JSON, body.token must match WEBHOOK_SECRET):
  *   { action:"inspect" }  -> layout of every category block (for setup/debug)
- *   { action:"append", category, vendor, date, item, amount }  -> writes a row
+ *   { action:"append", category, vendor, date, item, link, amount } -> writes a row
  ****************************************************************/
 
 const CONFIG = {
@@ -131,11 +132,16 @@ function append_(sheet, data) {
   const amountNum = parseFloat(String(data.amount).replace(/[^0-9.\-]/g, ''));
   const amountCell = isFinite(amountNum) ? amountNum : clean_(data.amount);
 
-  sheet.getRange(writeRow, writeCol, 1, 4).setValues([[
-    clean_(data.vendor), clean_(data.date), clean_(data.item), amountCell
+  // Link column: a clickable HYPERLINK to the source email (blank if none).
+  const url = String(data.link || '').trim().replace(/"/g, '');
+  const linkCell = url ? '=HYPERLINK("' + url + '","Receipt")' : '';
+
+  // Block columns: Vendor | Date | Description | Link | Price
+  sheet.getRange(writeRow, writeCol, 1, 5).setValues([[
+    clean_(data.vendor), clean_(data.date), clean_(data.item), linkCell, amountCell
   ]]);
 
-  const a1 = sheet.getRange(writeRow, writeCol, 1, 4).getA1Notation();
+  const a1 = sheet.getRange(writeRow, writeCol, 1, 5).getA1Notation();
   return jsonResponse_({ ok: true, wrote: a1, category: category });
 }
 
@@ -170,13 +176,50 @@ function inspect_(sheet) {
       category: cat,
       found: true,
       headerCell: colLetter(hdr.col) + (hdr.row + 1),
-      columns: colLetter(hdr.col) + '–' + colLetter(hdr.col + 3),
+      columns: colLetter(hdr.col) + '–' + colLetter(hdr.col + 4),
       existingItems: dataRows,
       nextWrite: target.error ? ('BLOCKED: ' + target.error) : (colLetter(hdr.col) + (target.row + 1)),
       headroom: headroom
     });
   });
   return jsonResponse_({ ok: true, tab: CONFIG.TAB_NAME, blocks: out });
+}
+
+// ---- one-time migration: add the "Link" column to every block ---------------
+// Inserts a blank column between Description and Price in each category block,
+// turning 4-column blocks (Vendor|Date|Description|Price) into 5-column blocks
+// (Vendor|Date|Description|Link|Price). Run from the editor. TEST FIRST, then
+// eyeball the tab (totals + header bars) before running on the live tab.
+
+function addLinkColumns_TEST() { return addLinkColumns_('TEST'); }
+function addLinkColumns_LIVE() { return addLinkColumns_('RECAST BIZ'); }
+
+function addLinkColumns_(tabName) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error('Tab not found: ' + tabName);
+
+  const values = sheet.getDataRange().getValues();
+  const blocks = [];
+  CATEGORIES.forEach(function (cat) {
+    if (cat === 'Interest') return; // Interest stays manual / untouched
+    const hdr = findHeader_(values, cat);
+    if (hdr) blocks.push({ category: cat, col: hdr.col });
+  });
+
+  // Insert right-to-left so each insert doesn't shift the blocks we haven't done.
+  blocks.sort(function (a, b) { return b.col - a.col; });
+
+  const done = [];
+  blocks.forEach(function (b) {
+    // Price is the 4th column of the current 4-wide block: 1-indexed = col + 4.
+    // Insert a blank column before it -> that blank becomes the Link column.
+    sheet.insertColumnBefore(b.col + 4);
+    done.push(b.category);
+  });
+  SpreadsheetApp.flush();
+  console.log('Added Link column on "' + tabName + '" for: ' + done.join(', '));
+  return done;
 }
 
 // ---- shared -----------------------------------------------------------------

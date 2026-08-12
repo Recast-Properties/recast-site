@@ -44,7 +44,13 @@ function ListingPhoto({ label = "Property photo", src, alt, style, className, on
 }
 
 /* ---------------------------------- Header ---------------------------------- */
-function ListingHeader() {
+/* On a listing page, `p` carries that property's agent — the header call number
+   switches to the listing's agent phone. Off a listing (landing page), `p` is
+   omitted and it falls back to the site-wide showing line. */
+function ListingHeader({ p }) {
+  const listingPhone = String((p && p.agentPhone) || "").trim();
+  const phone = listingPhone || "214.906.4992";
+  const tel = phone.replace(/[^0-9]/g, "");
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
@@ -56,11 +62,11 @@ function ListingHeader() {
         <nav className="main-nav" style={{ display: "flex", alignItems: "center", gap: 30 }}>
         </nav>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="tel:2149064992" className="header-phone" style={{ display: "inline-flex", alignItems: "center", gap: 13, textDecoration: "none" }}>
+          <a href={"tel:" + tel} className="header-phone" style={{ display: "inline-flex", alignItems: "center", gap: 13, textDecoration: "none" }}>
             <span className="header-phone-label" style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink-900)" }}>Call for a showing</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--color-brand)", color: "#fff",
               fontWeight: 700, fontSize: 15, padding: "9px 16px", borderRadius: 999, boxShadow: "0 3px 10px rgba(234,155,96,0.32)" }}>
-              <LIcon name="phone" className="ic" style={{ width: 16, height: 16, color: "#fff" }} />214.906.4992
+              <LIcon name="phone" className="ic" style={{ width: 16, height: 16, color: "#fff" }} />{phone}
             </span>
           </a>
         </div>
