@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Recast — Listings Admin</title>
-<link rel="stylesheet" href="../colors_and_type.css">
-<link rel="stylesheet" href="../kit.css">
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/kit.css">
 <style>
   :root { --gap: 16px; }
   * { box-sizing: border-box; }
@@ -18,6 +18,12 @@
     background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
   .bar h1 { font-family: var(--font-display, sans-serif); font-size: 18px; margin: 0; font-weight: 700; }
   .bar .sp { flex: 1; }
+  .tools { display: flex; gap: 4px; margin-left: 6px; }
+  .tools a { text-decoration: none; font-weight: 700; font-size: 13.5px; color: var(--ink-600, #53575f);
+    padding: 6px 10px; border-radius: 8px; }
+  .tools a:hover { background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c); }
+  .tools a.on { background: var(--ink-100, #eff1f4); color: var(--ink-900, #18191c); }
+  @media (max-width: 620px) { .tools { display: none; } }
   .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
   .brand img { height: 28px; display: block; }
   .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
@@ -55,6 +61,10 @@
   .listing { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--ink-200, #e1e4e9);
     border-radius: 12px; margin-bottom: 10px; background: #fff; cursor: pointer; }
   .listing:hover { border-color: var(--ink-400, #9498a1); }
+  .listing .grip { color: var(--ink-400, #9498a1); flex-shrink: 0; cursor: grab; font-size: 16px;
+    letter-spacing: -1px; padding: 6px 2px; user-select: none; line-height: 1; }
+  .listing.dragging { opacity: .4; }
+  .listing.over { outline: 2px solid var(--terracotta-500, #d9743f); outline-offset: -2px; }
   .listing .thumb { width: 78px; height: 56px; border-radius: 8px; object-fit: cover; background: var(--ink-100, #eff1f4);
     flex-shrink: 0; }
   .listing .meta { flex: 1; min-width: 0; }
@@ -97,7 +107,7 @@
 <!-- LOGIN -->
 <div id="login" class="login">
   <div class="card">
-    <img src="../assets/recast-logo-horizontal-black.png" alt="Recast">
+    <img src="/assets/recast-logo-horizontal-black.png" alt="Recast">
     <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Listings Admin</h1>
     <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
     <div class="field"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
@@ -109,10 +119,16 @@
 <!-- APP: LIST -->
 <div id="app" class="hidden">
   <div class="bar">
-    <a class="brand" href="../homes/index.html" target="_blank" rel="noopener" title="View live site">
-      <img src="../assets/recast-mark-orange-transparent.png" alt="">
+    <a class="brand" href="/homes/" target="_blank" rel="noopener" title="View live site">
+      <img src="/assets/recast-mark-orange-transparent.png" alt="">
       <span>Recast Properties</span>
     </a>
+    <nav class="tools">
+      <a href="/admin/">Hub</a>
+      <a href="/admin/listings/" class="on">Listings</a>
+      <a href="/admin/email/">Email</a>
+      <a href="https://receipts--incomparable-raindrop-8f3d22.netlify.app/receipts/" target="_blank" rel="noopener">Receipts</a>
+    </nav>
     <span class="sp"></span>
     <button id="newBtn" class="btn primary">+ New listing</button>
     <button id="logoutBtn" class="btn sm">Sign out</button>
@@ -127,8 +143,8 @@
 <!-- APP: EDITOR -->
 <div id="editor" class="hidden">
   <div class="bar">
-    <a class="brand" href="../homes/index.html" target="_blank" rel="noopener" title="View live site">
-      <img src="../assets/recast-mark-orange-transparent.png" alt="">
+    <a class="brand" href="/homes/" target="_blank" rel="noopener" title="View live site">
+      <img src="/assets/recast-mark-orange-transparent.png" alt="">
       <span>Recast Properties</span>
     </a>
     <span class="sp"></span>
@@ -164,6 +180,10 @@
       <div class="row">
         <div class="field"><label>Type</label><input id="f_type" value="Single-family"></div>
         <div class="field"><label>MLS #</label><input id="f_mlsId"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Agent name (who to call)</label><input id="f_agentName" placeholder="Dennis Little"><div class="hint">Shown on the listing's call button. Leave blank to use the site default.</div></div>
+        <div class="field"><label>Agent phone</label><input id="f_agentPhone" placeholder="214.906.4994"></div>
       </div>
       <div class="field"><label>Tagline</label><input id="f_tagline" placeholder="One-line headline shown on the listing"></div>
       <div class="field"><label>Description</label><textarea id="f_description" rows="7"></textarea></div>
@@ -260,19 +280,43 @@
   function renderList() {
     const el = $("list"); el.innerHTML = "";
     $("listEmpty").classList.toggle("hidden", listings.length > 0);
-    listings.forEach((row) => {
+    listings.forEach((row, i) => {
       const folder = (row.photos || "").trim();
       const status = (row.status || "available").toLowerCase();
       const div = document.createElement("div");
-      div.className = "listing";
+      div.className = "listing"; div.draggable = true; div.dataset.i = i;
       div.innerHTML =
+        '<span class="grip" title="Drag to reorder">⋮⋮</span>' +
         '<img class="thumb" src="' + (folder ? "/photos/" + folder + "/1.jpg" : "") + '" onerror="this.style.visibility=\'hidden\'">' +
         '<div class="meta"><div class="addr">' + esc(row.address || "(no address)") + '</div>' +
         '<div class="sub">' + esc(row.city || "") + (row.price ? " · $" + esc(row.price) : "") +
         (row.beds ? " · " + esc(row.beds) + "bd" : "") + (row.baths ? "/" + esc(row.baths) + "ba" : "") + '</div></div>' +
         '<span class="pill ' + status + '">' + esc(status) + '</span>';
       div.onclick = () => openEditor(row);
+      addListDrag(div);
       el.appendChild(div);
+    });
+  }
+  let listDragFrom = null;
+  function addListDrag(el) {
+    el.addEventListener("dragstart", () => { listDragFrom = +el.dataset.i; el.classList.add("dragging"); });
+    el.addEventListener("dragend", () => { listDragFrom = null; el.classList.remove("dragging"); document.querySelectorAll(".listing.over").forEach((n) => n.classList.remove("over")); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("over"); });
+    el.addEventListener("dragleave", () => el.classList.remove("over"));
+    el.addEventListener("drop", async (e) => {
+      e.preventDefault(); el.classList.remove("over");
+      const to = +el.dataset.i;
+      if (listDragFrom == null || listDragFrom === to) return;
+      const moved = listings.splice(listDragFrom, 1)[0];
+      listings.splice(to, 0, moved);
+      renderList();
+      try {
+        await api("admin-listings", { action: "reorder", ids: listings.map((r) => r.id) });
+        toast("Order saved.");
+      } catch (err) {
+        toast(String(err.message || err), true);
+        await showList(); // reload the real order from the server
+      }
     });
   }
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -294,6 +338,7 @@
     $("f_price").value = g("price"); $("f_beds").value = g("beds"); $("f_baths").value = g("baths");
     $("f_sqft").value = g("sqft"); $("f_lot").value = g("lot"); $("f_year").value = g("year");
     $("f_type").value = g("type") || "Single-family"; $("f_mlsId").value = g("mlsId");
+    $("f_agentName").value = g("agentName"); $("f_agentPhone").value = g("agentPhone");
     $("f_tagline").value = g("tagline"); $("f_description").value = g("description");
     $("f_highlights").value = String(g("highlights") || "").split("|").map((s) => s.trim()).filter(Boolean).join("\n");
 
@@ -329,6 +374,8 @@
       description: $("f_description").value.trim(),
       highlights: $("f_highlights").value.split("\n").map((s) => s.trim()).filter(Boolean).join("|"),
       mlsId: $("f_mlsId").value.trim(),
+      agentName: $("f_agentName").value.trim(),
+      agentPhone: $("f_agentPhone").value.trim(),
       photos: id, // folder name == id
     };
   }

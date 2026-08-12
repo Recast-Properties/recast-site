@@ -1,7 +1,7 @@
 # Listings & Admin — recast-properties.com
 
-How the public **listings** (the "Available Properties" pages) work, and the
-**admin tool** at `recast-properties.com/admin` used to manage them.
+How the public **listings** (the "Available Properties" pages) work, the **admin
+hub** at `recast-properties.com/admin`, and the tools under it.
 
 This is separate from the phone/website **scheduler** backend — see `CLAUDE.md`
 for that. They share the same Netlify site and `netlify/functions/` folder but
@@ -9,10 +9,63 @@ nothing else.
 
 ---
 
-## In plain terms (how to use it)
+## The admin hub (since 2026-08-11)
 
-1. Go to **recast-properties.com/admin** (laptop or phone) and enter the admin
-   password. You stay logged in for that browser session.
+**`/admin` is the landing page for all internal tools.** One password
+(`ADMIN_PASSWORD`), one session (`sessionStorage` key `recast_admin_token`
+shared by every page — sign in once, use them all):
+
+| URL | Tool |
+|---|---|
+| `/admin/` | The hub — cards + nav to everything below. |
+| `/admin/listings/` | Listings admin (was at `/admin` before 2026-08-11). |
+| `/admin/email/` | **Email setup** — create a property email (alias + label + filter) on paul@ or properties@. Replaces the two Apps Script "Email Setup" dialogs. |
+| receipts alias URL | Receipts queue (still on its own Netlify alias deploy — see `RECEIPTS.md`; the hub links out). |
+| — | Auction Sheets: placeholder card, not built. |
+
+Every admin page is `noindex, nofollow` and served `cache-control: no-store`
+(`netlify.toml`).
+
+### Email setup (`/admin/email/` + `email-setup.mjs`)
+
+One form: pick the **mailbox** (paul@ / properties@ — hardcoded allowlist),
+type an alias name, confirm, and the function does three steps, reporting each
+one separately (a failed step shows red — never a green "done"):
+
+1. **Workspace alias** on the mailbox (Admin Directory API). If the address
+   already belongs to the *other* user, the error names the owner.
+2. **Gmail label** named after the alias, in that mailbox.
+3. **Filter** `to:<alias>` → apply label, skip inbox, in that mailbox.
+
+Re-running is safe: already-existing alias/label/filter count as success.
+The page also lists the chosen mailbox's current aliases.
+
+**The old Apps Script dialogs:** the paul@ one ("Create Property Email",
+bound to its sheet) was retired 2026-08-11 — its code was replaced with a
+retirement comment, so the "Recast Tools → Email Setup" menu no longer
+appears. The properties@ twin lives under the properties@ account's
+script.google.com and still needs the same treatment.
+
+**How it authenticates to Google:** a **service account with domain-wide
+delegation**. The function hand-rolls the RS256 JWT → token exchange (native
+`crypto`, no googleapis dependency) and impersonates `GOOGLE_ADMIN_USER` for
+the Directory call and the target mailbox for the Gmail calls. The DWD grant
+(admin.google.com → Security → API controls → Domain-wide delegation) must
+authorize the service account's client ID for exactly:
+`admin.directory.user.alias`, `gmail.labels`, `gmail.settings.basic`.
+
+**Env vars (Netlify):** `GOOGLE_SA_EMAIL` (service-account client_email),
+`GOOGLE_SA_KEY` (its PEM private key; `\n`-escaped is fine),
+`GOOGLE_ADMIN_USER` (`paul@recast-properties.com`).
+
+---
+
+## In plain terms (how to use the listings admin)
+
+1. Go to **recast-properties.com/admin** (laptop or phone), enter the admin
+   password, and open **Listings Admin** (or go straight to
+   `recast-properties.com/admin/listings`). You stay logged in for that browser
+   session.
 2. **+ New listing** — fill in the fields, drag in photos, hit **Save**. It's
    live on the site immediately. No deploy, no spreadsheet.
 3. **Click any listing** to edit it — change text, add/remove/reorder photos
@@ -78,6 +131,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `homes-index.mjs` | **public** | Server-renders **`/homes/`** — meta + `ItemList` JSON-LD + a linked list of every listing; injects `window.__LISTINGS__`. Template: `homes/index.html`. |
 | `sitemap.mjs` | **public** | **`/sitemap.xml`** generated from Blobs, so every current listing URL is included automatically. |
 | `admin-migrate-photos.mjs` | auth | One-time import of the original static `photos/` folders into Blobs (already run). |
+| `email-setup.mjs` | auth | Property-email creator (see "Email setup" above): `list` aliases / `create` alias + label + filter via a Google service account with domain-wide delegation. |
 
 Shared server code lives in **`netlify/lib/listings.mjs`** (not a function — imported by
 the three above): reads the Blob, normalizes to the same shape `sheet-loader.js`
@@ -159,6 +213,14 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
+- **2026-08-11** — **Admin hub + email setup.** `/admin` became the hub landing
+  page; the listings tool moved to `/admin/listings/` (same code, absolute
+  paths, new nav bar). New `/admin/email/` + `email-setup.mjs`: one tool creates
+  a property email (Workspace alias + Gmail label + skip-inbox filter) on either
+  paul@ or properties@ via a service account with domain-wide delegation —
+  replaces the two per-mailbox Apps Script "Email Setup" dialogs (whose
+  identical-looking dialogs caused a wrong-mailbox mixup on 2026-08-11). Added
+  `no-store` headers for `/admin/*`.
 - **2026-06-24** — Built the admin tool (listings + photo uploads) on Netlify
   Blobs. Initially wired to the Google Sheet via an Apps Script, then
   **scrapped that** per Paul's call: listings now live entirely in Blobs, edited

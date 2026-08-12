@@ -73,3 +73,9 @@
   for = "/receipts/*"
   [headers.values]
     cache-control = "no-store"
+
+# Same for the admin pages (hub, listings, email setup).
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    cache-control = "no-store"

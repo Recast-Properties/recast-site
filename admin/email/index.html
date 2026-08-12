@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Email Setup</title>
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/kit.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c);
+    font-family: var(--font-sans, system-ui, sans-serif); }
+  a { color: var(--terracotta-600, #c2643a); }
+  .hidden { display: none !important; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
+  .bar .sp { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand img { height: 28px; display: block; }
+  .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
+    color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
+  .tools { display: flex; gap: 4px; margin-left: 6px; }
+  .tools a { text-decoration: none; font-weight: 700; font-size: 13.5px; color: var(--ink-600, #53575f);
+    padding: 6px 10px; border-radius: 8px; }
+  .tools a:hover { background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c); }
+  .tools a.on { background: var(--ink-100, #eff1f4); color: var(--ink-900, #18191c); }
+  @media (max-width: 620px) { .tools { display: none; } }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 22px 20px 80px; }
+  .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
+    margin: 2px 0 16px; color: var(--ink-900, #18191c); }
+  .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
+    padding: 9px 15px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--ink-50, #f6f7f9); }
+  .btn.primary { background: var(--terracotta-500, #d9743f); border-color: var(--terracotta-500, #d9743f); color: #fff; }
+  .btn.primary:hover { background: var(--terracotta-600, #c2643a); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  input, select { font-family: var(--font-sans, sans-serif); font-size: 14px; width: 100%;
+    border: 1px solid var(--ink-300, #c0c3cb); border-radius: 9px; padding: 9px 11px; background: #fff; color: var(--ink-900); }
+  label { display: block; font-weight: 700; font-size: 12.5px; margin: 0 0 5px; color: var(--ink-700, #3a3d44); }
+  .field { margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+  .muted { color: var(--ink-600, #53575f); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--ink-500, #71757e); margin-top: 4px; }
+  .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .login .card { text-align: center; }
+  .login img { height: 34px; margin-bottom: 14px; }
+
+  /* email-setup specifics */
+  .preview { font-family: var(--font-mono, monospace); font-size: 15px; font-weight: 700;
+    background: var(--ink-50, #f6f7f9); border: 1px solid var(--ink-200, #e1e4e9);
+    border-radius: 9px; padding: 10px 12px; margin-bottom: 16px; word-break: break-all; }
+  .preview .mb { color: var(--terracotta-600, #c2643a); }
+  .steps { list-style: none; margin: 14px 0 0; padding: 0; }
+  .steps li { display: flex; gap: 10px; align-items: baseline; padding: 8px 0;
+    border-top: 1px solid var(--ink-100, #eff1f4); font-size: 14px; }
+  .steps .st { font-weight: 800; flex-shrink: 0; }
+  .steps .ok .st { color: #1c7a3f; }
+  .steps .fail .st { color: #b3261e; }
+  .steps .fail .detail { color: #b3261e; }
+  .steps .detail { color: var(--ink-600, #53575f); font-size: 13px; }
+  .aliases { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13.5px; }
+  .aliases li { padding: 6px 0; border-top: 1px solid var(--ink-100, #eff1f4);
+    font-family: var(--font-mono, monospace); }
+  .banner { border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 16px; }
+  .banner.err { background: #fbeceb; color: #b3261e; border: 1px solid #e5b4b1; }
+  .banner.okay { background: #e3f5e9; color: #1c7a3f; border: 1px solid #b5dfc3; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <div class="card">
+    <img src="/assets/recast-logo-horizontal-black.png" alt="Recast">
+    <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Email Setup</h1>
+    <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
+    <div class="field"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <button id="loginBtn" class="btn primary" style="width:100%">Sign in</button>
+    <p id="loginErr" class="hint hidden" style="color:#b3261e"></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="bar">
+    <a class="brand" href="/homes/" target="_blank" rel="noopener" title="View live site">
+      <img src="/assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
+    <nav class="tools">
+      <a href="/admin/">Hub</a>
+      <a href="/admin/listings/">Listings</a>
+      <a href="/admin/email/" class="on">Email</a>
+      <a href="https://receipts--incomparable-raindrop-8f3d22.netlify.app/receipts/" target="_blank" rel="noopener">Receipts</a>
+    </nav>
+    <span class="sp"></span>
+    <button id="logoutBtn" class="btn sm">Sign out</button>
+  </div>
+  <div class="wrap">
+    <h1 class="page-title">Email Setup</h1>
+
+    <!-- FORM -->
+    <div id="form" class="card">
+      <p class="muted" style="margin:0 0 16px">Creates a property email address: a Workspace
+        alias on the chosen mailbox, plus a Gmail label and a skip-inbox filter in that
+        mailbox. One tool for both accounts — check the mailbox before you hit create.</p>
+      <div class="field">
+        <label>Mailbox (where the mail lands)</label>
+        <select id="mailbox">
+          <option value="properties@recast-properties.com">properties@recast-properties.com</option>
+          <option value="paul@recast-properties.com">paul@recast-properties.com</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Alias name</label>
+        <input id="alias" placeholder="e.g. 206whiterock" autocomplete="off">
+        <div class="hint">Lowercase letters and digits only — anything else is stripped.</div>
+      </div>
+      <div class="preview"><span id="pvAlias">…</span>@recast-properties.com → <span class="mb" id="pvMailbox">properties@</span></div>
+      <button id="createBtn" class="btn primary" style="width:100%">Create</button>
+
+      <div id="confirm" class="hidden" style="margin-top:14px">
+        <div class="banner" style="background:var(--ink-50,#f6f7f9);border:1px solid var(--ink-200,#e1e4e9)">
+          Create <strong id="cfAddr"></strong> delivering to <strong id="cfMailbox"></strong>?
+        </div>
+        <div style="display:flex;gap:10px">
+          <button id="confirmBtn" class="btn primary" style="flex:1">Yes, create it</button>
+          <button id="cancelBtn" class="btn" style="flex:1">Cancel</button>
+        </div>
+      </div>
+
+      <div id="result" class="hidden" style="margin-top:14px">
+        <div id="resultBanner" class="banner"></div>
+        <ul id="steps" class="steps"></ul>
+      </div>
+    </div>
+
+    <!-- EXISTING ALIASES -->
+    <div class="card">
+      <label style="font-size:14px">Existing aliases on <span id="alMailbox">…</span></label>
+      <ul id="aliases" class="aliases"><li class="muted" style="border:none">Loading…</li></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const FN = "/.netlify/functions/";
+  const DOMAIN = "recast-properties.com";
+  let token = sessionStorage.getItem("recast_admin_token") || "";
+
+  async function api(body) {
+    const res = await fetch(FN + "email-setup", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-token": token },
+      body: JSON.stringify(body || {}),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (_) {}
+    if (res.status === 401) { signOut(); throw new Error("Session expired — sign in again."); }
+    if (!res.ok && !data.steps) throw new Error(data.error || ("Request failed (" + res.status + ")"));
+    return data;
+  }
+
+  // ---- auth (same pattern + sessionStorage key as /admin) ----
+  async function tryLogin(pw) {
+    const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    return res.ok;
+  }
+  function signOut() {
+    token = ""; sessionStorage.removeItem("recast_admin_token");
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  async function showApp() {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    syncPreview();
+    await loadAliases();
+  }
+  $("loginBtn").onclick = async () => {
+    const pw = $("pw").value.trim();
+    if (!pw) return;
+    $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
+    try {
+      if (await tryLogin(pw)) {
+        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        $("pw").value = "";
+        await showApp();
+      } else {
+        $("loginErr").textContent = "Wrong password."; $("loginErr").classList.remove("hidden");
+      }
+    } catch (e) {
+      $("loginErr").textContent = String(e.message || e); $("loginErr").classList.remove("hidden");
+    } finally { $("loginBtn").disabled = false; }
+  };
+  $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = signOut;
+
+  // ---- form ----
+  const cleanAlias = () => $("alias").value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  function syncPreview() {
+    $("pvAlias").textContent = cleanAlias() || "…";
+    $("pvMailbox").textContent = $("mailbox").value;
+  }
+  $("alias").addEventListener("input", syncPreview);
+  $("mailbox").addEventListener("change", async () => { syncPreview(); await loadAliases(); });
+
+  $("createBtn").onclick = () => {
+    const alias = cleanAlias();
+    if (!alias) { $("alias").focus(); return; }
+    $("result").classList.add("hidden");
+    $("cfAddr").textContent = alias + "@" + DOMAIN;
+    $("cfMailbox").textContent = $("mailbox").value;
+    $("confirm").classList.remove("hidden");
+    $("createBtn").disabled = true;
+  };
+  $("cancelBtn").onclick = () => {
+    $("confirm").classList.add("hidden");
+    $("createBtn").disabled = false;
+  };
+
+  $("confirmBtn").onclick = async () => {
+    const alias = cleanAlias();
+    const mailbox = $("mailbox").value;
+    const btn = $("confirmBtn");
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Creating…';
+    try {
+      const data = await api({ action: "create", mailbox: mailbox, alias: alias });
+      renderResult(data, alias, mailbox);
+      await loadAliases();
+    } catch (e) {
+      renderResult({ ok: false, error: String(e.message || e), steps: [] }, alias, mailbox);
+    } finally {
+      btn.disabled = false; btn.textContent = "Yes, create it";
+      $("confirm").classList.add("hidden");
+      $("createBtn").disabled = false;
+    }
+  };
+
+  function renderResult(data, alias, mailbox) {
+    const banner = $("resultBanner");
+    if (data.ok) {
+      banner.className = "banner okay";
+      banner.textContent = alias + "@" + DOMAIN + " is live — mail delivers to " + mailbox + ", labeled \"" + alias + "\", skipping the inbox.";
+    } else {
+      banner.className = "banner err";
+      banner.textContent = "Not fully set up" + (data.error ? ": " + data.error : " — see the steps below. Fix and re-run; completed steps are safe to repeat.");
+    }
+    const ul = $("steps"); ul.innerHTML = "";
+    (data.steps || []).forEach((s) => {
+      const li = document.createElement("li");
+      li.className = s.ok ? "ok" : "fail";
+      li.innerHTML = '<span class="st">' + (s.ok ? "✓" : "✗") + '</span><span><strong>' + esc(s.name) + '</strong>' +
+        (s.detail ? ' <span class="detail">— ' + esc(s.detail) + "</span>" : "") + "</span>";
+      ul.appendChild(li);
+    });
+    $("result").classList.remove("hidden");
+  }
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---- alias list ----
+  async function loadAliases() {
+    const mailbox = $("mailbox").value;
+    $("alMailbox").textContent = mailbox;
+    const ul = $("aliases");
+    ul.innerHTML = '<li class="muted" style="border:none">Loading…</li>';
+    try {
+      const data = await api({ action: "list", mailbox: mailbox });
+      const rows = data.aliases || [];
+      ul.innerHTML = rows.length ? "" : '<li class="muted" style="border:none">No aliases.</li>';
+      rows.forEach((a) => {
+        const li = document.createElement("li");
+        li.textContent = a;
+        ul.appendChild(li);
+      });
+    } catch (e) {
+      ul.innerHTML = '<li class="muted" style="border:none;color:#b3261e">' + esc(String(e.message || e)) + "</li>";
+    }
+  }
+
+  // ---- boot ----
+  (async function boot() {
+    if (token && (await tryLogin(token))) await showApp();
+  })();
+})();
+</script>
+</body>
+</html>
