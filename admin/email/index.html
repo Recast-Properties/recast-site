@@ -157,7 +157,7 @@
 
     <!-- EXISTING ALIASES -->
     <div class="card">
-      <label style="font-size:14px"><span id="alKind">Existing aliases</span> on <span id="alMailbox">…</span></label>
+      <label style="font-size:14px"><span id="alKind">Existing aliases on</span> <span id="alMailbox">…</span></label>
       <ul id="aliases" class="aliases"><li class="muted" style="border:none">Loading…</li></ul>
 
       <div id="rmConfirm" class="hidden" style="margin-top:14px">
@@ -357,7 +357,7 @@
   async function loadAliases() {
     const mailbox = $("mailbox").value;
     $("alMailbox").textContent = mailbox;
-    $("alKind").textContent = isGroup() ? "Property groups delivering" : "Existing aliases";
+    $("alKind").textContent = isGroup() ? "Property groups delivering to" : "Existing aliases on";
     const ul = $("aliases");
     ul.innerHTML = '<li class="muted" style="border:none">Loading…</li>';
     try {

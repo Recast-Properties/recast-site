@@ -243,6 +243,13 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
+- **2026-08-12** — **Group model verified live** end to end (create `testremove@`
+  + remove, all steps green). One hiccup found and fixed: Google's members call
+  can 503 ("Service unavailable") while a fresh group provisions — the member
+  step now retries like the settings step (the old Apps Script's 4s sleep
+  covered the same race). With this proven, the properties@ Apps Script
+  ("Add Property Email") is clear to retire — still pending, needs the
+  properties@ account's script.google.com.
 - **2026-08-12** — **properties@ = GROUP model.** Removal "worked for paul@ but
   not properties@": turned out properties@'s property emails are **Google
   Groups** (per its old Apps Script "Add Property Email": group + external

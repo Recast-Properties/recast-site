@@ -234,13 +234,18 @@ async function setGroupSettings(fullAlias, justCreated) {
   }
 }
 
-async function addMember(fullAlias, memberEmail) {
+async function addMember(fullAlias, memberEmail, justCreated) {
   const admin = process.env.GOOGLE_ADMIN_USER || "";
-  const r = await gapi(admin, SCOPE_GROUP, "POST",
-    `${DIR}/groups/${encodeURIComponent(fullAlias)}/members`, { email: memberEmail, role: "MEMBER" });
-  if (r.ok) return { ok: true, detail: memberEmail + " added as member" };
-  if (r.status === 409) return { ok: true, detail: memberEmail + " already a member — kept as is" };
-  return { ok: false, detail: gErr(r) };
+  // Same provisioning race as settings: a fresh group can 404/5xx ("Service
+  // unavailable") for a few seconds. Retry through it.
+  for (let attempt = 1; ; attempt++) {
+    const r = await gapi(admin, SCOPE_GROUP, "POST",
+      `${DIR}/groups/${encodeURIComponent(fullAlias)}/members`, { email: memberEmail, role: "MEMBER" });
+    if (r.ok) return { ok: true, detail: memberEmail + " added as member" };
+    if (r.status === 409) return { ok: true, detail: memberEmail + " already a member — kept as is" };
+    if (justCreated && attempt < 4 && (r.status === 404 || r.status >= 500)) { await sleep(1500); continue; }
+    return { ok: false, detail: gErr(r) };
+  }
 }
 
 async function removeGroup(fullAlias) {
@@ -345,7 +350,7 @@ export default async (req) => {
         const setStep = groupStep.ok ? await setGroupSettings(fullAlias, groupStep.created) : skipped;
         steps.push({ name: "Group settings", ok: setStep.ok, detail: setStep.detail });
 
-        const memberStep = groupStep.ok ? await addMember(fullAlias, mailbox) : skipped;
+        const memberStep = groupStep.ok ? await addMember(fullAlias, mailbox, groupStep.created) : skipped;
         steps.push({ name: "Mailbox member", ok: memberStep.ok, detail: memberStep.detail });
 
         const labelStep = groupStep.ok ? await createLabel(mailbox, label) : skipped;
