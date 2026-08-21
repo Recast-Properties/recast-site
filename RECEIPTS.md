@@ -222,10 +222,13 @@ to `claude-haiku-4-5` to cut cost (expect more pending items).
 
 ## Known limits / backlog
 
-- **Large photos (> ~3 MB)** are skipped (base64 ×4/3 must fit Netlify's
-  request cap — a ~4 MB photo 413-bounced the whole email on 2026-08-21) and
-  become a ⚠️ review item. Phone photos near the limit: send at Mail's
-  "Large" image size.
+- **Large photos (> ~3 MB)** are automatically **shrunk via a Drive
+  round-trip** in the poller (temp upload → ~2000px JPEG rendition → trash
+  temp; also renders HEIC) so every already-received email works as-is at any
+  size — nothing needs re-sending. Background: base64 ×4/3 must fit Netlify's
+  request cap; a ~4 MB photo 413-bounced the whole email on 2026-08-21. Only
+  if the shrink itself fails is the photo skipped → ⚠️ review item. PDFs over
+  3 MB are still skipped (a Drive "thumbnail" would keep page 1 only).
 - **Block capacity:** when a category block fills, the writer refuses
   (`BLOCKED`) and the item waits in Pending — add blank rows under that block,
   then approve it manually.
@@ -300,11 +303,14 @@ ingested). Outcome:
   doubled Subscriptions pairs; the queue holds the caught twins. A final
   wipe+reset+rerun under fix v2 is the pending proof pass.
 - **Paul's Home Depot "test" photo email bounced (HTTP 413)** — the ~4 MB
-  photo exceeded Netlify's request cap after base64. Poller cap lowered to
-  3 MB (skip → review placeholder instead of a silent forever-retry bounce);
-  Paul re-sends the photo at Mail's "Large" size for the proof pass. Both
-  "test" emails get TRASHED when the test is done (Paul's instruction —
-  test-only, must never reach the live books).
+  photo exceeded Netlify's request cap after base64. Re-sending smaller was
+  REJECTED by Paul as a fix: the archive is full of months-old full-size
+  photo receipts that can't be re-sent. Real fix shipped instead: the poller
+  now **shrinks oversized photos via Drive** (see Known limits) — works for
+  every past email as-is. Requires the bookkeeper project's one-time Drive
+  re-authorization (prompted 2026-08-21). The "test" email needs NO re-send;
+  it gets TRASHED once the test passes (Paul's instruction — test-only, must
+  never reach the live books).
 - Queue page gained a **"Reset test records"** button (top bar, shown while
   bookkeeper-era records exist): deletes ALL bookkeeper-era queue records —
   their emails are unlabeled, so the next `testPollBatch` re-processes

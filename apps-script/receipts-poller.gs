@@ -25,11 +25,13 @@ const CONFIG = {
   DONE_LABEL: 'receipts-done',
   SEARCH_WINDOW: 'newer_than:90d',
   MAX_THREADS: 15,
-  // Skip attachments larger than ~3 MB: base64 inflates by 4/3 and the JSON
-  // payload must stay under Netlify's request cap — a ~4 MB photo bounced the
-  // whole email with HTTP 413 on 2026-08-21. A skipped attachment still sends
-  // the email (body only), so it surfaces as a review placeholder, not a
-  // silent forever-retry.
+  // Payload guard: base64 inflates by 4/3 and the JSON upload must stay under
+  // Netlify's request cap — a ~4 MB photo bounced the whole email with HTTP
+  // 413 on 2026-08-21. Photos over this limit are SHRUNK via a Drive
+  // round-trip (shrinkImageViaDrive_) so every already-received email works
+  // as-is; only if the shrink fails is the attachment skipped (the email
+  // still sends body-only and surfaces as a review placeholder, never a
+  // silent forever-retry).
   MAX_ATTACH_BYTES: 3 * 1024 * 1024,
   MAX_ATTACH_COUNT: 6                 // at most N attachments per email
 };
@@ -37,6 +39,7 @@ const CONFIG = {
 function authorize() {
   GmailApp.getInboxUnreadCount();
   UrlFetchApp.getRequest(CONFIG.INGEST_URL);
+  DriveApp.getRootFolder(); // Drive scope — used to shrink oversized photos
 }
 
 function pollReceipts() {
@@ -130,6 +133,45 @@ function testPollBatch() {
   console.log('Test batch: ' + sent + ' message(s) sent (NOT labeled done), ' + skipped + ' skipped.');
 }
 
+// Shrink an oversized photo by round-tripping it through Drive: upload a temp
+// copy, ask Drive for its ~2000px thumbnail rendition (a server-side-resized
+// JPEG — Drive renders HEIC too), download that, trash the temp file. Returns
+// the JPEG bytes, or null if anything fails (caller then skips the photo and
+// the receipt surfaces as a review placeholder instead). Works on every
+// already-received email — nothing needs re-sending at a smaller size.
+function shrinkImageViaDrive_(att) {
+  let fileId = null;
+  try {
+    const file = DriveApp.createFile(att.copyBlob().setName('receipt-shrink-tmp'));
+    fileId = file.getId();
+    // Drive generates thumbnails asynchronously — poll briefly.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const metaRes = UrlFetchApp.fetch(
+        'https://www.googleapis.com/drive/v3/files/' + fileId + '?fields=thumbnailLink',
+        { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+      if (metaRes.getResponseCode() === 200) {
+        const meta = JSON.parse(metaRes.getContentText());
+        if (meta.thumbnailLink) {
+          const url = meta.thumbnailLink.replace(/=s\d+(-[a-z]+)?$/, '=s2000');
+          const imgRes = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+          if (imgRes.getResponseCode() === 200) {
+            const bytes = imgRes.getContent();
+            if (bytes.length > 0 && bytes.length <= CONFIG.MAX_ATTACH_BYTES) return bytes;
+          }
+        }
+      }
+      Utilities.sleep(1500);
+    }
+    console.warn('Drive thumbnail never became available for "' + att.getName() + '"');
+    return null;
+  } catch (err) {
+    console.warn('shrinkImageViaDrive_ failed: ' + String(err));
+    return null;
+  } finally {
+    if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (err) {} }
+  }
+}
+
 // True only when the message is actually addressed to one of the receipt
 // inboxes (To or Cc). This is the eligibility guard for unlabeled threads.
 function isAddressedToInbox_(message) {
@@ -156,10 +198,20 @@ function buildPayload_(message, token) {
     const isImg = /^image\//.test(type) || /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/.test(lname);
     if (!isPdf && !isImg) continue;
 
-    const bytes = att.getBytes();
+    let bytes = att.getBytes();
+    let shrunk = false;
     if (bytes.length > CONFIG.MAX_ATTACH_BYTES) {
-      console.warn('Skipping large attachment "' + att.getName() + '" (' + bytes.length + ' bytes) on msg ' + message.getId());
-      continue;
+      // Oversized photo (common for full-resolution phone photos, incl. every
+      // pre-existing receipt email in the archive): have Drive render a
+      // smaller JPEG rather than skipping the receipt.
+      const small = isImg ? shrinkImageViaDrive_(att) : null;
+      if (!small) {
+        console.warn('Skipping large attachment "' + att.getName() + '" (' + bytes.length + ' bytes) on msg ' + message.getId());
+        continue;
+      }
+      bytes = small;
+      shrunk = true;
+      console.log('Shrunk "' + att.getName() + '" ' + att.getBytes().length + ' -> ' + bytes.length + ' bytes via Drive');
     }
 
     // Normalize the mime type (some clients send octet-stream); decide by extension.
@@ -179,6 +231,7 @@ function buildPayload_(message, token) {
     } else if (!/^image\//.test(mime)) {
       mime = 'image/jpeg';
     }
+    if (shrunk) mime = 'image/jpeg'; // Drive renditions are always JPEG
 
     attachments.push({
       filename: att.getName(),
