@@ -25,7 +25,12 @@ const CONFIG = {
   DONE_LABEL: 'receipts-done',
   SEARCH_WINDOW: 'newer_than:90d',
   MAX_THREADS: 15,
-  MAX_ATTACH_BYTES: 4 * 1024 * 1024, // skip attachments larger than ~4 MB (Netlify body cap)
+  // Skip attachments larger than ~3 MB: base64 inflates by 4/3 and the JSON
+  // payload must stay under Netlify's request cap — a ~4 MB photo bounced the
+  // whole email with HTTP 413 on 2026-08-21. A skipped attachment still sends
+  // the email (body only), so it surfaces as a review placeholder, not a
+  // silent forever-retry.
+  MAX_ATTACH_BYTES: 3 * 1024 * 1024,
   MAX_ATTACH_COUNT: 6                 // at most N attachments per email
 };
 
@@ -99,7 +104,7 @@ function pollReceipts() {
 // receipts are re-processed to the live tab at go-live (their queue records
 // must be deleted first — the delete/clear action in receipts-data does that).
 function testPollBatch() {
-  const BATCH = 50; // threads per run — the ingest skips already-processed messages, so re-running is safe
+  const BATCH = 60; // threads per run (above the unlabeled-backlog thread count) — the ingest skips already-processed messages, so re-running is safe
   const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
   if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
   const query = '(to:' + CONFIG.RECEIPT_ADDRESS + ' OR to:' + CONFIG.TRAVEL_ADDRESS +
