@@ -133,6 +133,7 @@ All Netlify v2 (`.mjs`, `export default`).
 | Function | Auth | Purpose |
 |---|---|---|
 | `receipts-ping.mjs` | `x-admin-token` == `ADMIN_PASSWORD` | Login check for the queue page. |
+| `receipts-upload.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | **Synchronous** (6 MB cap) attachment drop: parks one attachment's base64 in Blobs at `upload/<msgId>/<i>`. Exists because the BACKGROUND ingest is an async invocation with a **~256 KB request cap** — attachment bytes can never ride the ingest POST (every photo 413-bounced until 2026-08-21). The poller uploads here first; the ingest gets blob references, loads the bytes, and deletes the transient keys. |
 | `receipts-data.mjs` | `x-admin-token` == `ADMIN_PASSWORD` | Queue API: `list` / `seed` / `update` / `approve` / `dismiss` / `delete` / `clear` / `migrate` (one-time legacy `queue.json` split). Mutations locate the owning envelope via the item's `sourceMsgId`. **Approve** computes the tax-inclusive amount and POSTs to the sheet-writer; only marks approved if that write succeeds. |
 | `receipts-ingest-background.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | **Background function** (202 immediately, up to 15 min). The bookkeeper itself: processing-record-first, HEIC→JPEG, Claude `claude-opus-5` via `@anthropic-ai/sdk` with server-side `web_search` (max 4) + `web_fetch` (max 6) for SKU lookups, structured-output JSON (loose-parse fallback), `pause_turn` resume loop, refusal fallbacks enabled. Files high-confidence items to the sheet, queues the rest. **Idempotent** by Gmail message id; **never silently drops** (crash → `error` record + ⚠️ review item). |
 | `receipts-summary.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | Data for the morning email: yesterday's auto-filed items by category + totals, all pending review items, stuck-processing and errored ingests, and `lostMsgIds` reconciliation (receipts-done emails with no record). |
@@ -298,19 +299,26 @@ ingested). Outcome:
   ScriptLock (see "The autofile gate") — serialized, cannot race; ingest holds
   a rejected twin as "possible original/forward pair". Also: note
   sanitization, and human Approve sends force:true.
-- **Run 2 state (current):** records reset + TEST wiped + full 82-message
-  rerun done under fix v1 — TEST currently holds run-2 rows INCLUDING ~9
-  doubled Subscriptions pairs; the queue holds the caught twins. A final
-  wipe+reset+rerun under fix v2 is the pending proof pass.
-- **Paul's Home Depot "test" photo email bounced (HTTP 413)** — the ~4 MB
-  photo exceeded Netlify's request cap after base64. Re-sending smaller was
-  REJECTED by Paul as a fix: the archive is full of months-old full-size
-  photo receipts that can't be re-sent. Real fix shipped instead: the poller
-  now **shrinks oversized photos via Drive** (see Known limits) — works for
-  every past email as-is. Requires the bookkeeper project's one-time Drive
-  re-authorization (prompted 2026-08-21). The "test" email needs NO re-send;
-  it gets TRASHED once the test passes (Paul's instruction — test-only, must
-  never reach the live books).
+- ✅ **PROOF PASS PASSED (2026-08-21 ~2:30 PM, final full rerun):**
+  - **Zero doubles.** Subscriptions filed 15 rows / $257.22, every receipt #
+    unique — the writer-v6 serialized gate held one twin of every
+    simultaneous pair in Pending ("possible original/forward pair", with the
+    filed sibling's cell). Known safe false-positive observed: the two LEGIT
+    same-day $20 Netlify invoices (credits + Base Plan) look like a twin —
+    one filed, one waits in Pending for a one-click Approve.
+  - **The Home Depot photo parsed perfectly**: 6/6 lines (tool bag +
+    screwdriver set → Tools; foam/screws/flanges → Materials), per-line
+    8.25% tax applied, lines sum to the $96.36 paid.
+  - **The photo backlog unlocked**: photo receipts had NEVER worked in the
+    background-function era — every one silently 413-bounced at Netlify's
+    edge (no record, no error, endless poller retry). The upload-path fix
+    surfaced ~7 of them instantly: Milwaukee tools ×3, Harbor Freight
+    grinder, Honeywell thermostat (filed); Exxon gas (filed); Shell pump
+    photo + a JP-court eviction packet with a HANDWRITTEN amount (held for
+    review with sharp notes). Tools $688.41 / Materials $155.94 / Gas $78.66
+    now populated on TEST.
+  - Paul's "test" email was TRASHED after the pass (his instruction —
+    test-only; in Trash 30 days, excluded from all future polls).
 - Queue page gained a **"Reset test records"** button (top bar, shown while
   bookkeeper-era records exist): deletes ALL bookkeeper-era queue records —
   their emails are unlabeled, so the next `testPollBatch` re-processes
@@ -346,11 +354,10 @@ SKU decoding). Procedure:
   RECAST BIZ untouched (already 5-wide everywhere).
 
 **Go-live checklist (in order)**
-1. Paul reads the TEST tab and judges the filings (the 6 doubled pairs are
-   listed above — ignore them when judging accuracy, they're the race bug,
-   fixed but not yet re-verified).
-2. Run the **race-fix proof pass** ("Next test" above): Home Depot receipt
-   in, Reset test records + wipe TEST, `testPollBatch`, read the tab.
+1. Paul reads the TEST tab (clean proof-pass data, zero doubles) and gives
+   the verdict on the filings; approve/dismiss the ~40 New pending items in
+   the queue (twins, [Personal] Ubers, the second Netlify $20, photo holds).
+2. ~~Race-fix proof pass~~ DONE — passed 2026-08-21 ~2:30 PM (see above).
 3. Legacy cleanup, now visible via badges/filter: 59 June-backlog pending +
    7 fake seed rows (their emails are labeled receipts-done, so dismissing
    means they never reach the books — reprocessing can't see hand-entered
@@ -368,6 +375,17 @@ SKU decoding). Procedure:
 
 ## Change log
 
+- **2026-08-21 (PM 4)** — **Attachments ride Blobs; photo backlog unlocked;
+  PROOF PASS PASSED.** Root-caused why photos never worked: background
+  functions have a ~256 KB async-invocation request cap (regular functions:
+  6 MB) — every photo 413-bounced at the edge, silently, forever. New
+  `receipts-upload.mjs` (sync) parks attachment bytes in Blobs; poller
+  uploads first and sends the ingest blob references; ingest loads + deletes
+  them. Poller also shrinks >3 MB photos via a Drive round-trip (Drive scope
+  granted). Final rerun: zero doubled rows (writer gate verified under ~11
+  simultaneous twin pairs), Home Depot photo itemized 6/6 with per-line tax,
+  ~7 previously-invisible photo receipts surfaced (tools, gas, thermostat,
+  court packet w/ handwriting). Paul's "test" email trashed per instruction.
 - **2026-08-21 (PM 3)** — **Duplicate race fix v2: writer-side serialized
   gate.** Run-2 rerun showed fix v1 insufficient (twins race within seconds;
   9 pairs re-doubled). Moved the gate into `receipts-sheet.gs` inside its
