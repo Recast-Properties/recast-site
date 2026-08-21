@@ -79,6 +79,14 @@
     .rgrid .wide { grid-column: 1 / -1; }
   }
 
+  .bknote { margin-top: 9px; font-size: 12.5px; color: var(--ink-600, #53575f); }
+  .conf { display: inline-block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+    border-radius: 999px; padding: 1px 7px; margin-right: 4px; }
+  .conf.high { background: #e7f4ec; color: #1c7a3f; }
+  .conf.medium { background: #fdf3e0; color: #9a6b15; }
+  .conf.low { background: #fbeceb; color: #b3261e; }
+  .src.auto { background: #e7f4ec; border-color: #bfe3cc; color: #1c7a3f; }
+  .spin.dark { border-color: rgba(0,0,0,.15); border-top-color: var(--ink-700, #3a3d44); }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink-900, #18191c);
     color: #fff; padding: 11px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
   .toast.err { background: #b3261e; }
@@ -114,10 +122,11 @@
   </div>
   <div class="wrap">
     <h1 class="page-title">Receipts Queue</h1>
-    <p class="muted">Assign a category to each item, then Approve to send it to the sheet, or Dismiss to drop it.</p>
+    <p class="muted">The bookkeeper files confident items automatically (Filed tab). Anything here in Pending needs you: fix the fields, pick a category, then Approve — or Dismiss.</p>
 
     <div class="tabs">
       <div class="tab active" data-view="pending">Pending <span class="n" id="nPending">0</span></div>
+      <div class="tab" data-view="filed">Filed <span class="n" id="nFiled">0</span></div>
       <div class="tab" data-view="approved">Approved <span class="n" id="nApproved">0</span></div>
       <div class="tab" data-view="dismissed">Dismissed <span class="n" id="nDismissed">0</span></div>
     </div>
@@ -141,7 +150,7 @@
   const sheetAmount = (amount, taxable) => { const n = num(amount); return taxable ? n * (1 + TAX_RATE) : n; };
   const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2);
 
-  let token = sessionStorage.getItem("recast_admin_token") || "";
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
   let rows = [];
   let view = "pending";
 
@@ -174,7 +183,7 @@
     return res.ok;
   }
   function signOut() {
-    token = ""; sessionStorage.removeItem("recast_admin_token");
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
   }
   $("loginBtn").onclick = async () => {
@@ -183,7 +192,7 @@
     $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
     try {
       if (await tryLogin(pw)) {
-        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        token = pw; localStorage.setItem("recast_admin_token", pw);
         $("pw").value = "";
         $("login").classList.add("hidden");
         await load();
@@ -218,9 +227,10 @@
   }
 
   function counts() {
-    const c = { pending: 0, approved: 0, dismissed: 0 };
+    const c = { pending: 0, filed: 0, approved: 0, dismissed: 0, processing: 0 };
     rows.forEach((r) => { c[r.status] = (c[r.status] || 0) + 1; });
-    $("nPending").textContent = c.pending;
+    $("nPending").textContent = c.pending + c.processing;
+    $("nFiled").textContent = c.filed;
     $("nApproved").textContent = c.approved;
     $("nDismissed").textContent = c.dismissed;
   }
@@ -228,7 +238,7 @@
   function render() {
     counts();
     const el = $("list"); el.innerHTML = "";
-    const items = rows.filter((r) => r.status === view);
+    const items = rows.filter((r) => (view === "pending" ? (r.status === "pending" || r.status === "processing") : r.status === view));
     $("listEmpty").classList.toggle("hidden", items.length > 0);
     if (view === "pending" && rows.length === 0) {
       $("listEmpty").textContent = "Queue is empty. Click “Load test items” to try it out.";
@@ -237,7 +247,17 @@
     }
 
     items.forEach((r) => {
-      const pending = view === "pending";
+      // A receipt the bookkeeper is still reading: passive card, no controls.
+      if (r.status === "processing") {
+        const card = document.createElement("div");
+        card.className = "rcard done";
+        card.innerHTML = '<span class="spin dark"></span> <b>Reading receipt\u2026</b> ' + esc(r.item || "") +
+          ' <span class="muted">' + esc(r.vendor || "") + "</span>" +
+          (r.sourceUrl ? ' \u00b7 <a class="rlink" href="' + esc(r.sourceUrl) + '" target="_blank" rel="noopener">\ud83e\uddfe Email</a>' : "");
+        el.appendChild(card);
+        return;
+      }
+      const pending = r.status === "pending";
       const taxable = r.taxable !== false; // default true
       const card = document.createElement("div");
       card.className = "rcard" + (pending ? "" : " done");
@@ -291,7 +311,7 @@
         // Persist edits on change (blur / select / checkbox).
         card.querySelectorAll("[data-f]").forEach((inp) => {
           inp.addEventListener("change", async () => {
-            try { await api("receipts-data", { action: "update", id: r.id, patch: patch() }); }
+            try { await api("receipts-data", { action: "update", id: r.id, sourceMsgId: r.sourceMsgId, patch: patch() }); }
             catch (e) { toast(String(e.message || e), true); }
           });
         });
@@ -301,7 +321,7 @@
         const dismiss = document.createElement("button");
         dismiss.className = "btn danger sm"; dismiss.textContent = "Dismiss";
         dismiss.onclick = async () => {
-          try { await api("receipts-data", { action: "dismiss", id: r.id }); toast("Dismissed."); await load(); }
+          try { await api("receipts-data", { action: "dismiss", id: r.id, sourceMsgId: r.sourceMsgId }); toast("Dismissed."); await load(); }
           catch (e) { toast(String(e.message || e), true); }
         };
         const approve = document.createElement("button");
@@ -310,7 +330,7 @@
           const p = patch();
           if (!p.category) { toast("Pick a category first.", true); return; }
           approve.disabled = true; approve.innerHTML = '<span class="spin"></span> Approving…';
-          try { await api("receipts-data", { action: "approve", id: r.id, patch: p }); toast("Approved."); await load(); }
+          try { await api("receipts-data", { action: "approve", id: r.id, sourceMsgId: r.sourceMsgId, patch: p }); toast("Approved."); await load(); }
           catch (e) { toast(String(e.message || e), true); approve.disabled = false; approve.textContent = "Approve → sheet"; }
         };
         actions.appendChild(dismiss); actions.appendChild(approve);

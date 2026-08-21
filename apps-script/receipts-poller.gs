@@ -19,8 +19,9 @@
  ****************************************************************/
 
 const CONFIG = {
-  INGEST_URL: 'https://receipts--incomparable-raindrop-8f3d22.netlify.app/.netlify/functions/receipts-ingest',
+  INGEST_URL: 'https://receipts--incomparable-raindrop-8f3d22.netlify.app/.netlify/functions/receipts-ingest-background',
   RECEIPT_ADDRESS: 'receipts@recast-properties.com',
+  TRAVEL_ADDRESS: 'travel@recast-properties.com',   // its own mailbox, POP-imported into paul@
   DONE_LABEL: 'receipts-done',
   SEARCH_WINDOW: 'newer_than:90d',
   MAX_THREADS: 15,
@@ -45,13 +46,26 @@ function pollReceipts() {
     if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
 
     const doneLabel = GmailApp.getUserLabelByName(CONFIG.DONE_LABEL) || GmailApp.createLabel(CONFIG.DONE_LABEL);
-    const query = '(to:' + CONFIG.RECEIPT_ADDRESS + ' OR label:receipts) -label:' + CONFIG.DONE_LABEL + ' ' + CONFIG.SEARCH_WINDOW;
+    const query = '(to:' + CONFIG.RECEIPT_ADDRESS + ' OR to:' + CONFIG.TRAVEL_ADDRESS +
+      ' OR label:receipts OR label:travel) -label:' + CONFIG.DONE_LABEL + ' ' + CONFIG.SEARCH_WINDOW;
     const threads = GmailApp.search(query, 0, CONFIG.MAX_THREADS);
 
-    let ingested = 0, items = 0, failed = 0;
+    let ingested = 0, items = 0, failed = 0, skipped = 0;
     threads.forEach(function (thread) {
       let threadOk = true;
+      // HARD GUARD: only threads explicitly labeled receipts/travel, or whose
+      // messages are actually addressed to one of the receipt inboxes, may be
+      // ingested. If a Gmail search quirk ever over-matches (e.g. an alias
+      // resolving to the whole mailbox), unrelated mail is skipped and left
+      // unlabeled — never read into the bookkeeper.
+      const threadLabeled = thread.getLabels().some(function (l) {
+        const n = l.getName().toLowerCase();
+        return n === 'receipts' || n === 'travel';
+      });
+      let anyEligible = false;
       thread.getMessages().forEach(function (message) {
+        if (!threadLabeled && !isAddressedToInbox_(message)) { skipped++; return; }
+        anyEligible = true;
         try {
           const payload = buildPayload_(message, token);
           const res = UrlFetchApp.fetch(CONFIG.INGEST_URL, {
@@ -61,19 +75,68 @@ function pollReceipts() {
           const code = res.getResponseCode();
           let data = {};
           try { data = JSON.parse(res.getContentText()); } catch (e) {}
-          if (code === 200 && data.ok) { ingested++; items += (data.added || 0); }
+          // The ingest is a Netlify BACKGROUND function: 202 = accepted, work
+          // continues async (it records a processing marker first thing, and the
+          // morning summary reconciles anything that later goes missing).
+          if (code === 202 || (code === 200 && data.ok)) { ingested++; items += (data.added || 0); }
           else { threadOk = false; failed++; console.error('Ingest failed (' + code + '): ' + res.getContentText().slice(0, 300)); }
         } catch (err) {
           threadOk = false; failed++; console.error('Poller error: ' + String(err));
         }
       });
-      if (threadOk) thread.addLabel(doneLabel);
+      if (threadOk && anyEligible) thread.addLabel(doneLabel);
     });
 
-    console.log('Receipts poll: ' + ingested + ' email(s), ' + items + ' line item(s) queued, ' + failed + ' failure(s).');
+    console.log('Receipts poll: ' + ingested + ' email(s) ingested, ' + failed + ' failure(s), ' + skipped + ' non-inbox message(s) skipped.');
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---- TEST HARNESS: process a small batch of REAL receipts WITHOUT marking
+// them receipts-done. Used while the sheet-writer points at the TEST tab to
+// judge itemization on real receipts. Because nothing is labeled, the same
+// receipts are re-processed to the live tab at go-live (their queue records
+// must be deleted first — the delete/clear action in receipts-data does that).
+function testPollBatch() {
+  const BATCH = 10;
+  const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+  if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
+  const query = '(to:' + CONFIG.RECEIPT_ADDRESS + ' OR to:' + CONFIG.TRAVEL_ADDRESS +
+    ' OR label:receipts OR label:travel) -label:' + CONFIG.DONE_LABEL + ' ' + CONFIG.SEARCH_WINDOW;
+  const threads = GmailApp.search(query, 0, BATCH);
+  let sent = 0, skipped = 0;
+  threads.forEach(function (thread) {
+    const threadLabeled = thread.getLabels().some(function (l) {
+      const n = l.getName().toLowerCase();
+      return n === 'receipts' || n === 'travel';
+    });
+    thread.getMessages().forEach(function (message) {
+      if (!threadLabeled && !isAddressedToInbox_(message)) { skipped++; return; }
+      const payload = buildPayload_(message, token);
+      const res = UrlFetchApp.fetch(CONFIG.INGEST_URL, {
+        method: 'post', contentType: 'application/json',
+        payload: JSON.stringify(payload), muteHttpExceptions: true
+      });
+      console.log('test-ingest ' + message.getId() + ' -> ' + res.getResponseCode() + ' "' + message.getSubject() + '"');
+      sent++;
+    });
+  });
+  console.log('Test batch: ' + sent + ' message(s) sent (NOT labeled done), ' + skipped + ' skipped.');
+}
+
+// True only when the message is actually addressed to one of the receipt
+// inboxes (To or Cc). This is the eligibility guard for unlabeled threads.
+function isAddressedToInbox_(message) {
+  const hdrs = ((message.getTo() || '') + ',' + (message.getCc() || '')).toLowerCase();
+  return hdrs.indexOf(CONFIG.RECEIPT_ADDRESS) !== -1 || hdrs.indexOf(CONFIG.TRAVEL_ADDRESS) !== -1;
+}
+
+// Which inbox this receipt came through: travel@ (POP-imported into this
+// mailbox, To/Cc headers preserved) files with a Travel-category hint.
+function channelOf_(message) {
+  const hdrs = ((message.getTo() || '') + ',' + (message.getCc() || '')).toLowerCase();
+  return hdrs.indexOf(CONFIG.TRAVEL_ADDRESS) !== -1 ? 'travel' : 'receipts';
 }
 
 function buildPayload_(message, token) {
@@ -122,6 +185,7 @@ function buildPayload_(message, token) {
 
   return {
     token: token,
+    channel: channelOf_(message),
     gmailMessageId: message.getId(),
     gmailUrl: 'https://mail.google.com/mail/u/0/#all/' + message.getId(),
     subject: message.getSubject(),

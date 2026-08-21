@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Receipt</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f6f7f9; color: #18191c; font-family: system-ui, sans-serif; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #fff;
+    border-bottom: 1px solid #e1e4e9; position: sticky; top: 0; }
+  .bar b { font-size: 15px; }
+  .bar .muted { color: #53575f; font-size: 13px; }
+  .bar .sp { flex: 1; }
+  .bar a { color: #c2643a; font-weight: 700; font-size: 13px; text-decoration: none; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 20px; }
+  .card { background: #fff; border: 1px solid #e1e4e9; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .card img { max-width: 100%; display: block; margin: 0 auto; }
+  .card embed { width: 100%; height: 80vh; }
+  .card pre { white-space: pre-wrap; font-size: 13px; margin: 0; }
+  .fname { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #71757e; margin-bottom: 8px; }
+  .login { max-width: 340px; margin: 16vh auto; text-align: center; }
+  .login input { width: 100%; border: 1px solid #c0c3cb; border-radius: 9px; padding: 9px 11px; font-size: 14px; margin-bottom: 10px; }
+  .login button { width: 100%; border: 0; border-radius: 10px; padding: 10px; background: #d9743f; color: #fff; font-weight: 700; cursor: pointer; }
+  .err { color: #b3261e; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  "use strict";
+  const FN = "/.netlify/functions/";
+  const msgId = new URLSearchParams(location.search).get("m") || "";
+  const app = document.getElementById("app");
+  // Shared with the queue page: one login covers both.
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
+
+  function askLogin(msg) {
+    app.innerHTML = '<div class="login"><div class="card"><b>Receipt viewer</b>' +
+      '<p class="muted" style="color:#53575f;font-size:13px">Enter the admin password.</p>' +
+      (msg ? '<p class="err">' + msg + "</p>" : "") +
+      '<input id="pw" type="password" placeholder="Password"><button id="go">View receipt</button></div></div>';
+    document.getElementById("go").onclick = () => { token = document.getElementById("pw").value.trim(); load(); };
+    document.getElementById("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") document.getElementById("go").click(); });
+  }
+
+  async function load() {
+    if (!msgId) { app.innerHTML = '<div class="wrap"><p class="err">Missing receipt id.</p></div>'; return; }
+    if (!token) { askLogin(); return; }
+    app.innerHTML = '<div class="wrap"><p>Loading receipt…</p></div>';
+    let data = {};
+    try {
+      const res = await fetch(FN + "receipts-file", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-admin-token": token },
+        body: JSON.stringify({ msgId }),
+      });
+      data = await res.json();
+      if (res.status === 401) { askLogin("Wrong password."); return; }
+      if (!res.ok || !data.ok) throw new Error(data.error || ("HTTP " + res.status));
+    } catch (e) { app.innerHTML = '<div class="wrap"><p class="err">' + String(e.message || e) + "</p></div>"; return; }
+    localStorage.setItem("recast_admin_token", token);
+
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    let html = '<div class="bar"><div><b>' + esc(data.subject || "Receipt") + "</b><br>" +
+      '<span class="muted">' + esc(data.from) + (data.receivedAt ? " · " + esc(data.receivedAt.slice(0, 10)) : "") + "</span></div>" +
+      '<span class="sp"></span>' +
+      (data.gmailUrl && data.gmailUrl.indexOf("mail.google.com") !== -1 ? '<a href="' + esc(data.gmailUrl) + '" target="_blank" rel="noopener">Open email ↗</a>' : "") +
+      "</div><div class=\"wrap\">";
+
+    const files = data.files || [];
+    if (!files.length) html += "<p class=\"err\">No stored copy of this receipt (it may predate the bookkeeper).</p>";
+    for (const f of files) {
+      html += '<div class="card"><div class="fname">' + esc(f.name || f.mime) + "</div>";
+      if (/^image\//.test(f.mime)) {
+        html += '<img src="data:' + esc(f.mime) + ";base64," + f.dataBase64 + '" alt="receipt">';
+      } else if (f.mime === "application/pdf") {
+        html += '<embed src="data:application/pdf;base64,' + f.dataBase64 + '" type="application/pdf">';
+      } else {
+        let text = "";
+        try { text = decodeURIComponent(escape(atob(f.dataBase64))); } catch (e) { try { text = atob(f.dataBase64); } catch (e2) {} }
+        html += "<pre>" + esc(text) + "</pre>";
+      }
+      html += "</div>";
+    }
+    html += "</div>";
+    app.innerHTML = html;
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

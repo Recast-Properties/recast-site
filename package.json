@@ -4,6 +4,7 @@
   "private": true,
   "description": "Recast Properties marketing + listings site (static) with Netlify Functions backend.",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "@netlify/blobs": "^8.2.0",
     "heic-convert": "^2.1.0"
   },
