@@ -20,6 +20,11 @@
 
 const CONFIG = {
   INGEST_URL: 'https://receipts--incomparable-raindrop-8f3d22.netlify.app/.netlify/functions/receipts-ingest-background',
+  // Attachments can NEVER ride the ingest POST — background functions have a
+  // ~256 KB async-invocation request cap (every photo 413-bounced until
+  // 2026-08-21). Bytes go to this SYNCHRONOUS function (6 MB cap) which parks
+  // them in Blobs; the ingest gets blob references only.
+  UPLOAD_URL: 'https://receipts--incomparable-raindrop-8f3d22.netlify.app/.netlify/functions/receipts-upload',
   RECEIPT_ADDRESS: 'receipts@recast-properties.com',
   TRAVEL_ADDRESS: 'travel@recast-properties.com',   // its own mailbox, POP-imported into paul@
   DONE_LABEL: 'receipts-done',
@@ -121,16 +126,40 @@ function testPollBatch() {
     });
     thread.getMessages().forEach(function (message) {
       if (!threadLabeled && !isAddressedToInbox_(message)) { skipped++; return; }
-      const payload = buildPayload_(message, token);
-      const res = UrlFetchApp.fetch(CONFIG.INGEST_URL, {
-        method: 'post', contentType: 'application/json',
-        payload: JSON.stringify(payload), muteHttpExceptions: true
-      });
-      console.log('test-ingest ' + message.getId() + ' -> ' + res.getResponseCode() + ' "' + message.getSubject() + '"');
-      sent++;
+      try {
+        const payload = buildPayload_(message, token);
+        const res = UrlFetchApp.fetch(CONFIG.INGEST_URL, {
+          method: 'post', contentType: 'application/json',
+          payload: JSON.stringify(payload), muteHttpExceptions: true
+        });
+        console.log('test-ingest ' + message.getId() + ' -> ' + res.getResponseCode() + ' "' + message.getSubject() + '"');
+        sent++;
+      } catch (err) {
+        console.error('test-ingest ' + message.getId() + ' FAILED: ' + String(err));
+      }
     });
   });
   console.log('Test batch: ' + sent + ' message(s) sent (NOT labeled done), ' + skipped + ' skipped.');
+}
+
+// Upload one attachment's bytes to Netlify Blobs via receipts-upload
+// (synchronous, 6 MB cap). Returns the blob key for the ingest payload.
+function uploadAttachment_(token, msgId, index, filename, mimeType, bytes) {
+  const res = UrlFetchApp.fetch(CONFIG.UPLOAD_URL, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({
+      token: token, msgId: msgId, index: index,
+      filename: filename, mimeType: mimeType,
+      dataBase64: Utilities.base64Encode(bytes)
+    })
+  });
+  const code = res.getResponseCode();
+  let data = {};
+  try { data = JSON.parse(res.getContentText()); } catch (e) {}
+  if (code !== 200 || !data.ok || !data.key) {
+    throw new Error('Attachment upload failed (' + code + ') for "' + filename + '": ' + res.getContentText().slice(0, 200));
+  }
+  return data.key;
 }
 
 // Shrink an oversized photo by round-tripping it through Drive: upload a temp
@@ -233,11 +262,15 @@ function buildPayload_(message, token) {
     }
     if (shrunk) mime = 'image/jpeg'; // Drive renditions are always JPEG
 
+    // Park the bytes in Blobs via the synchronous upload function; the
+    // ingest payload carries only the reference. An upload failure throws →
+    // the poller counts the message failed and retries it next run.
+    const blobKey = uploadAttachment_(token, message.getId(), attachments.length, att.getName(), mime, bytes);
     attachments.push({
       filename: att.getName(),
       mimeType: mime,
       bytes: bytes.length,
-      dataBase64: Utilities.base64Encode(bytes)
+      blobKey: blobKey
     });
   }
 

@@ -16,7 +16,15 @@
 // POST JSON (body.token must match RECEIPTS_SHEET_TOKEN):
 //   { token, gmailMessageId, gmailUrl, subject, from, receivedDate, body,
 //     channel: "receipts"|"travel",
-//     attachments: [{ filename, mimeType, dataBase64 }] }
+//     attachments: [{ filename, mimeType, bytes, blobKey }] }
+//
+// ⚠️ This is a BACKGROUND function — async invocation, ~256 KB request cap
+// (a photo in the POST body 413-bounces the whole call). Attachment BYTES
+// therefore never ride this request: the poller first uploads each one via
+// receipts-upload.mjs (synchronous, 6 MB cap) to Blobs key
+// "upload/<msgId>/<i>" and sends only { blobKey } references here; the bytes
+// are loaded back from Blobs below and the upload/* keys deleted when done.
+// (Legacy inline { dataBase64 } is still honored if present and small.)
 import { getStore } from "@netlify/blobs";
 import Anthropic from "@anthropic-ai/sdk";
 import heicConvert from "heic-convert";
@@ -385,7 +393,22 @@ export default async (req) => {
   await store.setJSON(key, envelope);
 
   const attCount = (body.attachments || []).length;
+  const uploadKeys = [];
   try {
+    // Load attachment bytes from Blobs (uploaded by the poller via
+    // receipts-upload) — references only in this request, see header comment.
+    for (const att of body.attachments || []) {
+      if (att.blobKey && !att.dataBase64) {
+        const b64 = await store.get(clean(att.blobKey));
+        if (b64) {
+          att.dataBase64 = b64;
+          uploadKeys.push(clean(att.blobKey));
+        } else {
+          console.warn(`[ingest] upload blob missing: ${att.blobKey} (msg=${msgId})`);
+        }
+      }
+    }
+
     // Convert any HEIC/HEIF photos (iPhone default) to JPEG so Claude can read them.
     for (const att of body.attachments || []) {
       const m = clean(att.mimeType).toLowerCase();
@@ -536,6 +559,10 @@ export default async (req) => {
     envelope.vendor = clean(parsed && parsed.vendor);
     await store.setJSON(key, envelope);
 
+    // The receipt files are copied into file/<msgId>/* by now — drop the
+    // transient upload/* blobs.
+    for (const k of uploadKeys) { try { await store.delete(k); } catch (_) {} }
+
     console.log(`[ingest] OK msg=${msgId} channel=${channel} subject="${envelope.subject}" atts=${attCount} filed=${filed} pending=${pending} dupDismissed=${dismissed} vendor="${envelope.vendor}"`);
     return Response.json({ ok: true, filed, pending, dismissed });
   } catch (e) {
@@ -546,6 +573,9 @@ export default async (req) => {
     envelope.processedAt = new Date().toISOString();
     envelope.items = [reviewPlaceholder(body, msgId, channel, "Ingest error: " + err.slice(0, 200))];
     try { await store.setJSON(key, envelope); } catch (_) {}
+    // An error envelope is re-ingestable; the poller re-uploads attachments
+    // on the retry, so the transient blobs can go now either way.
+    for (const k of uploadKeys) { try { await store.delete(k); } catch (_) {} }
     return Response.json({ ok: false, error: err }, { status: 500 });
   }
 };
