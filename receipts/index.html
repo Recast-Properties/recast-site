@@ -86,6 +86,15 @@
   .conf.medium { background: #fdf3e0; color: #9a6b15; }
   .conf.low { background: #fbeceb; color: #b3261e; }
   .src.auto { background: #e7f4ec; border-color: #bfe3cc; color: #1c7a3f; }
+  .src.legacy { background: #fdf3e0; border-color: #eed9a8; color: #9a6b15; }
+  .src.seed { background: #eef0f4; border-color: #d5d9e0; color: #53575f; }
+  .src.travel { background: #e8effc; border-color: #c9d9f7; color: #2b5bb7; }
+  .src.dup { background: #fbeceb; border-color: #e5b4b1; color: #b3261e; }
+  .rbadges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
+  .rbadges .src, .rbadges .conf { margin: 0; }
+  .cell { font-size: 12px; font-weight: 700; color: var(--ink-500, #71757e); }
+  .tabs.sub { margin: -8px 0 16px; }
+  .tab.sm { font-size: 12px; padding: 5px 11px; }
   .spin.dark { border-color: rgba(0,0,0,.15); border-top-color: var(--ink-700, #3a3d44); }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink-900, #18191c);
     color: #fff; padding: 11px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
@@ -117,7 +126,6 @@
       <span>Recast Properties</span>
     </a>
     <span class="sp"></span>
-    <button id="seedBtn" class="btn sm">Load test items</button>
     <button id="logoutBtn" class="btn sm">Sign out</button>
   </div>
   <div class="wrap">
@@ -130,6 +138,7 @@
       <div class="tab" data-view="approved">Approved <span class="n" id="nApproved">0</span></div>
       <div class="tab" data-view="dismissed">Dismissed <span class="n" id="nDismissed">0</span></div>
     </div>
+    <div class="tabs sub hidden" id="eraTabs"></div>
 
     <div id="list"></div>
     <p id="listEmpty" class="muted hidden">Nothing here.</p>
@@ -153,6 +162,13 @@
   let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
   let rows = [];
   let view = "pending";
+  let era = "all"; // Pending-tab sub-filter: all | new | legacy
+
+  // Which generation an item came from. The stalled June system queued items
+  // with no confidence field; the bookkeeper (Aug 2026+) always sets one.
+  // Seed rows are fake test items.
+  const eraOf = (r) =>
+    r.source === "seed" ? "seed" : (r.confidence || r.status === "processing" ? "new" : "legacy");
 
   function toast(msg, isErr) {
     const t = document.createElement("div");
@@ -235,16 +251,53 @@
     $("nDismissed").textContent = c.dismissed;
   }
 
+  // Sub-filter chips on the Pending tab, shown only when the queue actually
+  // mixes June-backlog items with new ones — so each era can be reviewed as
+  // its own pass.
+  function renderEraTabs(items) {
+    const el = $("eraTabs");
+    const nLegacy = items.filter((r) => eraOf(r) === "legacy").length;
+    const nNew = items.length - nLegacy;
+    const show = view === "pending" && nLegacy > 0 && nNew > 0;
+    el.classList.toggle("hidden", !show);
+    el.innerHTML = "";
+    if (!show) { era = "all"; return; }
+    [["all", "All", items.length], ["new", "New", nNew], ["legacy", "June backlog", nLegacy]].forEach(([key, label, n]) => {
+      const t = document.createElement("div");
+      t.className = "tab sm" + (era === key ? " active" : "");
+      t.innerHTML = esc(label) + ' <span class="n">' + n + "</span>";
+      t.onclick = () => { era = key; render(); };
+      el.appendChild(t);
+    });
+  }
+
+  // Chips summarizing what the bookkeeper knows about an item: era, its
+  // confidence + duplicate verdicts, channel, and where it landed on the sheet.
+  function badgesHtml(r) {
+    const b = [];
+    const e = eraOf(r);
+    if (e === "legacy") b.push('<span class="src legacy">June backlog</span>');
+    if (e === "seed") b.push('<span class="src seed">Test item</span>');
+    if (r.confidence && r.status !== "processing") b.push('<span class="conf ' + esc(r.confidence) + '">' + esc(r.confidence) + " confidence</span>");
+    if (r.duplicate === "suspected") b.push('<span class="src dup">Possible duplicate</span>');
+    if (r.channel === "travel") b.push('<span class="src travel">Travel</span>');
+    if (r.autoFiled) b.push('<span class="src auto">auto-filed</span>');
+    if (r.sheetCell) b.push('<span class="cell">→ sheet ' + esc(r.sheetCell) + "</span>");
+    return b.length ? '<div class="rbadges">' + b.join("") + "</div>" : "";
+  }
+
   function render() {
     counts();
     const el = $("list"); el.innerHTML = "";
-    const items = rows.filter((r) => (view === "pending" ? (r.status === "pending" || r.status === "processing") : r.status === view));
-    $("listEmpty").classList.toggle("hidden", items.length > 0);
-    if (view === "pending" && rows.length === 0) {
-      $("listEmpty").textContent = "Queue is empty. Click “Load test items” to try it out.";
-    } else {
-      $("listEmpty").textContent = "Nothing here.";
+    let items = rows.filter((r) => (view === "pending" ? (r.status === "pending" || r.status === "processing") : r.status === view));
+    renderEraTabs(items);
+    if (view === "pending" && era !== "all") {
+      items = items.filter((r) => (era === "legacy" ? eraOf(r) === "legacy" : eraOf(r) !== "legacy"));
     }
+    $("listEmpty").classList.toggle("hidden", items.length > 0);
+    $("listEmpty").textContent = view === "pending" && rows.length === 0
+      ? "Queue is empty — nothing needs you."
+      : "Nothing here.";
 
     items.forEach((r) => {
       // A receipt the bookkeeper is still reading: passive card, no controls.
@@ -266,13 +319,15 @@
         .join("");
       const ro = pending ? "" : "disabled";
       card.innerHTML =
+        badgesHtml(r) +
         '<div class="rgrid">' +
           '<div><label>Vendor</label><input data-f="vendor" value="' + esc(r.vendor) + '" ' + ro + '></div>' +
           '<div><label>Date</label><input data-f="date" value="' + esc(r.date) + '" ' + ro + '></div>' +
           '<div class="wide"><label>Item</label><input data-f="item" value="' + esc(r.item) + '" ' + ro + '></div>' +
           '<div><label>Amount</label><input data-f="amount" value="' + esc(r.amount) + '" ' + ro + '></div>' +
           '<div><label>Category</label><select data-f="category" ' + ro + '>' + opts + '</select></div>' +
-        '</div>';
+        '</div>' +
+        (r.notes ? '<div class="bknote">📝 ' + esc(r.notes) + "</div>" : "");
 
       // Footer: receipt link · tax checkbox · "goes to sheet" amount · actions
       const foot = document.createElement("div");
@@ -338,8 +393,7 @@
       } else {
         const meta = document.createElement("span");
         meta.className = "tofinal";
-        meta.innerHTML = "· " + (r.category ? "<b>" + esc(r.category) + "</b>" : "(no category)") +
-          (r.source ? '<span class="src">' + esc(r.source) + "</span>" : "");
+        meta.innerHTML = "· " + (r.category ? "<b>" + esc(r.category) + "</b>" : "(no category)");
         info.appendChild(meta);
       }
 
@@ -347,15 +401,6 @@
       el.appendChild(card);
     });
   }
-
-  // ---- seed (Task 1 testing) ----
-  $("seedBtn").onclick = async () => {
-    try {
-      const r = await api("receipts-data", { action: "seed", force: rows.length > 0 });
-      toast("Loaded " + r.count + " test items.");
-      await load();
-    } catch (e) { toast(String(e.message || e), true); }
-  };
 
   // ---- boot ----
   (async function boot() {

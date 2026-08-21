@@ -127,8 +127,13 @@ Static HTML/JS. Login → four tabs: **Pending** (needs you; shows the
 bookkeeper's confidence badge + why-note, pre-picked category, editable fields,
 Approve/Dismiss — receipts still being read appear here as a passive
 "Reading receipt…" row), **Filed** (what the bookkeeper filed on its own —
-read-only, with category, `auto` badge, sheet cell, travel chip), **Approved**,
-**Dismissed**. `netlify.toml` sets `cache-control: no-store` on `/receipts/*`.
+read-only, with category, `auto-filed` badge, sheet cell, travel chip),
+**Approved**, **Dismissed**. Every card carries **era badges** — "June backlog"
+(items from the stalled June system, detected by their empty `confidence`
+field), "Test item" (seed rows) — and the Pending tab gains an
+**All / New / June backlog sub-filter** whenever both eras are present, so each
+era can be reviewed as its own pass. `netlify.toml` sets `cache-control:
+no-store` on `/receipts/*`.
 
 ### Apps Scripts (`apps-script/`)
 
@@ -237,60 +242,90 @@ edits do Deploy → Manage deployments → ✏️ → New version.
 
 ---
 
-## ROLLOUT STATUS — resume here (as of 2026-08-21, mid-rollout)
+## ROLLOUT STATUS — resume here (as of 2026-08-21 PM, mid-rollout)
 
-The bookkeeper is **built, deployed to the receipts alias, and verified on real
-receipts against the TEST tab — but NOT yet live**. No triggers exist; nothing
-runs automatically yet.
+The bookkeeper is **built, deployed to the receipts alias, and tested on the
+FULL email backlog against the TEST tab — but NOT yet live**. No triggers
+exist; nothing runs automatically yet.
 
-**What is done and verified**
-- All functions deployed to the alias: `receipts-ingest-background` (Opus 5 +
-  web search, per-item tax, confidence gate, subtotal reconciliation,
-  duplicate self-detection, receipt-file storage), `receipts-data` (per-message
-  store + `migrate` done — legacy queue.json split), `receipts-summary`,
-  `receipts-file` + `receipts/view.html` (🧾 links open the stored receipt).
-- Apps Script project **"Untitled project"** (rename to "Receipts Bookkeeper"
-  pending; script id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8`)
-  holds the updated poller (travel@ + hard guard + `testPollBatch`),
-  WEBHOOK_SECRET set, **Gmail authorization granted** by Paul.
-  `receipts-daily-summary.gs` is NOT yet pasted in (second file, still to do).
-- Sheet writer (separate June project) points at **TEST** (v5). Flip
-  `TAB_NAME` back to `'RECAST BIZ'` + deploy New version at go-live.
-- **RECAST BIZ already got the Tools Link-column migration** (2026-08-21,
-  inadvertently early but correct + data-intact) — all blocks are 5-wide now;
-  no layout work left at go-live.
-- travel@: POP-imported into paul@ (history + ongoing, label `travel`).
-  Real test batch (11 emails incl. travel@) verified: AA airfare auto-filed
-  $541.40 to TEST Travel, personal Uber Eats held with [Personal] notes,
-  security alerts/marketing → nothing, Apify invoice+receipt pair → both held
-  (no double-file).
-- Bookkeeping rules confirmed with Paul: amounts = what was actually paid
-  (only TX sales tax excluded/re-added); receipts with shipping → one line;
-  restaurants → one line incl. tip; confirmed duplicates auto-dismiss.
+**Testing method (Paul's call, 2026-08-21 PM):** judge the bookkeeper by
+**reading the TEST tab** — receipts landed in the right category blocks with
+right amounts — NOT by working the queue app. The queue is the exception lane
+only. When a bigger test pass is wanted: wipe TEST's data rows (keep header
+row 1), run `testPollBatch` in the "Receipts Bookkeeper" Apps Script project,
+read the tab ~10 min later.
 
-**Open problem (next session):** the queue mixes three eras with no visual
-distinction — 61 legacy pending items from the stalled June system (their
-emails are labeled receipts-done, so dismissing them means they never reach
-the books), this week's test items, and fresh batch items. Paul finds this
-confusing. Plan: era/source badges in the UI and/or a supervised sweep of the
-legacy 61 (bulk-merge same-vendor-same-date groups per the new one-line rules,
-then triage or unlabel-and-reprocess — note reprocessing can't see hand-entered
-sheet rows, so it risks double-filing anything Paul typed in himself).
+**Full-backlog test run (2026-08-21 ~12:40 PM)** — `testPollBatch`
+(`BATCH` now 50) sent **64 messages** (~53 new; the rest skipped as already
+ingested). Outcome:
+- **19 rows auto-filed to TEST, $1,687.91**: Travel $1,312.10 (4 rows — both
+  airlines w/ conf numbers, Wi-Fi pass), Subscriptions $335.81 (13 rows),
+  Website $40 (2 distinct Netlify invoices). Notes/links all present.
+- **Held correctly**: every [Personal]-flagged Uber/Uber Eats (~13), Cotality
+  $200 past-due invoices (held as possible dup of paid entries, "past-due ≠
+  proof of payment"), Apify $29 possible-dups, a $235 Zelle with no memo, an
+  epoxy kit w/ SKU decoded via web search. Security alerts / marketing / 2FA
+  notices → correctly produced nothing. Nothing personal auto-filed.
+- ⚠️ **FOUND — concurrency race defeats pairwise duplicate detection.**
+  6 Subscriptions pairs double-filed (~$150.66 excess): an original and its
+  "Fwd:" (same Anthropic receipt #s, same Max-plan invoice, same PDF.co
+  invoice) processed simultaneously; each read the last-60-days context before
+  either had written, so each separately concluded "not in books." Cross-TIME
+  dedup demonstrably works (notes reason correctly against prior recorded
+  charges); only same-moment pairs slip. The live poller has the same exposure
+  (a poll cycle POSTs its batch within seconds). **Proposed fix (not built):**
+  at filing time, re-read the store and demote a same-vendor+amount match from
+  a different msgId to Pending as a suspected duplicate; also sanitize notes
+  (2 notes carry leaked schema-error/JSON fragments).
+
+**Also done 2026-08-21 PM**
+- Queue UI era pass shipped to the alias: confidence badges + why-notes now
+  actually render, era badges ("June backlog" / "Test item"), All/New/June
+  sub-filter on Pending, sheet-cell + auto-filed + travel chips, "Load test
+  items" button removed. Queue now: Pending 86 (27 new — incl. 7 old fake
+  seed rows worth deleting — + 59 June backlog), Filed 20 (1 stale: AA
+  $541.40 whose TEST row Paul wiped), Approved 21, Dismissed 13 (all June).
+- Apps Script project renamed **"Receipts Bookkeeper"**; editor copy of the
+  poller == repo (incl. `BATCH = 50` test harness). Flaky-editor technique
+  that works: paste the WHOLE file (pbcopy → cmd+A → cmd+V) — never keyboard
+  micro-edits; to run a function, paste a variant whose `authorize()` calls
+  it, run `authorize`, then re-paste the clean file.
+- `receipts-daily-summary.gs` still NOT pasted in (unchanged).
+- Sheet writer (separate June project) still points at **TEST** (v5).
+  RECAST BIZ untouched (already 5-wide everywhere).
 
 **Go-live checklist (in order)**
-1. Resolve the legacy-61 question and finish Paul's queue review.
-2. Flip sheet writer `TAB_NAME` → `'RECAST BIZ'`, Deploy → New version.
-3. Delete the test-batch queue records (`msg/1a0*`) so those emails re-file to
-   the live tab; wipe/keep TEST as desired.
-4. Paste `receipts-daily-summary.gs` into the bookkeeper project; set project
-   timezone America/Chicago.
-5. Create triggers: `pollReceipts` every 15 min; `dailySummary` daily 7–8 AM.
+1. Paul reads the TEST tab and judges the filings (the 6 doubled pairs are
+   listed above — ignore them when judging accuracy, they're the race bug).
+2. Fix the concurrent-duplicate race + note sanitization; optionally wipe
+   TEST + delete bookkeeper-era queue records and rerun `testPollBatch` to
+   re-verify clean.
+3. Legacy cleanup, now visible via badges/filter: 59 June-backlog pending +
+   7 fake seed rows (their emails are labeled receipts-done, so dismissing
+   means they never reach the books — reprocessing can't see hand-entered
+   sheet rows and risks double-filing those).
+4. Flip sheet writer `TAB_NAME` → `'RECAST BIZ'`, Deploy → New version.
+5. Delete ALL bookkeeper-era queue records (`delete`/`clear` in
+   receipts-data) so those unlabeled emails re-file to the live tab; wipe
+   TEST as desired.
+6. Paste `receipts-daily-summary.gs` into the Receipts Bookkeeper project;
+   set project timezone America/Chicago.
+7. Create triggers: `pollReceipts` every 15 min; `dailySummary` daily 7–8 AM.
    (Account currently has ZERO triggers — this is what turns it on.)
-6. Backlog (~30 unlabeled receipts) processes over the next hours; verify the
-   first morning email.
+8. The backlog re-processes over the next hours; verify the first morning
+   email.
 
 ## Change log
 
+- **2026-08-21 (PM)** — **TEST-tab testing method + full-backlog test run.**
+  Testing reframed per Paul: the TEST tab is the verification surface; the
+  queue is the exception lane only. `testPollBatch` `BATCH` 10→50; ran the
+  whole backlog (64 msgs) → 19 rows/$1,687.91 auto-filed to TEST, all
+  personal/uncertain items held. Found the concurrent-ingest duplicate race
+  (6 double-filed pairs). Queue UI: era badges ("June backlog"/"Test item"),
+  All/New/June sub-filter on Pending, confidence badge + why-note rendering,
+  sheet-cell/auto-filed/travel chips; seed button removed. Apps Script
+  project renamed "Receipts Bookkeeper".
 - **2026-08-21** — **The bookkeeper.** Went autonomous: ingest rebuilt as a
   background function on Claude Opus 5 (`@anthropic-ai/sdk`) with server-side
   web search for SKU lookups, per-item tax + category + confidence, and

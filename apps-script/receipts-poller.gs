@@ -99,7 +99,7 @@ function pollReceipts() {
 // receipts are re-processed to the live tab at go-live (their queue records
 // must be deleted first — the delete/clear action in receipts-data does that).
 function testPollBatch() {
-  const BATCH = 10;
+  const BATCH = 50; // threads per run — the ingest skips already-processed messages, so re-running is safe
   const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
   if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
   const query = '(to:' + CONFIG.RECEIPT_ADDRESS + ' OR to:' + CONFIG.TRAVEL_ADDRESS +
