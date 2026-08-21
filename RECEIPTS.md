@@ -95,10 +95,19 @@ an otherwise-taxed receipt stays un-taxed).
 taxes, out-of-state taxes are all included; only TX sales tax is excluded
 (stored pre-tax, re-added at 8.25% per taxable item on write).
 
-**Duplicate detection:** the extraction call is shown the last 60 days of
-recorded charges. A receipt that clearly documents an already-recorded charge
-(vendor invoice + receipt pair) auto-dismisses itself with an explanatory
-note; a plausible-but-unsure match waits in Pending.
+**Duplicate detection** is two-layered:
+1. The extraction call is shown the last 60 days of recorded charges. A
+   receipt that clearly documents an already-recorded charge (vendor invoice +
+   receipt pair) auto-dismisses itself with an explanatory note; a
+   plausible-but-unsure match waits in Pending.
+2. **Filing-time concurrency guard** (added 2026-08-21 after the batch test
+   double-filed 6 original+"Fwd:" pairs): ingests run concurrently, so layer 1
+   can't see a twin being extracted at the same moment. Just before writing to
+   the sheet, the ingest re-reads the store; if another message filed/approved
+   the same vendor+amount within the last 6 hours, the item is held in Pending
+   as a suspected duplicate instead. Envelopes are persisted immediately after
+   each sheet write to keep the remaining blind window to seconds. Repeated
+   identical lines within ONE receipt are unaffected (own message excluded).
 
 An item files automatically only when **all** hold: `confidence === "high"`,
 valid category, amount > 0, vendor and date present — **and** the receipt
@@ -266,17 +275,33 @@ ingested). Outcome:
   proof of payment"), Apify $29 possible-dups, a $235 Zelle with no memo, an
   epoxy kit w/ SKU decoded via web search. Security alerts / marketing / 2FA
   notices → correctly produced nothing. Nothing personal auto-filed.
-- ⚠️ **FOUND — concurrency race defeats pairwise duplicate detection.**
+- ⚠️ **FOUND — concurrency race defeated pairwise duplicate detection.**
   6 Subscriptions pairs double-filed (~$150.66 excess): an original and its
   "Fwd:" (same Anthropic receipt #s, same Max-plan invoice, same PDF.co
   invoice) processed simultaneously; each read the last-60-days context before
   either had written, so each separately concluded "not in books." Cross-TIME
-  dedup demonstrably works (notes reason correctly against prior recorded
-  charges); only same-moment pairs slip. The live poller has the same exposure
-  (a poll cycle POSTs its batch within seconds). **Proposed fix (not built):**
-  at filing time, re-read the store and demote a same-vendor+amount match from
-  a different msgId to Pending as a suspected duplicate; also sanitize notes
-  (2 notes carry leaked schema-error/JSON fragments).
+  dedup demonstrably works. **FIXED same day (deployed to alias, NOT yet
+  re-verified):** filing-time just-filed guard + immediate envelope persists
+  (see "The autofile gate"), plus note sanitization (2 notes had carried
+  leaked schema-error/JSON fragments). The doubled rows from the first run
+  are still on TEST until the next wipe+rerun.
+- Queue page gained a **"Reset test records"** button (top bar, shown while
+  bookkeeper-era records exist): deletes ALL bookkeeper-era queue records —
+  their emails are unlabeled, so the next `testPollBatch` re-processes
+  everything fresh. June-backlog records untouched. Pair it with wiping the
+  TEST tab's data rows.
+
+**Next test (the race-fix proof pass)** — Paul wants a **big multi-line Home
+Depot receipt** in it to see in-store itemization (per-line categories + tax,
+SKU decoding). Procedure:
+1. Paul forwards/emails a long Home Depot receipt (e-receipt email or a photo
+   of the paper tape) to receipts@recast-properties.com.
+2. Click **Reset test records** on /receipts; wipe TEST's data rows (keep
+   header row 1).
+3. Run `testPollBatch` in the Receipts Bookkeeper project (~$5–15 of Opus).
+4. Read the TEST tab (~10 min): expect the Home Depot lines itemized into
+   Tools/Materials, exactly ONE of each former twin filed and its pair held
+   in Pending as "possible original/forward pair."
 
 **Also done 2026-08-21 PM**
 - Queue UI era pass shipped to the alias: confidence badges + why-notes now
@@ -296,10 +321,10 @@ ingested). Outcome:
 
 **Go-live checklist (in order)**
 1. Paul reads the TEST tab and judges the filings (the 6 doubled pairs are
-   listed above — ignore them when judging accuracy, they're the race bug).
-2. Fix the concurrent-duplicate race + note sanitization; optionally wipe
-   TEST + delete bookkeeper-era queue records and rerun `testPollBatch` to
-   re-verify clean.
+   listed above — ignore them when judging accuracy, they're the race bug,
+   fixed but not yet re-verified).
+2. Run the **race-fix proof pass** ("Next test" above): Home Depot receipt
+   in, Reset test records + wipe TEST, `testPollBatch`, read the tab.
 3. Legacy cleanup, now visible via badges/filter: 59 June-backlog pending +
    7 fake seed rows (their emails are labeled receipts-done, so dismissing
    means they never reach the books — reprocessing can't see hand-entered
@@ -317,6 +342,13 @@ ingested). Outcome:
 
 ## Change log
 
+- **2026-08-21 (PM 2)** — **Concurrent-duplicate race fixed.** Filing-time
+  just-filed guard (same vendor+amount recorded by another message within 6h
+  → held as suspected duplicate), envelopes persisted immediately after each
+  sheet write, model-note sanitization (strips leaked schema-error/JSON
+  fragments). Queue page: "Reset test records" button deletes all
+  bookkeeper-era records for a fresh rerun. Deployed to the alias; proof pass
+  (with a big Home Depot receipt from Paul) pending.
 - **2026-08-21 (PM)** — **TEST-tab testing method + full-backlog test run.**
   Testing reframed per Paul: the TEST tab is the verification surface; the
   queue is the exception lane only. `testPollBatch` `BATCH` 10→50; ran the

@@ -126,6 +126,7 @@
       <span>Recast Properties</span>
     </a>
     <span class="sp"></span>
+    <button id="resetBtn" class="btn sm danger hidden" title="Delete all bookkeeper-era queue records so their emails re-process on the next test run">Reset test records</button>
     <button id="logoutBtn" class="btn sm">Sign out</button>
   </div>
   <div class="wrap">
@@ -239,8 +240,26 @@
       const data = await api("receipts-data", { action: "list" });
       rows = data.rows || [];
     } catch (e) { $("list").innerHTML = ""; toast(String(e.message || e), true); return; }
+    $("resetBtn").classList.toggle("hidden", !rows.some((r) => eraOf(r) !== "legacy" && r.status !== "processing"));
     render();
   }
+
+  // Delete every bookkeeper-era record (filed/pending/dismissed test data) so
+  // those emails — none of them labeled receipts-done — re-process fresh on
+  // the next test run. June-backlog records are untouched. Pairs with wiping
+  // the TEST tab's data rows by hand.
+  $("resetBtn").onclick = async () => {
+    const ids = rows.filter((r) => eraOf(r) !== "legacy" && r.status !== "processing").map((r) => r.id);
+    if (!ids.length) return;
+    if (!confirm("Delete all " + ids.length + " bookkeeper-era queue records (test data)?\n\nTheir emails re-process on the next test run. June-backlog records are untouched.\n\nRemember to also wipe the TEST tab's data rows.")) return;
+    $("resetBtn").disabled = true;
+    try {
+      const r = await api("receipts-data", { action: "delete", ids });
+      toast("Deleted " + (r.removed ?? ids.length) + " records.");
+      await load();
+    } catch (e) { toast(String(e.message || e), true); }
+    finally { $("resetBtn").disabled = false; }
+  };
 
   function counts() {
     const c = { pending: 0, filed: 0, approved: 0, dismissed: 0, processing: 0 };

@@ -30,6 +30,16 @@ const CATEGORIES = ["Tools","Materials","Marketing","Meals","Travel","Office","G
 
 const clean = (v) => (v == null ? "" : String(v).trim());
 const newId = () => (globalThis.crypto?.randomUUID?.() || String(Date.now()) + Math.random().toString(16).slice(2));
+// Model notes occasionally leak tool/schema fragments (seen live 2026-08-21:
+// a Japanese schema-validation error mid-note, a trailing "}]}</parameter>"
+// tail). Notes are plain prose — cut from the first curly brace / angle-tag
+// / validation-error phrase onward. (Square brackets stay: "[Personal]".)
+function sanitizeNote(s) {
+  return String(s || "")
+    .replace(/(?:Json ?検証エラー|JSON validation error)[\s\S]*$/i, "")
+    .replace(/[{}<][\s\S]*$/, "")
+    .trim();
+}
 // "VistaPrint <no-reply@vistaprint.com>" -> "VistaPrint"
 const senderName = (from) => {
   const s = clean(from);
@@ -304,7 +314,7 @@ function makeItem(base) {
     taxable: base.taxable !== false,
     confidence: clean(base.confidence) || "low",
     duplicate: clean(base.duplicate) || "no",
-    notes: clean(base.notes),
+    notes: sanitizeNote(base.notes),
     channel: clean(base.channel) || "receipts",
     sourceUrl: clean(base.sourceUrl),
     status: base.status || "pending",
@@ -433,10 +443,38 @@ export default async (req) => {
       items[0].sourceUrl = viewerUrl;
     }
 
+    // Fresh view of what OTHER ingests filed/approved in the last hours. This
+    // closes the concurrency race found on the 2026-08-21 batch test: an
+    // original and its "Fwd:" (same charge) extracted simultaneously — the
+    // 60-day context both models saw predated both writes, so each concluded
+    // "not in books" and both filed. Same vendor+amount recorded by another
+    // message → hold as a suspected duplicate instead of filing a twin.
+    // Repeated identical lines WITHIN one receipt stay legit (own msg
+    // excluded). Residual window: twins passing this check in the same few
+    // seconds — envelopes are persisted immediately after each file below to
+    // keep that window tiny.
+    const justFiled = new Map();
+    try {
+      const { blobs } = await store.list({ prefix: "msg/" });
+      const cutoffT = Date.now() - 6 * 60 * 60 * 1000;
+      const others = await Promise.all((blobs || []).filter((b) => b.key !== key).map((b) => store.get(b.key, { type: "json" })));
+      for (const env2 of others) {
+        for (const it2 of (env2 && env2.items) || []) {
+          if (it2.status !== "filed" && it2.status !== "approved") continue;
+          if ((Date.parse(it2.approvedAt) || 0) < cutoffT) continue;
+          justFiled.set(clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2),
+            { amount: num(it2.amount).toFixed(2), cell: clean(it2.sheetCell) });
+        }
+      }
+    } catch (e) {
+      console.warn("[ingest] just-filed check failed (continuing without): " + String((e && e.message) || e));
+    }
+
     // File the confident items; anything that fails the write stays pending.
     // Duplicates: a CONFIRMED duplicate dismisses itself (visible in the
     // Dismissed tab + morning email, never on the sheet); a SUSPECTED one
     // waits in Pending for review.
+    envelope.items = items;
     let filed = 0, pending = 0, dismissed = 0;
     for (const item of items) {
       if (item.duplicate === "confirmed") {
@@ -450,12 +488,23 @@ export default async (req) => {
         continue;
       }
       if (autoFileGate(item)) {
+        const twin = justFiled.get(clean(item.vendor).toLowerCase() + "|" + num(item.amount).toFixed(2));
+        if (twin) {
+          item.duplicate = "suspected";
+          item.status = "pending";
+          item.notes = clean("⚠️ Same vendor + amount ($" + twin.amount + (twin.cell ? ", sheet " + twin.cell : "") + ") was just recorded from another email — possible original/forward pair. Verify before approving. " + item.notes).slice(0, 300);
+          console.warn(`[ingest] CONCURRENT-DUP-HOLD msg=${msgId} vendor="${item.vendor}" amount=${item.amount}`);
+          pending++;
+          continue;
+        }
         try {
           item.sheetCell = await sheetAppend(item);
           item.status = "filed";
           item.autoFiled = true;
           item.approvedAt = new Date().toISOString();
           filed++;
+          // Persist right away so concurrent ingests' just-filed checks see it.
+          await store.setJSON(key, envelope);
         } catch (e) {
           item.status = "pending";
           item.notes = clean(item.notes + " — sheet write failed: " + String((e && e.message) || e)).slice(0, 300);
@@ -466,7 +515,6 @@ export default async (req) => {
       }
     }
 
-    envelope.items = items;
     envelope.status = "done";
     envelope.processedAt = new Date().toISOString();
     envelope.vendor = clean(parsed && parsed.vendor);
