@@ -100,14 +100,21 @@ taxes, out-of-state taxes are all included; only TX sales tax is excluded
    receipt that clearly documents an already-recorded charge (vendor invoice +
    receipt pair) auto-dismisses itself with an explanatory note; a
    plausible-but-unsure match waits in Pending.
-2. **Filing-time concurrency guard** (added 2026-08-21 after the batch test
-   double-filed 6 original+"Fwd:" pairs): ingests run concurrently, so layer 1
-   can't see a twin being extracted at the same moment. Just before writing to
-   the sheet, the ingest re-reads the store; if another message filed/approved
-   the same vendor+amount within the last 6 hours, the item is held in Pending
-   as a suspected duplicate instead. Envelopes are persisted immediately after
-   each sheet write to keep the remaining blind window to seconds. Repeated
-   identical lines within ONE receipt are unaffected (own message excluded).
+2. **Filing-time store re-check** (Netlify-side): just before writing, the
+   ingest re-reads the store; a same-vendor+amount item filed/approved by
+   another message within 6h → held as a suspected duplicate. Cheap pre-filter
+   — but NOT sufficient alone: twins (original + "Fwd:") extract in
+   near-identical time and reach filing within 1–2s of each other (batch
+   testing re-doubled 9 pairs despite this check).
+3. **The airtight gate — the sheet writer itself** (2026-08-21, writer v6):
+   `receipts-sheet.gs` `doPost` already serializes every append behind a
+   ScriptLock, so its duplicate check cannot race. Inside the lock, a
+   CacheService memory of recent appends (vendor|amount|date, 6h TTL) rejects
+   a row already written by a DIFFERENT `msgId` with
+   `{ duplicate:true, existing:<cell> }`; the ingest holds that item in
+   Pending ("possible original/forward pair"). The same `msgId` may repeat a
+   key (a receipt can list identical lines twice), and `force:true` — sent by
+   the queue's human Approve — always writes.
 
 An item files automatically only when **all** hold: `confidence === "high"`,
 valid category, amount > 0, vendor and date present — **and** the receipt
@@ -153,7 +160,7 @@ of record — live copies are pasted into script.google.com.
 |---|---|---|
 | `receipts-poller.gs` | Time trigger (every 15 min) | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. |
 | `receipts-daily-summary.gs` | Time trigger (daily 7–8 AM, **same project as the poller**) | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. Project timezone must be America/Chicago. |
-| `receipts-sheet.gs` | Web app (`/exec`) | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
+| `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
 
 ### Configuration
 
@@ -215,8 +222,10 @@ to `claude-haiku-4-5` to cut cost (expect more pending items).
 
 ## Known limits / backlog
 
-- **Large photos (> ~4 MB)** are skipped (Netlify body cap) and become a ⚠️
-  review item.
+- **Large photos (> ~3 MB)** are skipped (base64 ×4/3 must fit Netlify's
+  request cap — a ~4 MB photo 413-bounced the whole email on 2026-08-21) and
+  become a ⚠️ review item. Phone photos near the limit: send at Mail's
+  "Large" image size.
 - **Block capacity:** when a category block fills, the writer refuses
   (`BLOCKED`) and the item waits in Pending — add blank rows under that block,
   then approve it manually.
@@ -276,15 +285,26 @@ ingested). Outcome:
   epoxy kit w/ SKU decoded via web search. Security alerts / marketing / 2FA
   notices → correctly produced nothing. Nothing personal auto-filed.
 - ⚠️ **FOUND — concurrency race defeated pairwise duplicate detection.**
-  6 Subscriptions pairs double-filed (~$150.66 excess): an original and its
-  "Fwd:" (same Anthropic receipt #s, same Max-plan invoice, same PDF.co
-  invoice) processed simultaneously; each read the last-60-days context before
-  either had written, so each separately concluded "not in books." Cross-TIME
-  dedup demonstrably works. **FIXED same day (deployed to alias, NOT yet
-  re-verified):** filing-time just-filed guard + immediate envelope persists
-  (see "The autofile gate"), plus note sanitization (2 notes had carried
-  leaked schema-error/JSON fragments). The doubled rows from the first run
-  are still on TEST until the next wipe+rerun.
+  Run 1: 6 Subscriptions pairs double-filed (original + "Fwd:" of the same
+  receipt processed simultaneously; each read the last-60-days context before
+  either had written). Cross-TIME dedup demonstrably works. **Fix v1**
+  (Netlify filing-time store re-check) **proved insufficient in run 2**: twins
+  extract in near-identical time, so 9 pairs re-doubled; only laggards (the
+  $10.27 trio) were caught. **Fix v2 — the airtight one (writer v6, deployed
+  1:39 PM, NOT yet re-verified):** duplicate gate inside the sheet writer's
+  ScriptLock (see "The autofile gate") — serialized, cannot race; ingest holds
+  a rejected twin as "possible original/forward pair". Also: note
+  sanitization, and human Approve sends force:true.
+- **Run 2 state (current):** records reset + TEST wiped + full 82-message
+  rerun done under fix v1 — TEST currently holds run-2 rows INCLUDING ~9
+  doubled Subscriptions pairs; the queue holds the caught twins. A final
+  wipe+reset+rerun under fix v2 is the pending proof pass.
+- **Paul's Home Depot "test" photo email bounced (HTTP 413)** — the ~4 MB
+  photo exceeded Netlify's request cap after base64. Poller cap lowered to
+  3 MB (skip → review placeholder instead of a silent forever-retry bounce);
+  Paul re-sends the photo at Mail's "Large" size for the proof pass. Both
+  "test" emails get TRASHED when the test is done (Paul's instruction —
+  test-only, must never reach the live books).
 - Queue page gained a **"Reset test records"** button (top bar, shown while
   bookkeeper-era records exist): deletes ALL bookkeeper-era queue records —
   their emails are unlabeled, so the next `testPollBatch` re-processes
@@ -342,6 +362,13 @@ SKU decoding). Procedure:
 
 ## Change log
 
+- **2026-08-21 (PM 3)** — **Duplicate race fix v2: writer-side serialized
+  gate.** Run-2 rerun showed fix v1 insufficient (twins race within seconds;
+  9 pairs re-doubled). Moved the gate into `receipts-sheet.gs` inside its
+  ScriptLock (CacheService 6h memory, msgId-aware, force for human Approve) —
+  writer **v6** deployed; ingest holds writer-rejected twins; approve sends
+  force. Poller attachment cap 4→3 MB (a ~4 MB photo 413-bounced). Projects
+  renamed: "Receipts Sheet Writer" (id recorded). Proof pass pending.
 - **2026-08-21 (PM 2)** — **Concurrent-duplicate race fixed.** Filing-time
   just-filed guard (same vendor+amount recorded by another message within 6h
   → held as suspected duplicate), envelopes persisted immediately after each

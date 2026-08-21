@@ -277,8 +277,11 @@ function autoFileGate(item) {
 }
 
 // Append one item into its category block via the receipts-sheet Apps Script.
-// Returns the written cell (e.g. "B14:F14") or throws.
-async function sheetAppend(item) {
+// Returns { wrote } on success, { duplicate: true, existing } when the
+// writer's serialized duplicate gate rejected it (same vendor+amount+date
+// already written by another message — the caller holds the item for review),
+// or throws on a real error.
+async function sheetAppend(item, msgId) {
   const sheetUrl = process.env.RECEIPTS_SHEET_URL || "";
   if (!sheetUrl) throw new Error("RECEIPTS_SHEET_URL not set");
   const res = await fetch(sheetUrl, {
@@ -295,12 +298,14 @@ async function sheetAppend(item) {
       amount: sheetAmount(item),  // tax-inclusive when taxable
       subtotal: item.amount,
       taxable: item.taxable,
+      msgId,                      // lets the writer allow same-receipt repeats
     }),
   });
   let j = {};
   try { j = await res.json(); } catch (_) {}
+  if (j.duplicate) return { duplicate: true, existing: clean(j.existing) };
   if (!res.ok || j.ok === false) throw new Error(j.error || ("sheet HTTP " + res.status));
-  return j.wrote || "";
+  return { wrote: j.wrote || "" };
 }
 
 function makeItem(base) {
@@ -498,7 +503,18 @@ export default async (req) => {
           continue;
         }
         try {
-          item.sheetCell = await sheetAppend(item);
+          const wrote = await sheetAppend(item, msgId);
+          if (wrote.duplicate) {
+            // The writer's serialized gate saw this charge land from another
+            // message — the airtight backstop for twins racing within seconds.
+            item.duplicate = "suspected";
+            item.status = "pending";
+            item.notes = clean("⚠️ Same vendor + amount + date" + (wrote.existing ? " (sheet " + wrote.existing + ")" : "") + " was already written by another email — possible original/forward pair. Verify before approving. " + item.notes).slice(0, 300);
+            console.warn(`[ingest] SHEET-DUP-HOLD msg=${msgId} vendor="${item.vendor}" amount=${item.amount}`);
+            pending++;
+            continue;
+          }
+          item.sheetCell = wrote.wrote;
           item.status = "filed";
           item.autoFiled = true;
           item.approvedAt = new Date().toISOString();

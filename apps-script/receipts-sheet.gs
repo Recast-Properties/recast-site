@@ -24,7 +24,18 @@
  *
  * Actions (POST JSON, body.token must match WEBHOOK_SECRET):
  *   { action:"inspect" }  -> layout of every category block (for setup/debug)
- *   { action:"append", category, vendor, date, item, link, amount } -> writes a row
+ *   { action:"append", category, vendor, date, item, link, amount,
+ *     msgId?, force? } -> writes a row
+ *
+ * Duplicate gate (2026-08-21): doPost already serializes on a ScriptLock, so
+ * this is the ONE place concurrent ingests can be reliably deduplicated —
+ * Netlify-side checks proved insufficient (twin emails extract in near-
+ * identical time and race each other; 9 pairs double-filed in batch testing).
+ * Inside the lock, a CacheService memory of recent appends (vendor|amount|date,
+ * 6h TTL) rejects a row already written by a DIFFERENT msgId with
+ * { duplicate:true, existing:<cell> } — the ingest holds that item for review.
+ * The same msgId may repeat a key (one receipt legitimately listing identical
+ * lines), and force:true (human Approve) always writes.
  ****************************************************************/
 
 const CONFIG = {
@@ -115,9 +126,41 @@ function nextWriteRow_(values, hRow, col) {
 
 // ---- append -----------------------------------------------------------------
 
+// Cache key identifying a written charge: vendor + amount + date. Twins (an
+// original and its Fwd:) extract to identical values; distinct charges differ.
+function dupKey_(data) {
+  const vendor = String(data.vendor || '').trim().toLowerCase().slice(0, 120);
+  const amount = parseFloat(String(data.amount).replace(/[^0-9.\-]/g, ''));
+  const date = String(data.date || '').replace(/[^0-9]/g, '');
+  if (!vendor || !isFinite(amount)) return '';
+  return 'dup:' + vendor + '|' + amount.toFixed(2) + '|' + date;
+}
+
 function append_(sheet, data) {
   const category = String(data.category || '').trim();
   if (!category) return jsonResponse_({ ok: false, error: 'Missing category' }, 400);
+
+  // Duplicate gate — runs inside doPost's ScriptLock, so concurrent appends
+  // are checked strictly one at a time.
+  const dupKey = dupKey_(data);
+  const msgId = String(data.msgId || '').trim();
+  const force = data.force === true || data.force === 'true';
+  if (dupKey && !force) {
+    const prior = CacheService.getScriptCache().get(dupKey);
+    if (prior) {
+      const sep = prior.indexOf('|');
+      const priorMsgId = sep === -1 ? '' : prior.slice(0, sep);
+      const priorCell = sep === -1 ? prior : prior.slice(sep + 1);
+      if (!msgId || priorMsgId !== msgId) {
+        return jsonResponse_({
+          ok: false, duplicate: true, existing: priorCell,
+          error: 'Same vendor + amount + date already written' + (priorCell ? ' at ' + priorCell : '') + ' by another receipt'
+        }, 409);
+      }
+      // Same message repeating an identical line (a receipt can legitimately
+      // list the same product twice) -> allow.
+    }
+  }
 
   const values = sheet.getDataRange().getValues();
   const hdr = findHeader_(values, category);
@@ -142,6 +185,9 @@ function append_(sheet, data) {
   ]]);
 
   const a1 = sheet.getRange(writeRow, writeCol, 1, 5).getA1Notation();
+  if (dupKey) {
+    try { CacheService.getScriptCache().put(dupKey, msgId + '|' + a1, 21600); } catch (err) {}
+  }
   return jsonResponse_({ ok: true, wrote: a1, category: category });
 }
 

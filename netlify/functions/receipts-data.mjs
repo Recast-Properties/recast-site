@@ -229,6 +229,8 @@ export default async (req) => {
               amount: sheetAmount(item),   // tax-inclusive when taxable
               subtotal: item.amount,
               taxable: item.taxable,
+              msgId: item.sourceMsgId,
+              force: true,                 // human decision — bypass the writer's duplicate gate
             }),
           });
           try { j2 = await res2.json(); } catch (_) {}
