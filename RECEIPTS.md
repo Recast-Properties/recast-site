@@ -349,7 +349,14 @@ SKU decoding). Procedure:
   that works: paste the WHOLE file (pbcopy → cmd+A → cmd+V) — never keyboard
   micro-edits; to run a function, paste a variant whose `authorize()` calls
   it, run `authorize`, then re-paste the clean file.
-- `receipts-daily-summary.gs` still NOT pasted in (unchanged).
+- `receipts-daily-summary.gs` is now IN the Receipts Bookkeeper project as a
+  second file, **`summary.gs`** (2026-08-22 AM). Gained `summaryToday()` — an
+  on-demand "today so far" digest (same email, subject says "(so far)");
+  `dailySummary()` stays the yesterday/trigger entry point. **First real
+  morning email verified 2026-08-22 10:49 AM:** "Bookkeeper | Fri Aug 21 |
+  $3053.72 filed | 99 to review" (the proof-pass day). Paste rule for this
+  project: Code.gs = `receipts-poller.gs`, summary.gs =
+  `receipts-daily-summary.gs` — cmd+A/paste only touches the open file.
 - Sheet writer (separate June project) still points at **TEST** (v5).
   RECAST BIZ untouched (already 5-wide everywhere).
 
@@ -366,14 +373,23 @@ SKU decoding). Procedure:
 5. Delete ALL bookkeeper-era queue records (`delete`/`clear` in
    receipts-data) so those unlabeled emails re-file to the live tab; wipe
    TEST as desired.
-6. Paste `receipts-daily-summary.gs` into the Receipts Bookkeeper project;
-   set project timezone America/Chicago.
+6. ~~Paste `receipts-daily-summary.gs`~~ DONE 2026-08-22 (summary.gs, email
+   verified). Still to do: set the project timezone to America/Chicago
+   (Project Settings) so the 7 AM trigger and the "yesterday" window follow
+   Texas time.
 7. Create triggers: `pollReceipts` every 15 min; `dailySummary` daily 7–8 AM.
    (Account currently has ZERO triggers — this is what turns it on.)
 8. The backlog re-processes over the next hours; verify the first morning
    email.
 
 ## Change log
+
+- **2026-08-22 (AM)** — **Morning email live-tested.** `summary.gs` added to
+  the Receipts Bookkeeper project (+ `summaryToday()` on-demand digest);
+  real `dailySummary` run emailed Paul the Aug 21 digest: $3,053.72 filed,
+  99 to review. Gotcha logged: the editor's function dropdown never accepts
+  synthetic clicks — paste a variant whose currently-selected function calls
+  the target, run, re-paste clean.
 
 - **2026-08-21 (PM 4)** — **Attachments ride Blobs; photo backlog unlocked;
   PROOF PASS PASSED.** Root-caused why photos never worked: background

@@ -16,7 +16,8 @@
  *      timezone to America/Chicago (Project Settings).
  *   2. Triggers -> Add Trigger -> function `dailySummary`, time-driven,
  *      day timer, 7am–8am.
- *   3. Run `dailySummary` once manually to verify the email.
+ *   3. Run `summaryToday` (today so far) or `dailySummary` (yesterday) once
+ *      manually to verify the email.
  ****************************************************************/
 
 const SUMMARY_CONFIG = {
@@ -27,14 +28,27 @@ const SUMMARY_CONFIG = {
   TIMEZONE: 'America/Chicago'
 };
 
+// Trigger entry point: yesterday, midnight to midnight, in local
+// (America/Chicago) time.
 function dailySummary() {
-  const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
-  if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
-
-  // Yesterday, midnight to midnight, in local (America/Chicago) time.
   const now = new Date();
   const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayStart = new Date(dayEnd.getTime() - 24 * 60 * 60 * 1000);
+  sendSummary_(dayStart, dayEnd, Utilities.formatDate(dayStart, SUMMARY_CONFIG.TIMEZONE, 'EEE MMM d'));
+}
+
+// On-demand: today so far (midnight to now). Same email; subject says
+// "so far". Run from the editor any time — used to exercise the email during
+// rollout testing, and handy whenever you want a mid-day digest.
+function summaryToday() {
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  sendSummary_(dayStart, now, Utilities.formatDate(dayStart, SUMMARY_CONFIG.TIMEZONE, 'EEE MMM d') + ' (so far)');
+}
+
+function sendSummary_(dayStart, dayEnd, dayLabel) {
+  const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+  if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
 
   const doneMsgIds = collectDoneMsgIds_(dayStart, dayEnd);
 
@@ -50,7 +64,6 @@ function dailySummary() {
   const j = JSON.parse(res.getContentText());
   if (!j.ok) throw new Error('Summary endpoint error: ' + (j.error || 'unknown'));
 
-  const dayLabel = Utilities.formatDate(dayStart, SUMMARY_CONFIG.TIMEZONE, 'EEE MMM d');
   const reviewCount = (j.needsReview || []).length;
   const problems = (j.lostMsgIds || []).length + (j.staleProcessing || []).length + (j.errors || []).length;
 
