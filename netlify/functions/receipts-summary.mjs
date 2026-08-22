@@ -66,6 +66,9 @@ export default async (req) => {
             amount: clean(it.amount), confidence: clean(it.confidence), notes: clean(it.notes),
             channel: clean(it.channel), sourceUrl: clean(it.sourceUrl),
             newToday: inWindow(it.receivedAt),
+            // June-system leftovers (no confidence field) — the email lists
+            // these as one count line instead of cluttering every morning.
+            legacy: !clean(it.confidence),
           });
         } else if (inWindow(it.approvedAt)) {
           if (it.status === "filed" && it.autoFiled) {

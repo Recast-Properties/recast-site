@@ -64,7 +64,7 @@ function sendSummary_(dayStart, dayEnd, dayLabel) {
   const j = JSON.parse(res.getContentText());
   if (!j.ok) throw new Error('Summary endpoint error: ' + (j.error || 'unknown'));
 
-  const reviewCount = (j.needsReview || []).length;
+  const reviewCount = (j.needsReview || []).filter(function (r) { return !r.legacy; }).length;
   const problems = (j.lostMsgIds || []).length + (j.staleProcessing || []).length + (j.errors || []).length;
 
   let subject = 'Bookkeeper | ' + dayLabel + ' | $' + (j.totals && j.totals.grand || '0.00') + ' filed';
@@ -127,8 +127,10 @@ function buildSummaryHtml_(j, dayLabel) {
     html += '<p style="color:#53575f">Nothing auto-filed yesterday.</p>';
   }
 
-  // Needs review
-  const review = j.needsReview || [];
+  // Needs review (bookkeeper-era items listed; June-backlog leftovers as one line)
+  const allReview = j.needsReview || [];
+  const review = allReview.filter(function (r) { return !r.legacy; });
+  const legacyCount = allReview.length - review.length;
   if (review.length) {
     html += '<h3 style="margin:18px 0 6px;color:#b3261e">Needs your review (' + review.length + ')</h3>';
     html += '<table cellpadding="5" style="border-collapse:collapse;font-size:13px;width:100%">';
@@ -141,6 +143,9 @@ function buildSummaryHtml_(j, dayLabel) {
     });
     html += '</table>';
     html += '<p style="margin:10px 0"><a href="' + SUMMARY_CONFIG.QUEUE_URL + '" style="font-weight:bold">Open the receipts queue \u2192</a></p>';
+  }
+  if (legacyCount) {
+    html += '<p style="margin:6px 0;color:#71757e;font-size:12px">+ ' + legacyCount + ' older item' + (legacyCount > 1 ? 's' : '') + ' from the June backlog still pending (queue &rarr; June backlog filter).</p>';
   }
 
   // Problems: lost / stale / errored ingests
@@ -169,7 +174,10 @@ function buildPlain_(j, dayLabel) {
     lines.push(cat + ' \u2014 $' + j.totals.byCategory[cat]);
     j.autoFiled[cat].forEach(function (r) { lines.push('  ' + r.vendor + ' | ' + r.item + ' | $' + r.amount + ' | ' + r.sheetCell); });
   });
-  const review = j.needsReview || [];
+  const allReview = j.needsReview || [];
+  const review = allReview.filter(function (r) { return !r.legacy; });
+  const legacyCount = allReview.length - review.length;
+  if (legacyCount) lines.push('', '+ ' + legacyCount + ' older June-backlog item(s) still pending: ' + SUMMARY_CONFIG.QUEUE_URL);
   if (review.length) {
     lines.push('', 'NEEDS REVIEW (' + review.length + ') \u2014 ' + SUMMARY_CONFIG.QUEUE_URL);
     review.forEach(function (r) { lines.push('  ' + (r.newToday ? '[NEW] ' : '') + r.vendor + ' | ' + r.item + (r.notes ? ' | ' + r.notes : '')); });

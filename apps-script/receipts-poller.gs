@@ -47,6 +47,18 @@ function authorize() {
   DriveApp.getRootFolder(); // Drive scope — used to shrink oversized photos
 }
 
+// One-time (re)setup of the production triggers — run from the editor.
+// Idempotent: clears this project's existing triggers first.
+//   • pollReceipts  every 15 minutes
+//   • dailySummary  daily in the 3–4 AM America/Chicago window (Paul wants the
+//                   digest waiting first thing in the morning)
+function setupTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('pollReceipts').timeBased().everyMinutes(15).create();
+  ScriptApp.newTrigger('dailySummary').timeBased().everyDays(1).atHour(3).inTimezone('America/Chicago').create();
+  console.log('Triggers set: pollReceipts every 15 min; dailySummary daily 3-4 AM America/Chicago');
+}
+
 function pollReceipts() {
   // Prevent two runs (manual + scheduled) from overlapping and racing the queue.
   const lock = LockService.getScriptLock();
