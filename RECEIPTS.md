@@ -264,125 +264,48 @@ edits do Deploy → Manage deployments → ✏️ → New version.
 
 ---
 
-## ROLLOUT STATUS — resume here (as of 2026-08-21 PM, mid-rollout)
+## STATUS — LIVE since 2026-08-22 (~3:30 PM Central)
 
-The bookkeeper is **built, deployed to the receipts alias, and tested on the
-FULL email backlog against the TEST tab — but NOT yet live**. No triggers
-exist; nothing runs automatically yet.
+**The bookkeeper is in production.** Writer v7 points at **RECAST BIZ**;
+triggers: `pollReceipts` every 15 min, `dailySummary` daily 3–4 AM Central
+(Paul wants the digest waiting first thing). Go-live drain: the live poller
+was run by hand until empty — ~190 messages across receipts@ + travel@ within
+the 90-day window, 0 failures; everything ingested is labeled `receipts-done`.
 
-**Testing method (Paul's call, 2026-08-21 PM):** judge the bookkeeper by
-**reading the TEST tab** — receipts landed in the right category blocks with
-right amounts — NOT by working the queue app. The queue is the exception lane
-only. When a bigger test pass is wanted: wipe TEST's data rows (keep header
-row 1), run `testPollBatch` in the "Receipts Bookkeeper" Apps Script project,
-read the tab ~10 min later.
+**How to operate it now** — see "In plain terms" at the top. Testing method
+stays: judge by reading the sheet; the queue is the exception lane.
 
-**Full-backlog test run (2026-08-21 ~12:40 PM)** — `testPollBatch`
-(`BATCH` now 50) sent **64 messages** (~53 new; the rest skipped as already
-ingested). Outcome:
-- **19 rows auto-filed to TEST, $1,687.91**: Travel $1,312.10 (4 rows — both
-  airlines w/ conf numbers, Wi-Fi pass), Subscriptions $335.81 (13 rows),
-  Website $40 (2 distinct Netlify invoices). Notes/links all present.
-- **Held correctly**: every [Personal]-flagged Uber/Uber Eats (~13), Cotality
-  $200 past-due invoices (held as possible dup of paid entries, "past-due ≠
-  proof of payment"), Apify $29 possible-dups, a $235 Zelle with no memo, an
-  epoxy kit w/ SKU decoded via web search. Security alerts / marketing / 2FA
-  notices → correctly produced nothing. Nothing personal auto-filed.
-- ⚠️ **FOUND — concurrency race defeated pairwise duplicate detection.**
-  Run 1: 6 Subscriptions pairs double-filed (original + "Fwd:" of the same
-  receipt processed simultaneously; each read the last-60-days context before
-  either had written). Cross-TIME dedup demonstrably works. **Fix v1**
-  (Netlify filing-time store re-check) **proved insufficient in run 2**: twins
-  extract in near-identical time, so 9 pairs re-doubled; only laggards (the
-  $10.27 trio) were caught. **Fix v2 — the airtight one (writer v6, deployed
-  1:39 PM, NOT yet re-verified):** duplicate gate inside the sheet writer's
-  ScriptLock (see "The autofile gate") — serialized, cannot race; ingest holds
-  a rejected twin as "possible original/forward pair". Also: note
-  sanitization, and human Approve sends force:true.
-- ✅ **PROOF PASS PASSED (2026-08-21 ~2:30 PM, final full rerun):**
-  - **Zero doubles.** Subscriptions filed 15 rows / $257.22, every receipt #
-    unique — the writer-v6 serialized gate held one twin of every
-    simultaneous pair in Pending ("possible original/forward pair", with the
-    filed sibling's cell). Known safe false-positive observed: the two LEGIT
-    same-day $20 Netlify invoices (credits + Base Plan) look like a twin —
-    one filed, one waits in Pending for a one-click Approve.
-  - **The Home Depot photo parsed perfectly**: 6/6 lines (tool bag +
-    screwdriver set → Tools; foam/screws/flanges → Materials), per-line
-    8.25% tax applied, lines sum to the $96.36 paid.
-  - **The photo backlog unlocked**: photo receipts had NEVER worked in the
-    background-function era — every one silently 413-bounced at Netlify's
-    edge (no record, no error, endless poller retry). The upload-path fix
-    surfaced ~7 of them instantly: Milwaukee tools ×3, Harbor Freight
-    grinder, Honeywell thermostat (filed); Exxon gas (filed); Shell pump
-    photo + a JP-court eviction packet with a HANDWRITTEN amount (held for
-    review with sharp notes). Tools $688.41 / Materials $155.94 / Gas $78.66
-    now populated on TEST.
-  - Paul's "test" email was TRASHED after the pass (his instruction —
-    test-only; in Trash 30 days, excluded from all future polls).
-- Queue page gained a **"Reset test records"** button (top bar, shown while
-  bookkeeper-era records exist): deletes ALL bookkeeper-era queue records —
-  their emails are unlabeled, so the next `testPollBatch` re-processes
-  everything fresh. June-backlog records untouched. Pair it with wiping the
-  TEST tab's data rows.
+**Left for Paul**
+- Queue triage: the New pending items (held twins → Dismiss; [Personal]
+  Ubers → judge; the second same-day Netlify $20 → Approve; photo holds
+  like the JP-court packet → Approve/fix).
+- The **59 June-backlog** pending items (badge "June backlog", filter on
+  Pending). Their emails are already labeled done, so they never re-process:
+  approve the real ones by hand or dismiss. The morning email shows them as
+  a single count line, not 59 rows.
+- The June-era "seed" fakes are gone (deleted with the test reset).
 
-**Next test (the race-fix proof pass)** — Paul wants a **big multi-line Home
-Depot receipt** in it to see in-store itemization (per-line categories + tax,
-SKU decoding). Procedure:
-1. Paul forwards/emails a long Home Depot receipt (e-receipt email or a photo
-   of the paper tape) to receipts@recast-properties.com.
-2. Click **Reset test records** on /receipts; wipe TEST's data rows (keep
-   header row 1).
-3. Run `testPollBatch` in the Receipts Bookkeeper project (~$5–15 of Opus).
-4. Read the TEST tab (~10 min): expect the Home Depot lines itemized into
-   Tools/Materials, exactly ONE of each former twin filed and its pair held
-   in Pending as "possible original/forward pair."
+**Known behaviors to expect**
+- Same vendor + amount + date from two different emails on the same day is
+  held as a possible twin even when legit (e.g. two $20 Netlify invoices) —
+  Approve the second one; human Approve bypasses the gate.
+- Photos > 3 MB are shrunk via Drive; PDFs > 3 MB are skipped → review item.
+- A full category block returns BLOCKED → item waits in Pending; add rows
+  under the block and Approve.
 
-**Also done 2026-08-21 PM**
-- Queue UI era pass shipped to the alias: confidence badges + why-notes now
-  actually render, era badges ("June backlog" / "Test item"), All/New/June
-  sub-filter on Pending, sheet-cell + auto-filed + travel chips, "Load test
-  items" button removed. Queue now: Pending 86 (27 new — incl. 7 old fake
-  seed rows worth deleting — + 59 June backlog), Filed 20 (1 stale: AA
-  $541.40 whose TEST row Paul wiped), Approved 21, Dismissed 13 (all June).
-- Apps Script project renamed **"Receipts Bookkeeper"**; editor copy of the
-  poller == repo (incl. `BATCH = 50` test harness). Flaky-editor technique
-  that works: paste the WHOLE file (pbcopy → cmd+A → cmd+V) — never keyboard
-  micro-edits; to run a function, paste a variant whose `authorize()` calls
-  it, run `authorize`, then re-paste the clean file.
-- `receipts-daily-summary.gs` is now IN the Receipts Bookkeeper project as a
-  second file, **`summary.gs`** (2026-08-22 AM). Gained `summaryToday()` — an
-  on-demand "today so far" digest (same email, subject says "(so far)");
-  `dailySummary()` stays the yesterday/trigger entry point. **First real
-  morning email verified 2026-08-22 10:49 AM:** "Bookkeeper | Fri Aug 21 |
-  $3053.72 filed | 99 to review" (the proof-pass day). Paste rule for this
-  project: Code.gs = `receipts-poller.gs`, summary.gs =
-  `receipts-daily-summary.gs` — cmd+A/paste only touches the open file.
-- Sheet writer (separate June project) still points at **TEST** (v5).
-  RECAST BIZ untouched (already 5-wide everywhere).
-
-**Go-live checklist (in order)**
-1. Paul reads the TEST tab (clean proof-pass data, zero doubles) and gives
-   the verdict on the filings; approve/dismiss the ~40 New pending items in
-   the queue (twins, [Personal] Ubers, the second Netlify $20, photo holds).
-2. ~~Race-fix proof pass~~ DONE — passed 2026-08-21 ~2:30 PM (see above).
-3. Legacy cleanup, now visible via badges/filter: 59 June-backlog pending +
-   7 fake seed rows (their emails are labeled receipts-done, so dismissing
-   means they never reach the books — reprocessing can't see hand-entered
-   sheet rows and risks double-filing those).
-4. Flip sheet writer `TAB_NAME` → `'RECAST BIZ'`, Deploy → New version.
-5. Delete ALL bookkeeper-era queue records (`delete`/`clear` in
-   receipts-data) so those unlabeled emails re-file to the live tab; wipe
-   TEST as desired.
-6. ~~Paste `receipts-daily-summary.gs`~~ DONE 2026-08-22 (summary.gs, email
-   verified). Still to do: set the project timezone to America/Chicago
-   (Project Settings) so the 7 AM trigger and the "yesterday" window follow
-   Texas time.
-7. Create triggers: `pollReceipts` every 15 min; `dailySummary` daily 7–8 AM.
-   (Account currently has ZERO triggers — this is what turns it on.)
-8. The backlog re-processes over the next hours; verify the first morning
-   email.
+**If something looks wrong**: Reprocess a receipt (Operating notes above);
+`summaryToday` in the Receipts Bookkeeper project emails an on-demand digest;
+"Reset test records" on the queue page deletes ALL bookkeeper-era records —
+do NOT use it in production (unlabeled emails would re-file; labeled-done
+ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-08-22 (PM)** — **GO-LIVE.** Writer v7 → RECAST BIZ; bookkeeper
+  project files refreshed (poller w/ upload path + `setupTriggers()`,
+  summary w/ June-backlog count line); test records reset; triggers created
+  from code (poll 15 min, summary 3–4 AM Central); both inboxes drained by
+  hand (~190 messages, 0 failures) onto the live tab.
 
 - **2026-08-22 (AM)** — **Morning email live-tested.** `summary.gs` added to
   the Receipts Bookkeeper project (+ `summaryToday()` on-demand digest);
