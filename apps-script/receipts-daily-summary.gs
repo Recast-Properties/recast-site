@@ -69,7 +69,7 @@ function sendSummary_(dayStart, dayEnd, dayLabel) {
 
   let subject = 'Bookkeeper | ' + dayLabel + ' | $' + (j.totals && j.totals.grand || '0.00') + ' filed';
   if (reviewCount) subject += ' | ' + reviewCount + ' to review';
-  if (problems) subject += ' | ⚠️ ' + problems + ' problem' + (problems > 1 ? 's' : '');
+  if (problems) subject += ' | \u26A0\uFE0F ' + problems + ' problem' + (problems > 1 ? 's' : '');
 
   GmailApp.sendEmail(SUMMARY_CONFIG.NOTIFY_EMAIL, subject, buildPlain_(j, dayLabel), {
     htmlBody: buildSummaryHtml_(j, dayLabel),
@@ -102,9 +102,9 @@ function escapeHtml_(value) {
 function buildSummaryHtml_(j, dayLabel) {
   const H = escapeHtml_;
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#18191c;max-width:640px">';
-  html += '<h2 style="margin:0 0 2px">Bookkeeper — ' + H(dayLabel) + '</h2>';
+  html += '<h2 style="margin:0 0 2px">Bookkeeper \u2014 ' + H(dayLabel) + '</h2>';
   html += '<p style="margin:0 0 16px;color:#53575f">Auto-filed <b>$' + H(j.totals.grand) + '</b>';
-  if (j.manuallyApproved) html += ' · ' + j.manuallyApproved + ' manually approved';
+  if (j.manuallyApproved) html += ' \u00B7 ' + j.manuallyApproved + ' manually approved';
   html += '</p>';
 
   // Auto-filed, by category
@@ -112,7 +112,7 @@ function buildSummaryHtml_(j, dayLabel) {
   if (cats.length) {
     html += '<h3 style="margin:14px 0 6px">Filed to the sheet</h3>';
     cats.forEach(function (cat) {
-      html += '<p style="margin:10px 0 4px;font-weight:bold">' + H(cat) + ' — $' + H(j.totals.byCategory[cat]) + '</p>';
+      html += '<p style="margin:10px 0 4px;font-weight:bold">' + H(cat) + ' \u2014 $' + H(j.totals.byCategory[cat]) + '</p>';
       html += '<table cellpadding="5" style="border-collapse:collapse;font-size:13px;width:100%">';
       j.autoFiled[cat].forEach(function (r) {
         html += '<tr style="border-bottom:1px solid #e1e4e9">' +
@@ -136,46 +136,46 @@ function buildSummaryHtml_(j, dayLabel) {
       html += '<tr style="border-bottom:1px solid #e1e4e9">' +
         '<td>' + (r.newToday ? '<b>NEW</b> ' : '') + H(r.vendor) + '</td>' +
         '<td>' + H(r.item) + '</td>' +
-        '<td align="right">' + (r.amount ? '$' + H(r.amount) : '—') + '</td>' +
+        '<td align="right">' + (r.amount ? '$' + H(r.amount) : '\u2014') + '</td>' +
         '<td style="color:#71757e;font-size:12px">' + H(r.notes || r.confidence) + '</td></tr>';
     });
     html += '</table>';
-    html += '<p style="margin:10px 0"><a href="' + SUMMARY_CONFIG.QUEUE_URL + '" style="font-weight:bold">Open the receipts queue →</a></p>';
+    html += '<p style="margin:10px 0"><a href="' + SUMMARY_CONFIG.QUEUE_URL + '" style="font-weight:bold">Open the receipts queue \u2192</a></p>';
   }
 
   // Problems: lost / stale / errored ingests
   const lost = j.lostMsgIds || [], stale = j.staleProcessing || [], errs = j.errors || [];
   if (lost.length || stale.length || errs.length) {
-    html += '<h3 style="margin:18px 0 6px;color:#b3261e">⚠️ Problems</h3><ul style="margin:4px 0;padding-left:20px">';
+    html += '<h3 style="margin:18px 0 6px;color:#b3261e">\u26A0\uFE0F Problems</h3><ul style="margin:4px 0;padding-left:20px">';
     lost.forEach(function (id) {
-      html += '<li>Receipt marked done but never recorded — <a href="https://mail.google.com/mail/u/0/#all/' + H(id) + '">open the email</a>, remove its receipts-done label to re-ingest.</li>';
+      html += '<li>Receipt marked done but never recorded \u2014 <a href="https://mail.google.com/mail/u/0/#all/' + H(id) + '">open the email</a>, remove its receipts-done label to re-ingest.</li>';
     });
     stale.forEach(function (s) {
-      html += '<li>Stuck processing since ' + H(s.startedAt) + ': “' + H(s.subject) + '” — <a href="' + H(s.gmailUrl) + '">email</a></li>';
+      html += '<li>Stuck processing since ' + H(s.startedAt) + ': \u201C' + H(s.subject) + '\u201D \u2014 <a href="' + H(s.gmailUrl) + '">email</a></li>';
     });
     errs.forEach(function (s) {
-      html += '<li>Ingest error on “' + H(s.subject) + '”: ' + H(s.error) + ' — <a href="' + H(s.gmailUrl) + '">email</a> (a review item was queued)</li>';
+      html += '<li>Ingest error on \u201C' + H(s.subject) + '\u201D: ' + H(s.error) + ' \u2014 <a href="' + H(s.gmailUrl) + '">email</a> (a review item was queued)</li>';
     });
     html += '</ul>';
   }
 
-  html += '<p style="margin:18px 0 0;color:#a0a3ab;font-size:11px">Recast bookkeeper · window ' + H(j.window.start) + ' → ' + H(j.window.end) + '</p></div>';
+  html += '<p style="margin:18px 0 0;color:#a0a3ab;font-size:11px">Recast bookkeeper \u00B7 window ' + H(j.window.start) + ' \u2192 ' + H(j.window.end) + '</p></div>';
   return html;
 }
 
 function buildPlain_(j, dayLabel) {
-  const lines = ['Bookkeeper — ' + dayLabel, 'Auto-filed: $' + j.totals.grand, ''];
+  const lines = ['Bookkeeper \u2014 ' + dayLabel, 'Auto-filed: $' + j.totals.grand, ''];
   Object.keys(j.autoFiled || {}).sort().forEach(function (cat) {
-    lines.push(cat + ' — $' + j.totals.byCategory[cat]);
+    lines.push(cat + ' \u2014 $' + j.totals.byCategory[cat]);
     j.autoFiled[cat].forEach(function (r) { lines.push('  ' + r.vendor + ' | ' + r.item + ' | $' + r.amount + ' | ' + r.sheetCell); });
   });
   const review = j.needsReview || [];
   if (review.length) {
-    lines.push('', 'NEEDS REVIEW (' + review.length + ') — ' + SUMMARY_CONFIG.QUEUE_URL);
+    lines.push('', 'NEEDS REVIEW (' + review.length + ') \u2014 ' + SUMMARY_CONFIG.QUEUE_URL);
     review.forEach(function (r) { lines.push('  ' + (r.newToday ? '[NEW] ' : '') + r.vendor + ' | ' + r.item + (r.notes ? ' | ' + r.notes : '')); });
   }
   (j.lostMsgIds || []).forEach(function (id) { lines.push('', 'LOST RECEIPT (re-ingest): https://mail.google.com/mail/u/0/#all/' + id); });
   (j.staleProcessing || []).forEach(function (s) { lines.push('STUCK PROCESSING: ' + s.subject); });
-  (j.errors || []).forEach(function (s) { lines.push('INGEST ERROR: ' + s.subject + ' — ' + s.error); });
+  (j.errors || []).forEach(function (s) { lines.push('INGEST ERROR: ' + s.subject + ' \u2014 ' + s.error); });
   return lines.join('\n');
 }
