@@ -145,7 +145,14 @@ bookkeeper's confidence badge + why-note, pre-picked category, editable fields,
 Approve/Dismiss — receipts still being read appear here as a passive
 "Reading receipt…" row), **Filed** (what the bookkeeper filed on its own —
 read-only, with category, `auto-filed` badge, sheet cell, travel chip),
-**Approved**, **Dismissed**. Every card carries **era badges** — "June backlog"
+**Approved**, **Dismissed**. The Pending tab also offers a **Twins** filter +
+**"Dismiss all shown"** bulk action: it collects only the items the sheet
+writer's gate refused because the same vendor+amount+date was already written
+by another email (original + "Fwd:" pairs), so the whole group is safely
+redundant. There is deliberately **no "[Personal]" bulk bucket** — Paul
+confirmed 2026-08-23 that airport rideshares (PDX/DFW) carry that subject tag
+and ARE business expenses, so every [Personal] item stays an individual call.
+Every card carries **era badges** — "June backlog"
 (items from the stalled June system, detected by their empty `confidence`
 field), "Test item" (seed rows) — and the Pending tab gains an
 **All / New / June backlog sub-filter** whenever both eras are present, so each
@@ -236,6 +243,16 @@ to `claude-haiku-4-5` to cut cost (expect more pending items).
 - **Poller labels done on 202** (background function): a crash *before* the
   processing record is written could lose a receipt silently — that exact
   window is what the morning email's `lostMsgIds` reconciliation catches.
+- **The poller's 90-day window (`SEARCH_WINDOW: 'newer_than:90d'`) is a
+  deliberate safety boundary, not an arbitrary default.** Widening it is
+  DANGEROUS: receipts older than that were either hand-entered into RECAST BIZ
+  or handled by the June system, and their emails are unlabeled — a wider
+  window would re-ingest and re-file them as duplicates the writer's gate
+  cannot catch (its cache is 6h, and the model's 60-day context wouldn't show
+  a January charge). Coverage is complete without it: pre-2026-05-25 =
+  hand-entered/June backlog, 2026-05-25→go-live = swept by hand at go-live,
+  go-live onward = the 15-min poller. The window only ever needs to span the
+  gap since the last successful poll.
 - **Interest** category stays manual by design.
 - **Next: per-property receipts.** The `channel` field is a free string and the
   admin email-setup tool already creates per-property inboxes; the extension is
@@ -300,6 +317,15 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-08-23** — **Post-go-live queue triage.** Swept the first-day backlog:
+  approved airport rideshares (Paul: PDX/DFW Ubers ARE business, despite the
+  [Personal] subject tag), corrected the 06/03 Uber on the sheet to the tipped
+  total $113.98, dismissed food-delivery [Personal] orders and the
+  original/forward twins. Queue UI gained a **Twins filter + "Dismiss all
+  shown"** bulk action (14 twins cleared in one click); the earlier
+  "[Personal]" bulk bucket was REMOVED as unsafe per Paul's correction.
+  New-pending 95 → 49.
 
 - **2026-08-22 (PM)** — **GO-LIVE.** Writer v7 → RECAST BIZ; bookkeeper
   project files refreshed (poller w/ upload path + `setupTriggers()`,

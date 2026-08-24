@@ -171,6 +171,19 @@
   const eraOf = (r) =>
     r.source === "seed" ? "seed" : (r.confidence || r.status === "processing" ? "new" : "legacy");
 
+  // The ONE bucket safe to act on in bulk: the sheet writer's serialized gate
+  // refused this row because the same vendor+amount+date was ALREADY written
+  // by a different email (an original and its "Fwd:"). The charge is on the
+  // books; this card is the redundant copy.
+  // NOTE: deliberately NO "[Personal]" bucket — Paul confirmed 2026-08-23 that
+  // airport rideshares (PDX/DFW) carry that tag and ARE business expenses.
+  // Every [Personal] item stays an individual judgment call.
+  const kindOf = (r) => {
+    if (r.status !== "pending") return null;
+    if (r.duplicate === "suspected" && /original\/forward pair/i.test(r.notes || "")) return "twin";
+    return null;
+  };
+
   function toast(msg, isErr) {
     const t = document.createElement("div");
     t.className = "toast" + (isErr ? " err" : "");
@@ -277,17 +290,53 @@
     const el = $("eraTabs");
     const nLegacy = items.filter((r) => eraOf(r) === "legacy").length;
     const nNew = items.length - nLegacy;
-    const show = view === "pending" && nLegacy > 0 && nNew > 0;
+    const nTwin = items.filter((r) => kindOf(r) === "twin").length;
+    const show = view === "pending" && ((nLegacy > 0 && nNew > 0) || nTwin > 0);
     el.classList.toggle("hidden", !show);
     el.innerHTML = "";
     if (!show) { era = "all"; return; }
-    [["all", "All", items.length], ["new", "New", nNew], ["legacy", "June backlog", nLegacy]].forEach(([key, label, n]) => {
+    const chips = [["all", "All", items.length]];
+    if (nLegacy > 0 && nNew > 0) chips.push(["new", "New", nNew], ["legacy", "June backlog", nLegacy]);
+    if (nTwin) chips.push(["twin", "Twins", nTwin]);
+    chips.forEach(([key, label, n]) => {
       const t = document.createElement("div");
       t.className = "tab sm" + (era === key ? " active" : "");
       t.innerHTML = esc(label) + ' <span class="n">' + n + "</span>";
       t.onclick = () => { era = key; render(); };
       el.appendChild(t);
     });
+    // Bulk dismiss offered ONLY on the Twins filter — every card there is a
+    // copy of a charge already written to the sheet. Never for "All", and
+    // never for judgment-call groups.
+    const shown = filterByEra(items);
+    if (era === "twin" && shown.length) {
+      const b = document.createElement("button");
+      b.className = "btn danger sm";
+      b.style.marginLeft = "8px";
+      b.textContent = "Dismiss all shown (" + shown.length + ")";
+      b.onclick = async () => {
+        if (!confirm("Dismiss all " + shown.length + " item(s) currently shown in this filter?\n\nThey move to the Dismissed tab (nothing is written to the sheet).")) return;
+        b.disabled = true;
+        let done = 0;
+        try {
+          for (const r of shown) {
+            await api("receipts-data", { action: "dismiss", id: r.id, sourceMsgId: r.sourceMsgId });
+            done++;
+            b.textContent = "Dismissing\u2026 " + done + "/" + shown.length;
+            await new Promise((res) => setTimeout(res, 150));
+          }
+          toast("Dismissed " + done + " item(s).");
+        } catch (e) { toast(String(e.message || e) + " (" + done + " done)", true); }
+        await load();
+      };
+      el.appendChild(b);
+    }
+  }
+
+  function filterByEra(items) {
+    if (era === "all") return items;
+    if (era === "twin") return items.filter((r) => kindOf(r) === "twin");
+    return items.filter((r) => (era === "legacy" ? eraOf(r) === "legacy" : eraOf(r) !== "legacy"));
   }
 
   // Chips summarizing what the bookkeeper knows about an item: era, its
@@ -310,9 +359,7 @@
     const el = $("list"); el.innerHTML = "";
     let items = rows.filter((r) => (view === "pending" ? (r.status === "pending" || r.status === "processing") : r.status === view));
     renderEraTabs(items);
-    if (view === "pending" && era !== "all") {
-      items = items.filter((r) => (era === "legacy" ? eraOf(r) === "legacy" : eraOf(r) !== "legacy"));
-    }
+    if (view === "pending" && era !== "all") items = filterByEra(items);
     $("listEmpty").classList.toggle("hidden", items.length > 0);
     $("listEmpty").textContent = view === "pending" && rows.length === 0
       ? "Queue is empty — nothing needs you."
