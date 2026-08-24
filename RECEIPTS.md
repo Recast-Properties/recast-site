@@ -296,10 +296,9 @@ stays: judge by reading the sheet; the queue is the exception lane.
 - Queue triage: the New pending items (held twins → Dismiss; [Personal]
   Ubers → judge; the second same-day Netlify $20 → Approve; photo holds
   like the JP-court packet → Approve/fix).
-- The **59 June-backlog** pending items (badge "June backlog", filter on
-  Pending). Their emails are already labeled done, so they never re-process:
-  approve the real ones by hand or dismiss. The morning email shows them as
-  a single count line, not 59 rows.
+- ~~The 59 June-backlog items~~ **DONE 2026-08-24** — reprocessed through the
+  current bookkeeper (see change log). The "June backlog" era no longer
+  exists; every pending card now carries a confidence badge and a why-note.
 - The June-era "seed" fakes are gone (deleted with the test reset).
 
 **Known behaviors to expect**
@@ -317,6 +316,20 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-08-24** — **June backlog reprocessed + duplicate checking now reads
+  the REAL sheet.** The 59 leftovers from the stalled June system had never
+  been read by the current bookkeeper (no category, tax call, SKU lookup or
+  duplicate check) and their emails were labeled `receipts-done`, so the
+  poller skipped them permanently. Released via `reprocessLegacy()`:
+  59 records across 39 emails cleared and unlabeled, then re-ingested —
+  12 more items auto-filed, the rest returned as real review items, and
+  several archived photo receipts finally read (Drive shrink handled
+  3.9 MB → 319 KB). Tools total unchanged at $4,690.15, confirming no
+  collision with Paul's hand-entered rows.
+  Prerequisite shipped first: the bookkeeper now checks duplicates against
+  the **actual sheet** (writer v8 `readRecent` + `blockHasRow_`), not just the
+  queue — closing the blind spot for anything typed straight onto the tab.
 
 - **2026-08-23** — **Post-go-live queue triage.** Swept the first-day backlog:
   approved airport rideshares (Paul: PDX/DFW Ubers ARE business, despite the
