@@ -26,7 +26,7 @@ This is separate from the phone/website **scheduler** (`CLAUDE.md`) and the
    amount) waits in the **Pending** tab of the queue page with a note
    explaining why. You fix the fields, pick a category, and Approve — same
    flow as before.
-4. **Every morning ~7 AM** you get a summary email of the previous day: what
+4. **Every morning ~3 AM** you get a summary email of the previous day: what
    was filed (by category, with totals and sheet cells), what needs review,
    and ⚠️ any receipt that got lost or stuck (with a link to re-ingest it).
 
@@ -45,26 +45,33 @@ Meals, Travel, Office, Gas/Truck/Trailer, Subscriptions, Website, Business.
 ```
 receipt → receipts@ or travel@ ──(Gmail: travel@ POP-imported into paul@)──►
                                    receipts-poller.gs   (Apps Script, 15-min trigger)
-                                        │  POST email + attachments (channel-tagged)
-                                        ▼
-                        receipts-ingest-background.mjs   (Netlify BACKGROUND function)
+                                        │  • >3 MB photo → shrink via Drive rendition
+                                        │  • each attachment → receipts-upload.mjs
+                                        │      (SYNC fn, 6 MB cap) → Blobs upload/<msgId>/<i>
+                                        │  • POST email + blob REFERENCES (channel-tagged)
+                                        ▼            ⚠️ background fns cap requests at ~256 KB,
+                        receipts-ingest-background.mjs   so bytes can never ride this POST
                          • writes a "processing" record FIRST (crash-safe)
-                         • HEIC → JPEG
+                         • loads attachment bytes from Blobs; HEIC → JPEG
+                         • reads the REAL sheet (receipts-sheet readRecent) so it can
+                           spot charges already on the books — incl. hand-entered rows
                          • Claude Opus 5 + web search: itemize, decode SKUs,
-                           categorize, per-item tax, per-item confidence
+                           categorize, per-item tax, per-item confidence, duplicate call
                          • HIGH confidence → files directly to the sheet ("filed")
-                         • uncertain → queued "pending" with a why-note
+                         • uncertain / duplicate → queued "pending" with a why-note
                                         │
                           ┌─────────────┴──────────────┐
                           ▼                            ▼
                 /receipts queue page          receipts-sheet.gs (Apps Script web app)
-                (review + manual approve)      • write row into the category block
-                          │  Approve                   ▼
-                          ▼                    Google Sheet "RECAST BIZ" tab
-                    receipts-data.mjs  ────────────────┘
+                (review + manual approve)      • ScriptLock-serialized duplicate gate
+                          │  Approve             (recent-append cache + sheet scan)
+                          │  (force:true)       • write row into the category block
+                          ▼                            ▼
+                    receipts-data.mjs  ────────►  Google Sheet "RECAST BIZ" tab
                                         ▲
-        receipts-daily-summary.gs ──►  receipts-summary.mjs (7 AM email data:
-        (Apps Script daily trigger)     filed/review/lost-receipt reconciliation)
+        receipts-daily-summary.gs ──►  receipts-summary.mjs (3 AM email data:
+        (Apps Script daily trigger)     filed/review/lost-receipt reconciliation;
+                                        also `legacyReset` for one-off re-ingests)
 ```
 
 ### Storage: one blob per receipt email
@@ -166,8 +173,8 @@ of record — live copies are pasted into script.google.com.
 
 | Script | Type | Purpose |
 |---|---|---|
-| `receipts-poller.gs` | Time trigger (every 15 min) | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. |
-| `receipts-daily-summary.gs` | Time trigger (daily 7–8 AM, **same project as the poller**) | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. Project timezone must be America/Chicago. |
+| `receipts-poller.gs` | Time trigger (every 15 min) | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), and `testPollBatch()` (process without labeling done). |
+| `receipts-daily-summary.gs` | Time trigger (daily **3–4 AM Central**); lives as `summary.gs` in the **same project as the poller** | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. `dailySummary()` = yesterday (the trigger); `summaryToday()` = an on-demand "today so far" digest. Project timezone is America/Chicago. Keep user-facing strings ASCII (`\uXXXX` escapes) — pasting into the editor mangles UTF-8. |
 | `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
 
 ### Configuration

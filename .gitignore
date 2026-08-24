@@ -13,3 +13,7 @@ node_modules/
 /homes/app-index.js
 /homes/detail.js
 /homes/app-detail.js
+
+# Claude Code machine-local settings and Netlify CLI's deno lockfile.
+.claude/settings.local.json
+deno.lock

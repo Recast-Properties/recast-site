@@ -4,7 +4,7 @@
  * Paste into the SAME Apps Script project as receipts-poller.gs (it reuses that
  * project's Gmail authorization and WEBHOOK_SECRET script property).
  *
- * Runs on a daily time trigger (~7 AM America/Chicago) and emails paul@ a
+ * Runs on a daily time trigger (3-4 AM America/Chicago) and emails paul@ a
  * summary of the previous day:
  *   • what the bookkeeper auto-filed, grouped by category, with totals
  *   • items waiting for review (with a link to the /receipts queue)
