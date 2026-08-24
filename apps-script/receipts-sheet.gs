@@ -71,6 +71,7 @@ function doPost(e) {
     if (!sheet) return jsonResponse_({ ok: false, error: 'Tab "' + CONFIG.TAB_NAME + '" not found' }, 404);
 
     if (data.action === 'inspect') return inspect_(sheet);
+    if (data.action === 'readRecent') return readRecent_(sheet, data);
     return append_(sheet, data);
   } catch (err) {
     console.error('RECEIPTS-SHEET ERROR: ' + String(err && err.stack ? err.stack : err));
@@ -124,6 +125,43 @@ function nextWriteRow_(values, hRow, col) {
   return { row: values.length };  // block runs to the bottom of the used range; write just below
 }
 
+// Normalize a date cell to MMDDYY digits so a hand-typed "07/14/26", a real
+// Date object, and an incoming "07/14/26" all compare equal.
+function normDate_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'MMddyy');
+  const digits = String(v == null ? '' : v).replace(/[^0-9]/g, '');
+  if (digits.length === 8) return digits.slice(0, 4) + digits.slice(6);  // MMDDYYYY -> MMDDYY
+  return digits;
+}
+
+function normVendor_(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+function normAmount_(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, ''));
+  return isFinite(n) ? n.toFixed(2) : '';
+}
+
+// Does this category block ALREADY contain a row with the same vendor + date +
+// amount? This is the deterministic backstop that catches rows the queue never
+// knew about — above all the ones Paul typed into the sheet by hand (confirmed
+// 2026-08-23: a fair number of Tools purchases were entered directly during the
+// June-system stall). The CacheService gate only remembers this run; the sheet
+// remembers everything.
+function blockHasRow_(values, hRow, col, vendor, date, amount) {
+  const wantV = normVendor_(vendor), wantD = normDate_(date), wantA = normAmount_(amount);
+  if (!wantV || !wantA) return null;
+  for (let r = hRow + 1; r < values.length; r++) {
+    if (isHeaderRow_(values, r, col)) break;
+    const v = getCell_(values, r, col);
+    if (isEmpty_(v) && isEmpty_(getCell_(values, r, col + 1))) continue;
+    if (normVendor_(v) === wantV &&
+        normAmount_(getCell_(values, r, col + 4)) === wantA &&
+        (!wantD || normDate_(getCell_(values, r, col + 1)) === wantD)) {
+      return { row: r + 1 };
+    }
+  }
+  return null;
+}
+
 // ---- append -----------------------------------------------------------------
 
 // Cache key identifying a written charge: vendor + amount + date. Twins (an
@@ -166,6 +204,18 @@ function append_(sheet, data) {
   const hdr = findHeader_(values, category);
   if (!hdr) return jsonResponse_({ ok: false, error: 'Category block "' + category + '" not found on tab ' + CONFIG.TAB_NAME }, 404);
 
+  // Deterministic duplicate check against what is ACTUALLY on the sheet
+  // (covers hand-entered rows the queue never saw). force:true = human Approve.
+  if (!force) {
+    const existingRow = blockHasRow_(values, hdr.row, hdr.col, data.vendor, data.date, data.amount);
+    if (existingRow) {
+      return jsonResponse_({
+        ok: false, duplicate: true, existing: category + ' row ' + existingRow.row,
+        error: 'This vendor + date + amount is already on the sheet at row ' + existingRow.row + ' of the ' + category + ' block'
+      }, 409);
+    }
+  }
+
   const target = nextWriteRow_(values, hdr.row, hdr.col);
   if (target.error) return jsonResponse_({ ok: false, error: 'Block "' + category + '": ' + target.error }, 409);
 
@@ -189,6 +239,36 @@ function append_(sheet, data) {
     try { CacheService.getScriptCache().put(dupKey, msgId + '|' + a1, 21600); } catch (err) {}
   }
   return jsonResponse_({ ok: true, wrote: a1, category: category });
+}
+
+// ---- readRecent -------------------------------------------------------------
+// Return what is actually recorded in the books, so the ingest can show Claude
+// the REAL sheet (not just the queue) when it reasons about duplicates. Without
+// this, anything entered on the sheet by hand is invisible to the bookkeeper.
+function readRecent_(sheet, data) {
+  const maxPerBlock = Math.max(1, Math.min(parseInt(data.maxPerBlock, 10) || 40, 200));
+  const values = sheet.getDataRange().getValues();
+  const out = [];
+  CATEGORIES.forEach(function (cat) {
+    const hdr = findHeader_(values, cat);
+    if (!hdr) return;
+    const rows = [];
+    for (let r = hdr.row + 1; r < values.length; r++) {
+      if (isHeaderRow_(values, r, hdr.col)) break;
+      const v = getCell_(values, r, hdr.col);
+      if (isEmpty_(v) && isEmpty_(getCell_(values, r, hdr.col + 1))) continue;
+      rows.push({
+        category: cat,
+        vendor: String(v == null ? '' : v).trim(),
+        date: normDate_(getCell_(values, r, hdr.col + 1)),
+        item: String(getCell_(values, r, hdr.col + 2) || '').slice(0, 70),
+        amount: normAmount_(getCell_(values, r, hdr.col + 4))
+      });
+    }
+    // Newest entries sit at the bottom of a block; keep the tail.
+    out.push.apply(out, rows.slice(-maxPerBlock));
+  });
+  return jsonResponse_({ ok: true, tab: CONFIG.TAB_NAME, rows: out });
 }
 
 // ---- inspect ----------------------------------------------------------------

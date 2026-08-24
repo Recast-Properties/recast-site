@@ -13,6 +13,7 @@
 //     crash edge case fired and that email needs re-ingest.
 //
 // POST JSON: { token, action:"summary", dayStartIso, dayEndIso, doneMsgIds:[] }
+//            { token, action:"legacyReset", dryRun? } -> { msgIds, count, ... }
 import { getStore } from "@netlify/blobs";
 
 const PREFIX = "msg/";
@@ -29,6 +30,39 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }
   if (!expected || clean(body.token) !== expected) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
+  // --- legacyReset: hand back the Gmail message ids of the stalled June
+  // system's leftover PENDING items and delete those queue records, so their
+  // emails can be unlabeled and re-read by the current bookkeeper. Legacy items
+  // are identifiable because the June system never wrote a `confidence` field.
+  // Deleting FIRST matters: the ingest skips any msgId that still has a record.
+  // dryRun:true reports what would happen and changes nothing.
+  if (clean(body.action) === "legacyReset") {
+    const dryRun = body.dryRun === true || clean(body.dryRun) === "true";
+    try {
+      const store = getStore({ name: "receipts-data", consistency: "strong" });
+      const { blobs } = await store.list({ prefix: PREFIX });
+      const envs = await Promise.all((blobs || []).map(async (b) => ({ key: b.key, env: await store.get(b.key, { type: "json" }) })));
+      const msgIds = [];
+      let removedItems = 0, removedEnvelopes = 0;
+      for (const { key, env } of envs) {
+        if (!env || !Array.isArray(env.items)) continue;
+        const legacy = env.items.filter((it) => it.status === "pending" && !clean(it.confidence));
+        if (!legacy.length) continue;
+        const msgId = clean(env.msgId);
+        // Only real Gmail messages can be re-ingested; manual/seed rows can't.
+        if (msgId && !/^manual-/.test(msgId)) msgIds.push(msgId);
+        removedItems += legacy.length;
+        if (dryRun) continue;
+        const keep = env.items.filter((it) => !(it.status === "pending" && !clean(it.confidence)));
+        if (keep.length === 0 && env.status !== "processing") { await store.delete(key); removedEnvelopes++; }
+        else { env.items = keep; await store.setJSON(key, env); }
+      }
+      return Response.json({ ok: true, dryRun, msgIds, count: msgIds.length, removedItems, removedEnvelopes });
+    } catch (e) {
+      return Response.json({ ok: false, error: String((e && e.message) || e) }, { status: 500 });
+    }
+  }
 
   const start = Date.parse(clean(body.dayStartIso)) || 0;
   const end = Date.parse(clean(body.dayEndIso)) || Date.now();

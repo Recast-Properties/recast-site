@@ -189,6 +189,32 @@ function parseJsonLoose(text) {
   try { return JSON.parse(s.slice(start, end + 1)); } catch { return null; }
 }
 
+// What is ACTUALLY recorded in the expense sheet, straight from the tab. This
+// is the duplicate context that matters: the queue only knows what passed
+// through it, so anything typed onto the sheet by hand is invisible to a
+// store-only check (Paul confirmed 2026-08-23 he hand-entered a fair number of
+// Tools purchases during the June-system stall). Best-effort — on any failure
+// we fall back to the store-only view rather than blocking the ingest.
+async function sheetBooksContext() {
+  const sheetUrl = process.env.RECEIPTS_SHEET_URL || "";
+  if (!sheetUrl) return "";
+  try {
+    const res = await fetch(sheetUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: process.env.RECEIPTS_SHEET_TOKEN || "", action: "readRecent", maxPerBlock: 40 }),
+    });
+    const j = await res.json();
+    if (!j || !Array.isArray(j.rows)) return "";
+    return j.rows
+      .map((r) => `${clean(r.category)} | ${clean(r.vendor)} | ${clean(r.date)} | ${clean(r.item)} | $${clean(r.amount)}`)
+      .join("\n");
+  } catch (e) {
+    console.warn("[ingest] sheet books context failed: " + String((e && e.message) || e));
+    return "";
+  }
+}
+
 // Compact list of recently recorded charges, shown to Claude so it can catch
 // duplicates (a vendor's invoice email + receipt email for the same payment).
 async function recentItemsContext(store) {
@@ -220,8 +246,16 @@ async function recentItemsContext(store) {
 // retry once without the schema and parse loosely.
 async function extractReceipt(client, payload, useSchema, recentContext) {
   const content = buildContent(payload);
-  if (recentContext) {
-    content.push({ type: "text", text: "--- Charges already recorded in the books (last 60 days) ---\n" + recentContext });
+  if (recentContext && recentContext.books) {
+    content.push({ type: "text", text:
+      "--- WHAT IS ALREADY ON THE EXPENSE SHEET (category | vendor | date MMDDYY | description | amount incl. tax) ---\n" +
+      "These rows are the actual books. Some were typed in by hand and never passed through the queue. " +
+      "If this receipt documents a charge already listed here, say so: mark the item duplicate \"confirmed\" " +
+      "(or \"suspected\" if you cannot be sure) and explain which row it matches.\n" + recentContext.books });
+  }
+  if (recentContext && recentContext.queue) {
+    content.push({ type: "text", text:
+      "--- Recently processed receipts (queue records, last 60 days; status shown) ---\n" + recentContext.queue });
   }
   const messages = [{ role: "user", content }];
   const req = {
@@ -421,7 +455,8 @@ export default async (req) => {
     await store.setJSON(key, envelope);
 
     const client = new Anthropic();
-    const recentContext = await recentItemsContext(store);
+    const [books, queue] = await Promise.all([sheetBooksContext(), recentItemsContext(store)]);
+    const recentContext = { books, queue };
     const parsed = await extractWithFallback(client, body, recentContext);
 
     let items = [];

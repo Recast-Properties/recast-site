@@ -25,6 +25,7 @@ const CONFIG = {
   // 2026-08-21). Bytes go to this SYNCHRONOUS function (6 MB cap) which parks
   // them in Blobs; the ingest gets blob references only.
   UPLOAD_URL: 'https://receipts--incomparable-raindrop-8f3d22.netlify.app/.netlify/functions/receipts-upload',
+  SUMMARY_URL: 'https://receipts--incomparable-raindrop-8f3d22.netlify.app/.netlify/functions/receipts-summary',
   RECEIPT_ADDRESS: 'receipts@recast-properties.com',
   TRAVEL_ADDRESS: 'travel@recast-properties.com',   // its own mailbox, POP-imported into paul@
   DONE_LABEL: 'receipts-done',
@@ -57,6 +58,64 @@ function setupTriggers() {
   ScriptApp.newTrigger('pollReceipts').timeBased().everyMinutes(15).create();
   ScriptApp.newTrigger('dailySummary').timeBased().everyDays(1).atHour(3).inTimezone('America/Chicago').create();
   console.log('Triggers set: pollReceipts every 15 min; dailySummary daily 3-4 AM America/Chicago');
+}
+
+// ---- ONE-OFF: release the stalled June system's leftovers ------------------
+// The June system left ~59 PENDING items in the queue that the current
+// bookkeeper has never read (no category, no tax call, no duplicate check).
+// Their emails carry the receipts-done label, so the poller skips them
+// permanently. This deletes those queue records and removes the label from
+// exactly those messages, so the next poll re-reads them properly.
+//
+// Safe by construction:
+//   • Only items with NO `confidence` field are touched (June-system output;
+//     everything the current bookkeeper produced always sets one).
+//   • Records are deleted BEFORE unlabeling — the ingest skips any msgId that
+//     still has a record, so ordering matters.
+//   • If a thread also holds an already-processed message, that message keeps
+//     its store record and the ingest skips it, so nothing re-files twice.
+//   • Duplicate protection against rows Paul typed into the sheet by hand now
+//     comes from the sheet writer itself (blockHasRow_) plus the sheet contents
+//     shown to Claude — see receipts-sheet.gs readRecent.
+//
+// Run `reprocessLegacyDryRun` first to see the count without changing anything.
+function reprocessLegacyDryRun() { return reprocessLegacy_(true); }
+function reprocessLegacy() { return reprocessLegacy_(false); }
+
+function reprocessLegacy_(dryRun) {
+  const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
+  if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
+
+  const res = UrlFetchApp.fetch(CONFIG.SUMMARY_URL, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({ token: token, action: 'legacyReset', dryRun: !!dryRun })
+  });
+  if (res.getResponseCode() !== 200) throw new Error('legacyReset HTTP ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
+  const j = JSON.parse(res.getContentText());
+  if (!j.ok) throw new Error('legacyReset error: ' + (j.error || 'unknown'));
+
+  console.log((dryRun ? '[DRY RUN] ' : '') + 'Legacy records: ' + j.removedItems + ' item(s) across ' +
+    j.count + ' email(s); ' + j.removedEnvelopes + ' envelope(s) removed.');
+  if (dryRun) { console.log('Would unlabel ' + j.count + ' message(s). Nothing changed.'); return j; }
+
+  const doneLabel = GmailApp.getUserLabelByName(CONFIG.DONE_LABEL);
+  if (!doneLabel) throw new Error('Label not found: ' + CONFIG.DONE_LABEL);
+
+  let unlabeled = 0, missing = 0;
+  j.msgIds.forEach(function (id) {
+    try {
+      const msg = GmailApp.getMessageById(id);
+      if (!msg) { missing++; return; }
+      msg.getThread().removeLabel(doneLabel);
+      unlabeled++;
+    } catch (err) {
+      missing++;
+      console.warn('Could not unlabel ' + id + ': ' + String(err));
+    }
+  });
+  console.log('Unlabeled ' + unlabeled + ' message(s); ' + missing + ' could not be found. ' +
+    'The next pollReceipts run will re-read them.');
+  return { unlabeled: unlabeled, missing: missing, items: j.removedItems };
 }
 
 function pollReceipts() {
