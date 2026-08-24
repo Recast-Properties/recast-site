@@ -173,7 +173,7 @@ of record — live copies are pasted into script.google.com.
 
 | Script | Type | Purpose |
 |---|---|---|
-| `receipts-poller.gs` | Time trigger (every 15 min) | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), and `testPollBatch()` (process without labeling done). |
+| `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), and `testPollBatch()` (process without labeling done). |
 | `receipts-daily-summary.gs` | Time trigger (daily **3–4 AM Central**); lives as `summary.gs` in the **same project as the poller** | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. `dailySummary()` = yesterday (the trigger); `summaryToday()` = an on-demand "today so far" digest. Project timezone is America/Chicago. Keep user-facing strings ASCII (`\uXXXX` escapes) — pasting into the editor mangles UTF-8. |
 | `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
 
@@ -300,6 +300,11 @@ the 90-day window, 0 failures; everything ingested is labeled `receipts-done`.
 stays: judge by reading the sheet; the queue is the exception lane.
 
 **Left for Paul**
+- **Backfill tail (added 2026-08-24):** 24 Pending items dated Jan–May. The Uber
+  rides are individual calls (airport = business); Adobe $34.49 ×2 and Microsoft
+  $9.99 ×2 are legitimate separate monthly charges held only because vendor+amount
+  repeat — approve them. VistaPrint was deliberately left out (see change log);
+  Marketing stays empty for this window on purpose.
 - Queue triage: the New pending items (held twins → Dismiss; [Personal]
   Ubers → judge; the second same-day Netlify $20 → Approve; photo holds
   like the JP-court packet → Approve/fix).
@@ -323,6 +328,41 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-08-24 (PM)** — **Pre-receipts@ backfill (Jan 1 – May 24).** Established
+  that `receipts@` only ever received mail from **2026-06-22**, and that
+  ingestion effectively starts **2026-05-25** (the 90-day lookback at go-live),
+  leaving Jan 1 – May 24 uncovered. A read-only `backfill-scan.gs` in the
+  Bookkeeper project swept **1,999 messages** across that window (deliberately
+  NOT keyword-filtered) and dumped them to Drive for off-script review; RECAST
+  BIZ was read in full via the sheet's `gviz` endpoint and verified block-by-block
+  against its header totals.
+  Key finding: inside the gap the tab held **only 61 Tools + 6 Meals rows, all
+  hand-entered** — the other eight categories were empty, each starting only when
+  the automation did. Paul reviewed the findings doc and approved: property/rehab
+  costs stay OFF RECAST BIZ (they belong on the property tabs), Tools + Meals
+  untouched, CoreLogic Stripe payments in, the $7,800 Matthew Beard payment,
+  AcesPhoto and Sunstate all skipped.
+  `backfillRun()` then posted an **explicit list of 47 Gmail message ids** to the
+  ingest — *never* by widening `SEARCH_WINDOW`, whose 90-day boundary this
+  exercise confirms is load-bearing (those 61 Tools rows are exactly the
+  collision it prevents). All 47 accepted (202), 0 failed, 0 errored, 0 stuck.
+  **Filed: 24 rows / $2,077.19** — Travel +11/$1,826.29, Subscriptions
+  +6/$138.00, Business +7/$112.90. Tools and Meals unchanged to the cent.
+  24 items parked in Pending for individual judgement (mostly `[Personal]` Uber
+  rides, plus Adobe/Microsoft held as suspected recurring-amount twins and two
+  LGS receipts held on a subtotal mismatch).
+  Notable: the four Driversnote invoices, unpriceable from previews, resolved to
+  **$12.00/mo** once the bodies were read. Both VistaPrint orders (05-08 $179.98,
+  05-13 $194.83) were pulled from the run before it started — the same day carries
+  two cancellation notices for order `VP_WX7TV54F` and a **$406.04 merchandise
+  credit**, which nets ambiguously. **Paul's call 2026-08-24: leave VistaPrint
+  alone.** Marketing therefore stays empty for Jan–May by decision, not by
+  oversight — don't "fix" it in a later pass.
+  Threads were **not** labelled `receipts-done`: the ingest is idempotent by
+  message id, and labelling ordinary inbox mail would pollute the poller's view.
+  `backfill-scan.gs` is still in the project (entry point parked on the
+  read-only `backfillVerify`) — delete it once the Pending tail is triaged.
 
 - **2026-08-24** — **June backlog reprocessed + duplicate checking now reads
   the REAL sheet.** The 59 leftovers from the stalled June system had never
