@@ -176,6 +176,7 @@ of record — live copies are pasted into script.google.com.
 | `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), and `testPollBatch()` (process without labeling done). |
 | `receipts-daily-summary.gs` | Time trigger (daily **3–4 AM Central**); lives as `summary.gs` in the **same project as the poller** | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. `dailySummary()` = yesterday (the trigger); `summaryToday()` = an on-demand "today so far" digest. Project timezone is America/Chicago. Keep user-facing strings ASCII (`\uXXXX` escapes) — pasting into the editor mangles UTF-8. |
 | `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
+| `receipts-sheet-sort.gs` | Manual run; project **"RECAST BIZ Sorter"**, id `1dE6KeuDNNkto-9XTDvgRAk1M6k710k4Bdl7voht1wzoJYKxbW3ObaMNa` | Maintenance: sorts the rows inside every category block by date, oldest at top, and normalizes the date column to `MM/dd/yy`. Rows land in PROCESSED order, not DATED order, so blocks drift — re-run whenever one looks out of order. Locates blocks by NAME in row 1 (never hardcoded columns), backs the tab up first, carries HYPERLINK formulas and per-cell number formats with their rows, aborts if the poller appends mid-run, and refuses to finish if any block's row count or total moved. ONE entry point (`sortRecastBizByDate`) so the editor preselects it; `SORT_CFG.DRY_RUN` picks report-only vs apply, and is left **true** in the repo. |
 
 ### Configuration
 
@@ -223,6 +224,13 @@ totals and neighboring blocks shift automatically).
 ### Fix a wrongly auto-filed item
 The morning email and the Filed tab show the sheet cell each item landed in —
 edit the row on the sheet directly. (Filed items are read-only in the queue.)
+
+### Re-sort a block that has drifted out of date order
+Rows are appended in the order receipts are PROCESSED, so a backfill or a
+reprocessed batch leaves blocks out of order. Open the **RECAST BIZ Sorter**
+project, run `sortRecastBizByDate` with `DRY_RUN: true` to see what would move,
+then set it `false` and run again. It backs the tab up first and verifies every
+block's total is unchanged. Re-running when nothing has drifted is a no-op.
 
 ### Verify the sheet layout
 POST `{token, action:"inspect"}` to the sheet-writer `/exec` URL for each
@@ -328,6 +336,28 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-08-25** — **RECAST BIZ sorted by date.** Every category block's rows
+  reordered oldest-at-top, newest-at-bottom, via a new `receipts-sheet-sort.gs`
+  ("RECAST BIZ Sorter" project, pushed with clasp — NOT pasted, so the em dashes
+  survived). Moved 51/72 Tools, 63/63 Travel, 62/62 Subscriptions, 12/13
+  Business, 10/12 Gas, 8/8 Website, 4/5 Marketing; Materials, Meals, Office and
+  Interest were already in order. All 11 block totals unchanged to the cent
+  (verified twice — once by the script, once by reading the sheet back through
+  `gviz` and re-summing against each block's own header total), all 158
+  HYPERLINK formulas preserved as formulas, row counts identical.
+  The Tools date column had three display formats (`1/11/26`, `01/08/26`,
+  `2/18/2026`) — all genuine date VALUES, just inconsistently formatted, which
+  `year(C)` resolving on all 72 rows confirmed before anything was touched.
+  Normalized to `MM/dd/yy` per Paul's call. The two undated rows (Website/Apify
+  $29.00, Interest/420 Alyssa) sit at the bottom of their blocks.
+  Backup tab **"RECAST BIZ backup 2026-08-25 1350"** left in place — delete it
+  once the result looks right. A re-run now reports 0 moves in every block.
+  Noticed in passing, NOT fixed: the deployed sheet-writer project does not
+  match local `receipts-sheet.gs` — the remote is missing `readRecent_` and
+  `blockHasRow_` (the writer v8 changes the 2026-08-24 entry describes) and its
+  comments are UTF-8-mangled from a hand-paste. Worth verifying whether the
+  sheet-based duplicate check is actually live.
 
 - **2026-08-24 (PM)** — **Pre-receipts@ backfill (Jan 1 – May 24).** Established
   that `receipts@` only ever received mail from **2026-06-22**, and that
