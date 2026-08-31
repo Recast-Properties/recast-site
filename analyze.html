@@ -18,7 +18,11 @@ input{width:100%;font:inherit;font-size:16px;color:var(--color-fg,#18191C);backg
 input::placeholder{color:var(--color-fg-subtle,#9498A1)}
 input:focus-visible{outline:3px solid var(--color-focus-ring,rgba(220,130,68,.45));outline-offset:0;border-color:var(--color-border-brand,#F1BB8D)}
 .addr-group{margin:0 0 6px}
-.email-label{margin-top:10px}
+.email-label{margin-top:10px;display:block;font-family:var(--font-display,"Poppins",sans-serif);font-weight:600;font-size:11.5px;letter-spacing:var(--tracking-caps,.08em);text-transform:uppercase;color:var(--color-fg-subtle,#9498A1)}
+.recipients{display:flex;gap:10px;margin:0 0 6px}
+.check{display:flex;align-items:center;gap:9px;flex:1;border:1px solid var(--color-border,#E1E4E9);border-radius:8px;padding:11px 14px;background:var(--color-bg,#FBF8F4);cursor:pointer;font-weight:600;font-size:15px;text-transform:none;letter-spacing:0;color:var(--color-fg,#18191C);font-family:var(--font-sans,"Mulish",sans-serif)}
+.check:has(input:checked){border-color:var(--color-border-brand,#F1BB8D);background:var(--color-brand-subtle,#FBEAD9)}
+.check input{width:auto;margin:0;accent-color:var(--color-brand,#EA9B60);width:17px;height:17px}
 button{width:100%;font-family:var(--font-display,"Poppins",sans-serif);font-weight:600;font-size:16px;background:var(--color-brand,#EA9B60);color:var(--color-fg-on-brand,#fff);border:0;border-radius:8px;padding:14px;cursor:pointer;margin-top:8px;transition:background .15s}
 button:hover:not(:disabled){background:var(--color-brand-hover,#DC8244)}
 button:active:not(:disabled){background:var(--color-brand-press,#B96730)}
@@ -56,14 +60,17 @@ fieldset:disabled input{background:var(--color-bg-sunken,#F3ECE3);color:var(--co
         <label for="a3">Property address 3 <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
         <input id="a3" placeholder="Third address (optional)">
       </div>
-      <label class="email-label" for="email">Email the reports to</label>
-      <input id="email" type="email" placeholder="you@recast-properties.com" required>
+      <p class="email-label" style="margin-bottom:8px" id="rec-label">Email the reports to</p>
+      <div class="recipients" role="group" aria-labelledby="rec-label">
+        <label class="check"><input type="checkbox" id="r-paul" value="paul" checked><span>Paul</span></label>
+        <label class="check"><input type="checkbox" id="r-dennis" value="dennis"><span>Dennis</span></label>
+      </div>
       <button id="go" type="submit">Generate reports</button>
     </fieldset>
   </form>
   <ul id="runs" class="runs"></ul>
   <div id="note" class="note" role="status"></div>
-  <p class="fine">Reports take roughly 5–30 minutes each and arrive by email; this page also updates live if you leave it open. While reports are running, new submissions wait until they finish. Runs are capped daily and reports go only to approved addresses. Every figure is source-verified — anything unverifiable is labeled in the report.</p>
+  <p class="fine">Reports take roughly 5–30 minutes each and arrive by email; this page also updates live if you leave it open. While reports are running, new submissions wait until they finish. Runs are capped at 10 per day and reports go only to Paul and Dennis. Every figure is source-verified — anything unverifiable is labeled in the report.</p>
 </main>
 <script>
 const EP = '/.netlify/functions/analyst-bridge';
@@ -110,18 +117,19 @@ $('f').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (active()) return;
   note.className = 'note'; note.textContent = '';
-  const email = $('email').value.trim();
+  const recipients = ['paul','dennis'].filter((k) => $('r-' + k).checked);
+  if (!recipients.length) { note.className = 'note err'; note.textContent = 'Pick at least one recipient.'; return; }
   const addrs = ['a1','a2','a3'].map((id) => $(id).value.trim()).filter(Boolean);
   const seen = new Set();
   const unique = addrs.filter((a) => { const k = a.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   if (!unique.length) return;
-  try { localStorage.setItem('analystEmail', email); } catch {}
+  try { localStorage.setItem('analystRecipients', JSON.stringify(recipients)); } catch {}
   go.disabled = true;
   batch = unique.map((address) => ({ address, state: 'queued' }));
   paint();
   for (const b of batch) {
     try {
-      const r = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'submit', address: b.address, email }) });
+      const r = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'submit', address: b.address, recipients }) });
       const j = await r.json();
       if (!r.ok) { b.state = 'error'; b.error = j.error || ('error ' + r.status); }
       else if (j.status === 'existing') { b.state = 'existing'; b.url = j.url; }
@@ -136,8 +144,8 @@ $('f').addEventListener('submit', async (e) => {
 
 /* Restore an in-flight batch after a refresh, keeping the form locked. */
 try {
-  const savedEmail = localStorage.getItem('analystEmail');
-  if (savedEmail) $('email').value = savedEmail;
+  const savedRec = JSON.parse(localStorage.getItem('analystRecipients') || 'null');
+  if (Array.isArray(savedRec)) for (const k of ['paul','dennis']) $('r-' + k).checked = savedRec.includes(k);
   const saved = JSON.parse(localStorage.getItem('analystBatch') || '[]');
   if (Array.isArray(saved) && saved.length) {
     batch = saved;

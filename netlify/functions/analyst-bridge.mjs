@@ -1,13 +1,14 @@
 // Recast Analyst bridge — the queue between the public /analyze page and the Mac
 // watcher that runs analyst-cli (Recast-analyst repo). One function, action-routed.
 //
-// Public actions:  submit (address+email -> queued), check (id -> state/url)
+// Public actions:  submit (address + recipient keys -> queued), check (id -> state/url)
 // Secret actions (ANALYST_BRIDGE_SECRET): claim, status, store-report, complete,
 //                                         fail, notify
 //
-// Rails (Paul declined a password, 2026-08-30): recipient allowlist
-// (ANALYST_ALLOWED_EMAILS), daily cap (ANALYST_DAILY_CAP, default 5), and
-// same-address dedupe (a report generated in the last 30 days is re-sent, not re-run).
+// Rails (Paul declined a password, 2026-08-30): fixed recipient set
+// (ANALYST_RECIPIENTS, key:email pairs — the page sends keys, never emails),
+// daily cap (ANALYST_DAILY_CAP), per-recipient in-flight limit, and same-address
+// dedupe (a report generated in the last 30 days is re-sent, not re-run).
 import { getStore } from "@netlify/blobs";
 
 const STORE = "analyst";
@@ -19,10 +20,15 @@ const json = (obj, status = 200) =>
 const slugify = (a) => String(a).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 const today = () => new Date(Date.now() - 6 * 3600 * 1000).toISOString().slice(0, 10); // America/Chicago-ish day
 
-function allowedEmail(email) {
-  const list = String(process.env.ANALYST_ALLOWED_EMAILS || "")
-    .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return list.includes(String(email || "").trim().toLowerCase());
+function recipientMap() {
+  // ANALYST_RECIPIENTS = "paul:paul@example.com,dennis:d@example.com" — keys are what
+  // the page sends; raw emails never appear client-side.
+  const map = {};
+  for (const pair of String(process.env.ANALYST_RECIPIENTS || "").split(",")) {
+    const [k, v] = pair.split(":").map((s) => (s || "").trim());
+    if (k && v) map[k.toLowerCase()] = v;
+  }
+  return map;
 }
 
 async function sendEmail(to, subject, html) {
@@ -61,14 +67,16 @@ export default async (req) => {
   // ---------- public ----------
   if (action === "submit") {
     const address = String(body.address || "").trim();
-    const email = String(body.email || "").trim();
     if (!/\d+.+\d{5}/.test(address)) return json({ error: "Enter a full street address including the ZIP code." }, 400);
-    if (!allowedEmail(email)) return json({ error: "That email isn't on the report list. Ask Paul to add it." }, 403);
+    const map = recipientMap();
+    const keys = [...new Set((Array.isArray(body.recipients) ? body.recipients : []).map((k) => String(k).toLowerCase()))];
+    const emails = keys.filter((k) => map[k]).map((k) => map[k]);
+    if (!emails.length) return json({ error: "Pick at least one recipient." }, 400);
 
     const slug = slugify(address);
     const done = await store.get(`done/${slug}`, { type: "json" });
     if (done && done.url && Date.now() - new Date(done.at).getTime() < 30 * 86400000) {
-      await sendEmail(email, `Recast Analyst report: ${address}`, reportEmail(address, done.url));
+      for (const to of emails) await sendEmail(to, `Recast Analyst report: ${address}`, reportEmail(address, done.url));
       return json({ status: "existing", url: done.url, note: "A report from the last 30 days exists — emailed you the link." });
     }
 
@@ -78,7 +86,8 @@ export default async (req) => {
     let inFlight = 0;
     for (const b of qb) {
       const q = await store.get(b.key, { type: "json" });
-      if (q && q.email?.toLowerCase() === email.toLowerCase()
+      const qEmails = q?.emails || (q?.email ? [q.email] : []);
+      if (q && qEmails.some((e) => emails.includes(e))
         && ["queued", "claimed", "running"].includes(q.state)
         && Date.now() - new Date(q.at).getTime() < 3 * 3600 * 1000) inFlight++;
     }
@@ -90,7 +99,7 @@ export default async (req) => {
     await store.setJSON(dayKey, { n: count + 1 });
 
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-    await store.setJSON(`queue/${id}`, { id, address, email, slug, state: "queued", at: new Date().toISOString() });
+    await store.setJSON(`queue/${id}`, { id, address, emails, slug, state: "queued", at: new Date().toISOString() });
     return json({ status: "queued", id });
   }
 
@@ -137,15 +146,16 @@ export default async (req) => {
     if (!r) return json({ error: "unknown id" }, 404);
     await store.setJSON(`queue/${body.id}`, { ...r, state: "done", url: body.url, doneAt: new Date().toISOString() });
     await store.setJSON(`done/${r.slug}`, { url: body.url, at: new Date().toISOString() });
-    const mail = await sendEmail(r.email, `Recast Analyst report: ${r.address}`, reportEmail(r.address, body.url));
-    return json({ ok: true, mail });
+    const results = [];
+    for (const to of r.emails || (r.email ? [r.email] : [])) results.push(await sendEmail(to, `Recast Analyst report: ${r.address}`, reportEmail(r.address, body.url)));
+    return json({ ok: true, mail: results });
   }
 
   if (action === "fail") {
     const r = await store.get(`queue/${body.id}`, { type: "json" });
     if (r) {
       await store.setJSON(`queue/${body.id}`, { ...r, state: "failed", detail: String(body.error || "").slice(0, 300) });
-      await sendEmail(r.email, `Recast Analyst: report failed for ${r.address}`,
+      for (const to of r.emails || (r.email ? [r.email] : [])) await sendEmail(to, `Recast Analyst: report failed for ${r.address}`,
         `<p>The report for <b>${r.address}</b> hit an error and didn't finish. Paul's Mac has the details; ask him to re-run it.</p>`);
     }
     return json({ ok: true });
