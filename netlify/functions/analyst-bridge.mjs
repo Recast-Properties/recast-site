@@ -72,6 +72,18 @@ export default async (req) => {
       return json({ status: "existing", url: done.url, note: "A report from the last 30 days exists — emailed you the link." });
     }
 
+    // Belt behind the UI lock: while this email already has 3+ runs in flight,
+    // new submissions are refused (a stuck claim re-pools after 2h via claim()).
+    const { blobs: qb } = await store.list({ prefix: "queue/" });
+    let inFlight = 0;
+    for (const b of qb) {
+      const q = await store.get(b.key, { type: "json" });
+      if (q && q.email?.toLowerCase() === email.toLowerCase()
+        && ["queued", "claimed", "running"].includes(q.state)
+        && Date.now() - new Date(q.at).getTime() < 3 * 3600 * 1000) inFlight++;
+    }
+    if (inFlight >= 3) return json({ error: "Reports are already running for this email — wait for them to finish before adding more." }, 429);
+
     const dayKey = `meta/day-${today()}`;
     const count = (await store.get(dayKey, { type: "json" }))?.n || 0;
     if (count >= CAP) return json({ error: `Daily report cap reached (${CAP}). Try tomorrow or ask Paul.` }, 429);

@@ -5,78 +5,146 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Recast Analyst</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="/colors_and_type.css">
 <style>
-:root{--paper:#FBF9F6;--surface:#fff;--ink:#26231F;--soft:#524C43;--faint:#7D766B;--line:#E1DCD2;--accent:#8A4B2D;--accent-deep:#6E3A22;--wash:#F3EAE2;--crit:#9B3B30;--crit-wash:#F6E8E4;--good:#3D6B4F;--good-wash:#E7EFE7}
-@media (prefers-color-scheme:dark){:root{--paper:#18150F;--surface:#211D17;--ink:#EAE4DA;--soft:#B2A99B;--faint:#83796A;--line:#342F27;--accent:#D29A73;--accent-deep:#E0B08C;--wash:#33271E;--crit:#DB8A7B;--crit-wash:#362220;--good:#8FBC9F;--good-wash:#22312A}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.6;min-height:100vh;display:grid;place-items:center;padding:24px}
-.card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 12px 32px -16px rgba(0,0,0,.25);max-width:520px;width:100%;padding:32px 30px 28px}
-.eyebrow{font-family:Archivo,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
-h1{font-family:Archivo,system-ui,sans-serif;font-weight:800;font-size:30px;letter-spacing:-.01em;margin:0 0 8px}
-.sub{color:var(--soft);font-size:15px;margin:0 0 24px}
-label{display:block;font-family:Archivo,system-ui,sans-serif;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 6px}
-input{width:100%;font:inherit;font-size:16.5px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0 0 18px}
-input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
-button{width:100%;font-family:Archivo,system-ui,sans-serif;font-weight:700;font-size:16px;background:var(--accent);color:var(--paper);border:0;border-radius:8px;padding:14px;cursor:pointer}
-button:hover{background:var(--accent-deep)}
-button:disabled{opacity:.55;cursor:default}
-.msg{border-radius:8px;padding:12px 14px;font-size:14.5px;margin:16px 0 0;display:none}
-.msg.err{display:block;background:var(--crit-wash);color:var(--crit)}
-.msg.ok{display:block;background:var(--good-wash);color:var(--good)}
-.msg a{color:inherit;font-weight:700}
-.fine{color:var(--faint);font-size:12.5px;font-family:Archivo,system-ui,sans-serif;margin:20px 0 0;line-height:1.55}
+body{margin:0;background:var(--color-bg,#FBF8F4);color:var(--color-fg,#18191C);font-family:var(--font-sans,"Mulish",system-ui,sans-serif);font-size:16px;line-height:var(--leading-relaxed,1.65);min-height:100vh;display:grid;place-items:center;padding:24px}
+.card{background:var(--color-bg-elevated,#fff);border:1px solid var(--color-border,#E1E4E9);border-top:4px solid var(--color-brand,#EA9B60);border-radius:12px;box-shadow:0 1px 2px rgba(24,25,28,.05),0 14px 36px -18px rgba(24,25,28,.22);max-width:560px;width:100%;padding:34px 32px 28px}
+.eyebrow{font-family:var(--font-display,"Poppins",sans-serif);font-weight:600;font-size:11.5px;letter-spacing:var(--tracking-caps,.08em);text-transform:uppercase;color:var(--terracotta-700,#B96730);margin:0 0 10px}
+h1{font-family:var(--font-display,"Poppins",sans-serif);font-weight:700;font-size:30px;letter-spacing:var(--tracking-snug,-.01em);line-height:var(--leading-tight,1.1);margin:0 0 8px}
+.sub{color:var(--color-fg-muted,#53575F);font-size:15px;margin:0 0 22px}
+label{display:block;font-family:var(--font-display,"Poppins",sans-serif);font-weight:600;font-size:11.5px;letter-spacing:var(--tracking-caps,.08em);text-transform:uppercase;color:var(--color-fg-subtle,#9498A1);margin:0 0 6px}
+input{width:100%;font:inherit;font-size:16px;color:var(--color-fg,#18191C);background:var(--color-bg,#FBF8F4);border:1px solid var(--color-border,#E1E4E9);border-radius:8px;padding:12px 14px;margin:0 0 12px}
+input::placeholder{color:var(--color-fg-subtle,#9498A1)}
+input:focus-visible{outline:3px solid var(--color-focus-ring,rgba(220,130,68,.45));outline-offset:0;border-color:var(--color-border-brand,#F1BB8D)}
+.addr-group{margin:0 0 6px}
+.email-label{margin-top:10px}
+button{width:100%;font-family:var(--font-display,"Poppins",sans-serif);font-weight:600;font-size:16px;background:var(--color-brand,#EA9B60);color:var(--color-fg-on-brand,#fff);border:0;border-radius:8px;padding:14px;cursor:pointer;margin-top:8px;transition:background .15s}
+button:hover:not(:disabled){background:var(--color-brand-hover,#DC8244)}
+button:active:not(:disabled){background:var(--color-brand-press,#B96730)}
+button:disabled{background:var(--terracotta-200,#F6D3B4);color:var(--terracotta-800,#8C4D24);cursor:default}
+fieldset{border:0;padding:0;margin:0}
+fieldset:disabled input{background:var(--color-bg-sunken,#F3ECE3);color:var(--color-fg-muted,#53575F)}
+.runs{list-style:none;margin:18px 0 0;padding:0;display:none}
+.runs.show{display:block}
+.runs li{display:flex;align-items:baseline;gap:10px;border:1px solid var(--color-border,#E1E4E9);border-radius:8px;padding:10px 12px;margin:0 0 8px;background:var(--color-bg,#FBF8F4);font-size:14px}
+.runs .addr{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-fg,#18191C);font-weight:600}
+.badge{font-family:var(--font-display,"Poppins",sans-serif);font-weight:600;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.badge.wait{background:var(--warning-50,#FCF3E2);color:var(--warning-700,#9C6E15)}
+.badge.run{background:var(--info-50,#EAF1F8);color:var(--info-700,#2A567C)}
+.badge.done{background:var(--success-50,#ECF6F0);color:var(--success-700,#2C6E4C)}
+.badge.fail{background:var(--error-50,#FBEDEA);color:var(--error-700,#9B3527)}
+.runs a{color:var(--terracotta-700,#B96730);font-weight:700}
+.note{border-radius:8px;padding:11px 13px;font-size:14px;margin:14px 0 0;display:none}
+.note.err{display:block;background:var(--error-50,#FBEDEA);color:var(--error-700,#9B3527)}
+.note.ok{display:block;background:var(--success-50,#ECF6F0);color:var(--success-700,#2C6E4C)}
+.fine{color:var(--color-fg-subtle,#9498A1);font-size:12.5px;margin:20px 0 0;line-height:1.55}
 </style>
 </head>
 <body>
 <main class="card">
   <p class="eyebrow">Recast Properties · internal</p>
   <h1>Recast Analyst</h1>
-  <p class="sub">Enter a listed property's address. The analyst pulls county records, live listing data, comps, and market statistics, writes the evaluation, and emails you the report link.</p>
+  <p class="sub">Enter up to three listed property addresses. The analyst pulls county records, live listing data, comps, and market statistics for each, writes the evaluations, and emails you the report links.</p>
   <form id="f">
-    <label for="address">Property address</label>
-    <input id="address" name="address" placeholder="136 Bowling Green Ave, Red Oak, TX 75154" autocomplete="street-address" required>
-    <label for="email">Email the report to</label>
-    <input id="email" name="email" type="email" placeholder="you@recast-properties.com" required>
-    <button id="go" type="submit">Generate report</button>
+    <fieldset id="fields">
+      <div class="addr-group">
+        <label for="a1">Property address 1</label>
+        <input id="a1" placeholder="136 Bowling Green Ave, Red Oak, TX 75154" autocomplete="street-address" required>
+        <label for="a2">Property address 2 <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input id="a2" placeholder="Second address (optional)">
+        <label for="a3">Property address 3 <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input id="a3" placeholder="Third address (optional)">
+      </div>
+      <label class="email-label" for="email">Email the reports to</label>
+      <input id="email" type="email" placeholder="you@recast-properties.com" required>
+      <button id="go" type="submit">Generate reports</button>
+    </fieldset>
   </form>
-  <div id="msg" class="msg" role="status"></div>
-  <p class="fine">Reports take roughly 10–30 minutes and arrive by email; this page also updates if you leave it open. Runs are capped daily and reports go only to approved Recast addresses. Every figure is source-verified — anything unverifiable is labeled in the report.</p>
+  <ul id="runs" class="runs"></ul>
+  <div id="note" class="note" role="status"></div>
+  <p class="fine">Reports take roughly 5–30 minutes each and arrive by email; this page also updates live if you leave it open. While reports are running, new submissions wait until they finish. Runs are capped daily and reports go only to approved addresses. Every figure is source-verified — anything unverifiable is labeled in the report.</p>
 </main>
 <script>
-const f = document.getElementById('f'), msg = document.getElementById('msg'), go = document.getElementById('go');
 const EP = '/.netlify/functions/analyst-bridge';
+const $ = (id) => document.getElementById(id);
+const fields = $('fields'), runsEl = $('runs'), note = $('note'), go = $('go');
+let batch = [];      // [{address, id?, state, url?, error?}]
 let timer = null;
-try {
-  const last = localStorage.getItem('analystEmail');
-  if (last) document.getElementById('email').value = last;
-} catch {}
-f.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  go.disabled = true; msg.className = 'msg'; msg.textContent = '';
-  const address = document.getElementById('address').value.trim();
-  const email = document.getElementById('email').value.trim();
-  try { localStorage.setItem('analystEmail', email); } catch {}
-  try {
-    const r = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'submit', address, email }) });
-    const j = await r.json();
-    if (!r.ok) { msg.className = 'msg err'; msg.textContent = j.error || ('Error ' + r.status); go.disabled = false; return; }
-    if (j.status === 'existing') { msg.className = 'msg ok'; msg.innerHTML = 'A recent report already exists — emailed you the link. <a href="' + j.url + '">Open it now</a>.'; go.disabled = false; return; }
-    msg.className = 'msg ok'; msg.textContent = 'Queued. The office Mac picks it up next time it checks in — you\'ll get the email at ' + email + '.';
-    if (timer) clearInterval(timer);
-    timer = setInterval(async () => {
-      try {
-        const c = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'check', id: j.id }) });
-        const s = await c.json();
-        if (s.state === 'done' && s.url) { msg.innerHTML = 'Report ready: <a href="' + s.url + '">' + s.url + '</a> (also emailed).'; clearInterval(timer); go.disabled = false; }
-        else if (s.state === 'failed') { msg.className = 'msg err'; msg.textContent = 'The run failed — Paul\'s Mac has the log. ' + (s.detail || ''); clearInterval(timer); go.disabled = false; }
-        else if (s.state === 'running' || s.state === 'claimed') { msg.textContent = 'Running on the office Mac now' + (s.detail ? ' — ' + s.detail : '') + '…'; }
-      } catch {}
-    }, 20000);
-  } catch (err) {
-    msg.className = 'msg err'; msg.textContent = 'Network error: ' + err.message; go.disabled = false;
+
+const BADGE = { queued: ['wait','Queued'], claimed: ['run','Starting'], running: ['run','Running'], done: ['done','Ready'], failed: ['fail','Failed'], existing: ['done','Ready'], error: ['fail','Rejected'] };
+const active = () => batch.some((b) => ['queued','claimed','running'].includes(b.state));
+
+function paint() {
+  runsEl.className = 'runs' + (batch.length ? ' show' : '');
+  runsEl.innerHTML = batch.map((b) => {
+    const [cls, lbl] = BADGE[b.state] || ['wait', b.state];
+    const right = b.url ? '<a href="' + b.url + '">open report</a>' : (b.error ? '<span style="color:var(--error-700)">' + b.error + '</span>' : '');
+    return '<li><span class="addr" title="' + b.address + '">' + b.address + '</span>' + right + '<span class="badge ' + cls + '">' + lbl + '</span></li>';
+  }).join('');
+  const lock = active();
+  fields.disabled = lock;
+  go.textContent = lock ? 'Reports running — please wait' : 'Generate reports';
+  try { localStorage.setItem('analystBatch', JSON.stringify(batch.filter((b) => b.id))); } catch {}
+  if (!lock && timer) { clearInterval(timer); timer = null; }
+  if (!lock && batch.length && batch.every((b) => ['done','existing'].includes(b.state))) {
+    note.className = 'note ok'; note.textContent = 'All reports ready — links above, and in your email.';
   }
+}
+
+async function poll() {
+  for (const b of batch) {
+    if (!b.id || !['queued','claimed','running'].includes(b.state)) continue;
+    try {
+      const r = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'check', id: b.id }) });
+      const s = await r.json();
+      if (s.state) { b.state = s.state; if (s.url) b.url = s.url; if (s.state === 'failed') b.error = 'ask Paul to check the Mac log'; }
+    } catch {}
+  }
+  paint();
+}
+
+function watch() { if (!timer) timer = setInterval(poll, 20000); }
+
+$('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (active()) return;
+  note.className = 'note'; note.textContent = '';
+  const email = $('email').value.trim();
+  const addrs = ['a1','a2','a3'].map((id) => $(id).value.trim()).filter(Boolean);
+  const seen = new Set();
+  const unique = addrs.filter((a) => { const k = a.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  if (!unique.length) return;
+  try { localStorage.setItem('analystEmail', email); } catch {}
+  go.disabled = true;
+  batch = unique.map((address) => ({ address, state: 'queued' }));
+  paint();
+  for (const b of batch) {
+    try {
+      const r = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'submit', address: b.address, email }) });
+      const j = await r.json();
+      if (!r.ok) { b.state = 'error'; b.error = j.error || ('error ' + r.status); }
+      else if (j.status === 'existing') { b.state = 'existing'; b.url = j.url; }
+      else { b.id = j.id; b.state = 'queued'; }
+    } catch (err) { b.state = 'error'; b.error = 'network: ' + err.message; }
+    paint();
+  }
+  go.disabled = false;
+  paint();
+  if (active()) watch();
 });
+
+/* Restore an in-flight batch after a refresh, keeping the form locked. */
+try {
+  const savedEmail = localStorage.getItem('analystEmail');
+  if (savedEmail) $('email').value = savedEmail;
+  const saved = JSON.parse(localStorage.getItem('analystBatch') || '[]');
+  if (Array.isArray(saved) && saved.length) {
+    batch = saved;
+    paint();
+    if (active()) { poll(); watch(); }
+  }
+} catch {}
 </script>
 </body>
 </html>
