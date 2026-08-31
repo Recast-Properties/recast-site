@@ -59,6 +59,13 @@
   status = 200
   force = true
 
+# Analyst-generated reports served from Netlify Blobs. NOT forced, so the
+# hand-built static reports in reports/ keep winning; only misses hit the function.
+[[redirects]]
+  from = "/reports/*"
+  to = "/.netlify/functions/report-page/:splat"
+  status = 200
+
 # Clean listing URL -> server-rendered detail page. NOT forced, so real static
 # files under /homes/ (index.html, detail.html, *.jsx, *.js) win over this and
 # only a bare id like /homes/136bowlinggreen falls through to the function.

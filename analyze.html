@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast Analyst</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{--paper:#FBF9F6;--surface:#fff;--ink:#26231F;--soft:#524C43;--faint:#7D766B;--line:#E1DCD2;--accent:#8A4B2D;--accent-deep:#6E3A22;--wash:#F3EAE2;--crit:#9B3B30;--crit-wash:#F6E8E4;--good:#3D6B4F;--good-wash:#E7EFE7}
+@media (prefers-color-scheme:dark){:root{--paper:#18150F;--surface:#211D17;--ink:#EAE4DA;--soft:#B2A99B;--faint:#83796A;--line:#342F27;--accent:#D29A73;--accent-deep:#E0B08C;--wash:#33271E;--crit:#DB8A7B;--crit-wash:#362220;--good:#8FBC9F;--good-wash:#22312A}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.6;min-height:100vh;display:grid;place-items:center;padding:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 12px 32px -16px rgba(0,0,0,.25);max-width:520px;width:100%;padding:32px 30px 28px}
+.eyebrow{font-family:Archivo,system-ui,sans-serif;font-weight:600;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+h1{font-family:Archivo,system-ui,sans-serif;font-weight:800;font-size:30px;letter-spacing:-.01em;margin:0 0 8px}
+.sub{color:var(--soft);font-size:15px;margin:0 0 24px}
+label{display:block;font-family:Archivo,system-ui,sans-serif;font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 6px}
+input{width:100%;font:inherit;font-size:16.5px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0 0 18px}
+input:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+button{width:100%;font-family:Archivo,system-ui,sans-serif;font-weight:700;font-size:16px;background:var(--accent);color:var(--paper);border:0;border-radius:8px;padding:14px;cursor:pointer}
+button:hover{background:var(--accent-deep)}
+button:disabled{opacity:.55;cursor:default}
+.msg{border-radius:8px;padding:12px 14px;font-size:14.5px;margin:16px 0 0;display:none}
+.msg.err{display:block;background:var(--crit-wash);color:var(--crit)}
+.msg.ok{display:block;background:var(--good-wash);color:var(--good)}
+.msg a{color:inherit;font-weight:700}
+.fine{color:var(--faint);font-size:12.5px;font-family:Archivo,system-ui,sans-serif;margin:20px 0 0;line-height:1.55}
+</style>
+</head>
+<body>
+<main class="card">
+  <p class="eyebrow">Recast Properties · internal</p>
+  <h1>Recast Analyst</h1>
+  <p class="sub">Enter a listed property's address. The analyst pulls county records, live listing data, comps, and market statistics, writes the evaluation, and emails you the report link.</p>
+  <form id="f">
+    <label for="address">Property address</label>
+    <input id="address" name="address" placeholder="136 Bowling Green Ave, Red Oak, TX 75154" autocomplete="street-address" required>
+    <label for="email">Email the report to</label>
+    <input id="email" name="email" type="email" placeholder="you@recast-properties.com" required>
+    <button id="go" type="submit">Generate report</button>
+  </form>
+  <div id="msg" class="msg" role="status"></div>
+  <p class="fine">Reports take roughly 10–30 minutes and arrive by email; this page also updates if you leave it open. Runs are capped daily and reports go only to approved Recast addresses. Every figure is source-verified — anything unverifiable is labeled in the report.</p>
+</main>
+<script>
+const f = document.getElementById('f'), msg = document.getElementById('msg'), go = document.getElementById('go');
+const EP = '/.netlify/functions/analyst-bridge';
+let timer = null;
+try {
+  const last = localStorage.getItem('analystEmail');
+  if (last) document.getElementById('email').value = last;
+} catch {}
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  go.disabled = true; msg.className = 'msg'; msg.textContent = '';
+  const address = document.getElementById('address').value.trim();
+  const email = document.getElementById('email').value.trim();
+  try { localStorage.setItem('analystEmail', email); } catch {}
+  try {
+    const r = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'submit', address, email }) });
+    const j = await r.json();
+    if (!r.ok) { msg.className = 'msg err'; msg.textContent = j.error || ('Error ' + r.status); go.disabled = false; return; }
+    if (j.status === 'existing') { msg.className = 'msg ok'; msg.innerHTML = 'A recent report already exists — emailed you the link. <a href="' + j.url + '">Open it now</a>.'; go.disabled = false; return; }
+    msg.className = 'msg ok'; msg.textContent = 'Queued. The office Mac picks it up next time it checks in — you\'ll get the email at ' + email + '.';
+    if (timer) clearInterval(timer);
+    timer = setInterval(async () => {
+      try {
+        const c = await fetch(EP, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'check', id: j.id }) });
+        const s = await c.json();
+        if (s.state === 'done' && s.url) { msg.innerHTML = 'Report ready: <a href="' + s.url + '">' + s.url + '</a> (also emailed).'; clearInterval(timer); go.disabled = false; }
+        else if (s.state === 'failed') { msg.className = 'msg err'; msg.textContent = 'The run failed — Paul\'s Mac has the log. ' + (s.detail || ''); clearInterval(timer); go.disabled = false; }
+        else if (s.state === 'running' || s.state === 'claimed') { msg.textContent = 'Running on the office Mac now' + (s.detail ? ' — ' + s.detail : '') + '…'; }
+      } catch {}
+    }, 20000);
+  } catch (err) {
+    msg.className = 'msg err'; msg.textContent = 'Network error: ' + err.message; go.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
