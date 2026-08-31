@@ -92,6 +92,10 @@ Amounts policy — record what was ACTUALLY PAID: amounts must include shipping,
 
 Duplicate detection — you may be shown a list of charges already recorded in the books. Judge each item: "confirmed" duplicate when this email clearly documents a charge that is already recorded (e.g. an invoice email and a receipt email for the same payment, same vendor + amount + service period); "suspected" when it plausibly is but you cannot be sure (e.g. same vendor and amount but the receipt does not show a distinguishing date/period/invoice number); "no" otherwise. Two genuinely separate charges that happen to match (two months of the same subscription with different periods) are NOT duplicates. Explain your duplicate reasoning in that item's notes. If the receipt has no itemized list (gas, a single service charge, a hotel folio total), return one item describing the whole purchase with its pre-tax amount. If the email is not a receipt at all (marketing, shipping notice with no charges), return an empty items array with a note of why in vendor position is not needed — just items: [].
 
+Rideshare rules (Uber and Lyft RIDES — not Uber Eats or any food delivery): a ride is always ONE item, amount = everything paid including the tip. Write the description as route and time, e.g. "Uber 5:12 PM DFW Airport -> Waxahachie" — route and time are how a later receipt for the same ride gets matched, so always include them when the receipt shows them. Uber's "[Personal]" subject tag is a profile label, not a verdict on the expense. Standing owner rule: any ride whose pickup OR dropoff is an airport (an airport name or code — DFW, DAL, PDX, "International Airport", etc.) IS a business expense — category Travel, and the [Personal] tag alone must not keep such a ride from high confidence. A [Personal] ride with no airport end stays a human call: confidence at most medium, and say why in the notes. [Personal] food delivery is usually a personal expense — never high confidence.
+
+Tipped updates: Uber often sends TWO receipts for one ride — the base fare first, then an updated receipt that includes the tip. The tip-included receipt is the authoritative total; the books must hold exactly ONE row per ride, at the tipped total. If the books already show what looks like the same ride (same date, matching route/time, LOWER amount) and THIS receipt includes the tip, mark the item duplicate "suspected" with a note naming both amounts, e.g. "Tipped total $23.45 replaces the untipped $19.80 already on the sheet — fix that row to $23.45, then dismiss this card." If the books already show the ride at a HIGHER (tipped) total and this receipt is the earlier untipped version, mark it duplicate "confirmed" — the charge is already recorded. Two rides on the same day with different routes or times are separate charges, not duplicates.
+
 Categories (pick exactly one per item; "" only when you truly cannot tell):
 - Tools: durable tools & equipment — drills, saws, ladders, batteries for tools.
 - Materials: rehab/building materials & job supplies — lumber, paint, drywall, fixtures, fasteners, caulk.
@@ -309,6 +313,11 @@ const sheetAmount = (item) => {
   const n = num(item.amount);
   return (item.taxable ? n * (1 + TAX_RATE) : n).toFixed(2);
 };
+// Uber/Lyft rides (food delivery excluded) — a ride's base-fare receipt and
+// its later tip-updated receipt carry DIFFERENT amounts, so the exact-match
+// twin gates can't pair them; these helpers feed the ride-pair hold below.
+const isRideshare = (v) => { const s = clean(v).toLowerCase(); return /\b(uber|lyft)\b/.test(s) && !/eats|food|deliver/.test(s); };
+const dateDigits = (d) => clean(d).replace(/[^0-9]/g, "");
 
 // True when an item is safe to file with no human review.
 function autoFileGate(item) {
@@ -517,6 +526,7 @@ export default async (req) => {
     // seconds — envelopes are persisted immediately after each file below to
     // keep that window tiny.
     const justFiled = new Map();
+    const justFiledRides = [];   // same-day rideshare charges for the tip-pair hold
     try {
       const { blobs } = await store.list({ prefix: "msg/" });
       const cutoffT = Date.now() - 6 * 60 * 60 * 1000;
@@ -527,6 +537,9 @@ export default async (req) => {
           if ((Date.parse(it2.approvedAt) || 0) < cutoffT) continue;
           justFiled.set(clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2),
             { amount: num(it2.amount).toFixed(2), cell: clean(it2.sheetCell) });
+          if (isRideshare(it2.vendor)) {
+            justFiledRides.push({ amount: num(it2.amount), date: dateDigits(it2.date), cell: clean(it2.sheetCell) });
+          }
         }
       }
     } catch (e) {
@@ -559,6 +572,31 @@ export default async (req) => {
           console.warn(`[ingest] CONCURRENT-DUP-HOLD msg=${msgId} vendor="${item.vendor}" amount=${item.amount}`);
           pending++;
           continue;
+        }
+        // Rideshare tip pairs: Uber sends a base-fare receipt and, once the
+        // rider tips, an UPDATED receipt for the same ride at a higher total.
+        // The amounts differ, so the exact-match gates above (and the sheet
+        // writer's vendor|amount|date gate) can never pair them — and both
+        // versions often land in the same poll batch, where the 60-day context
+        // predates both. A same-day Uber/Lyft charge within a tip-sized ratio
+        // just filed from another email is held instead of filed: the sheet
+        // must keep ONE row per ride, at the tip-included total. A genuine
+        // second same-day ride gets held too — its note says to just Approve.
+        if (isRideshare(item.vendor)) {
+          const d = dateDigits(item.date), amt = num(item.amount);
+          const ride = justFiledRides.find((r) => r.date && d && r.date === d &&
+            Math.abs(r.amount - amt) > 0.005 &&
+            Math.max(r.amount, amt) <= Math.min(r.amount, amt) * 1.6);
+          if (ride) {
+            item.duplicate = "suspected";
+            item.status = "pending";
+            item.notes = clean("⚠️ A same-day rideshare charge of $" + ride.amount.toFixed(2) +
+              (ride.cell ? " (sheet " + ride.cell + ")" : "") +
+              " was just filed from another email — likely one ride's base + tipped receipt pair. Keep only the tip-included total: if THIS is the tipped one, fix that row to this amount, then Dismiss this card. Two separate rides → Approve. " + item.notes).slice(0, 300);
+            console.warn(`[ingest] RIDE-PAIR-HOLD msg=${msgId} vendor="${item.vendor}" amount=${item.amount} vs=${ride.amount}`);
+            pending++;
+            continue;
+          }
         }
         try {
           const wrote = await sheetAppend(item, msgId);

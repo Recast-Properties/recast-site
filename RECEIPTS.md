@@ -133,6 +133,23 @@ incomplete set. Everything else waits in Pending with the bookkeeper's note
 If the sheet write fails (e.g. a full block returns `BLOCKED`), the item is
 demoted to pending with the error in its note — never lost.
 
+**Rideshare rules (2026-08-31).** Paul's standing rule, baked into the prompt:
+an Uber/Lyft ride with an **airport** pickup or dropoff IS a business expense —
+category Travel, and Uber's "[Personal]" subject tag alone no longer blocks
+high confidence. Non-airport [Personal] rides still cap at medium and wait in
+Pending. Ride descriptions now carry route + time so receipts for the same
+ride can be matched later. **Tip pairs:** Uber sends a base-fare receipt and,
+once the rider tips, an updated receipt for the SAME ride — the amounts differ,
+so the exact-match twin gates never paired them. The model treats the
+tip-included total as authoritative (untipped version of an already-recorded
+tipped ride auto-dismisses; tipped version of an already-filed untipped row is
+held with a fix-that-row note), and a 4th mechanical check holds a same-day
+rideshare charge within a tip-sized ratio (≤1.6×) of one just filed by another
+email (`RIDE-PAIR-HOLD`) — closing the same-poll-batch race the 60-day context
+can't see. The writer can't edit existing rows, so the tipped-update case
+surfaces as a Pending card telling you exactly which row to fix, not a silent
+auto-repair.
+
 ### Netlify functions (`netlify/functions/`)
 
 All Netlify v2 (`.mjs`, `export default`).
@@ -328,6 +345,9 @@ stays: judge by reading the sheet; the queue is the exception lane.
 - Photos > 3 MB are shrunk via Drive; PDFs > 3 MB are skipped → review item.
 - A full category block returns BLOCKED → item waits in Pending; add rows
   under the block and Approve.
+- Two same-day rideshare charges within a tip-sized ratio: the second is held
+  as a possible base/tipped pair for one ride — fix the filed row (if this is
+  the tipped total) or Approve (if they're genuinely two rides), per the note.
 
 **If something looks wrong**: Reprocess a receipt (Operating notes above);
 `summaryToday` in the Receipts Bookkeeper project emails an on-demand digest;
@@ -336,6 +356,21 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-08-31** — **Rideshare rules: airport = business; tip-updated
+  receipts.** Prompt now carries Paul's rule that any Uber/Lyft ride with an
+  airport pickup or dropoff is a business expense — Travel, high confidence
+  allowed despite the "[Personal]" tag (non-airport [Personal] rides still cap
+  at medium). Ride descriptions carry route + time for same-ride matching.
+  Tip pairs (base-fare receipt + later tip-included receipt for one ride) dodge
+  every exact-match gate because the amounts differ — the 06/03 Uber had to be
+  hand-fixed to its tipped $113.98 on 2026-08-23. Now the model treats the
+  tipped total as authoritative (untipped duplicate of a recorded tipped ride
+  auto-dismisses; tipped update of an already-filed untipped row pends with a
+  fix-that-row note), and the ingest's pre-filing re-check holds a same-day
+  rideshare charge within ≤1.6× of one just filed by another email
+  (`RIDE-PAIR-HOLD`), closing the same-batch race. See "Rideshare rules" under
+  the autofile gate. Deployed to the alias.
 
 - **2026-08-25** — **RECAST BIZ sorted by date.** Every category block's rows
   reordered oldest-at-top, newest-at-bottom, via a new `receipts-sheet-sort.gs`
