@@ -14,7 +14,9 @@ export default async () => {
   let rows = [];
   try {
     const raw = await getStore({ name: STORE, consistency: "strong" }).get(KEY, { type: "json" });
-    if (Array.isArray(raw)) rows = raw;
+    // Same visibility rule as lib/listings.mjs: a row the admin unchecked
+    // ("hidden" = "1") never leaves the server.
+    if (Array.isArray(raw)) rows = raw.filter((r) => String((r && r.hidden) || "").trim() !== "1");
   } catch (_) { /* fall through to header-only CSV */ }
 
   const lines = [HEADERS.map(q).join(",")];

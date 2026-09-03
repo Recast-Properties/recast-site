@@ -136,7 +136,8 @@ the single source of truth.
 
 ### Listing fields
 `id, status, price, address, city, state, zip, beds, baths, sqft, lot, year,
-type, tagline, description, highlights, mlsId, agentName, agentPhone, photos`
+type, tagline, description, highlights, mlsId, agentName, agentPhone, photos,
+hidden`
 - `highlights` is stored pipe-delimited (`a|b|c`); the admin shows one per line.
 - `agentName` / `agentPhone` are the **per-property "who to call"** shown on the
   listing's orange call button. Leave both blank to use the site-wide default
@@ -144,6 +145,12 @@ type, tagline, description, highlights, mlsId, agentName, agentPhone, photos`
   stripping non-digits from `agentPhone`.
 - `photos` holds the **folder name** (= the `id`).
 - `status` is `available | pending | sold`.
+- `hidden` is `"1"` or `""` — the **Live** checkbox on each row of the listings
+  admin (and in the editor). `"1"` keeps the listing off every public surface —
+  the `/homes/` cards, its `/homes/<id>` page (404 + noindex), the sitemap, the
+  JSON-LD and the CSV feed — while the admin still shows it, dimmed. Absent on
+  rows saved before 2026-09-03, which reads as visible. `status` is a different
+  axis: a `sold` listing still shows (with its SOLD badge) unless it is hidden.
 
 ### Functions (`netlify/functions/`)
 All admin functions require the header **`x-admin-token: <ADMIN_PASSWORD>`** and
@@ -153,7 +160,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | Function | Public? | Purpose |
 |---|---|---|
 | `admin-ping.mjs` | auth | Password check (the login screen calls this). |
-| `admin-listings.mjs` | auth | `list` / `save` (upsert by id) / `delete` / `seed`. |
+| `admin-listings.mjs` | auth | `list` / `save` (upsert by id) / `delete` / `reorder` / `visibility` (flip one row's `hidden` without touching its other fields) / `seed`. |
 | `admin-photos.mjs` | auth | `list` / `add` (stage one photo) / `arrange` (set final order) / `clear`. |
 | `listings.mjs` | **public** | Read-only feed the website loads — returns the listings as **CSV**. |
 | `photo.mjs` | **public** | Serves `/photos/<folder>/<n>.jpg` from the `listing-photos` Blob store (long CDN cache w/ `stale-while-revalidate`; `HEAD` is a cheap metadata-only existence check). |
@@ -243,6 +250,18 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-09-03** — **Per-listing "Live" checkbox.** Each row of the listings
+  admin (and the editor, next to Status) has a **Live** checkbox that controls
+  whether the property appears on the public site. Stored as `hidden` = `"1"`;
+  filtered out in the two public readers — `netlify/lib/listings.mjs`
+  `readListings()` (so `/homes/`, `/homes/<id>` → 404, sitemap and JSON-LD all
+  agree) and the `listings.mjs` CSV feed — so a hidden row never leaves the
+  server. The row checkbox calls a new `visibility` action that touches only
+  that flag (`save` normalizes every field, so a partial save would have
+  blanked the rest); the editor's Save carries the flag through. Unchecked rows
+  dim in the admin. Older rows have no `hidden` field and read as visible, so
+  nothing on the site changed when this shipped.
 
 - **2026-09-03** — **Admin login is remembered.** `/admin`, `/admin/listings/`
   and `/admin/email/` kept the password in `sessionStorage`, so every new tab

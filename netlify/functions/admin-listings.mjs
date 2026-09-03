@@ -9,13 +9,20 @@
 //   { action:"reorder", ids:[...] }   -> { ok, count } (store listings in this
 //                                        id order; unmentioned ids keep their
 //                                        position at the end)
+//   { action:"visibility", id, hidden } -> { ok, id, hidden } (the list-row
+//                                        checkbox; touches ONLY that flag —
+//                                        "save" normalizes every field, so a
+//                                        partial save would blank the rest)
 //   { action:"seed", force? }         -> { ok, count } (one-time import from the
 //                                        old published Google Sheet CSV)
 import { getStore } from "@netlify/blobs";
 
 const STORE = "listings-data";
 const KEY = "listings.json";
-const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","photos"];
+// "hidden" ("1" or "") keeps a listing OUT of every public surface — cards,
+// /homes/<id> (404), sitemap, JSON-LD — while the admin still shows it. Absent
+// on older rows, which reads as visible, so nothing changed when it was added.
+const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","photos","hidden"];
 // One-time seed source: the previously-published listings sheet.
 const SEED_CSV_URL = "https://docs.google.com/spreadsheets/d/1lpCONle2BfovuOu7_9k17hYwCuDKxnvE0ddeQLdGI5k/gviz/tq?tqx=out:csv&gid=701320222";
 
@@ -33,9 +40,12 @@ async function writeAll(store, arr) {
 }
 const clean = (v) => (v == null ? "" : String(v).trim());
 
+const asHidden = (v) => (v === true || v === 1 || /^(1|true|yes|on)$/i.test(clean(v)) ? "1" : "");
+
 function normalize(listing) {
   const o = {};
   FIELDS.forEach((f) => { o[f] = clean(listing[f]); });
+  o.hidden = asHidden(listing.hidden);
   return o;
 }
 
@@ -105,6 +115,16 @@ export default async (req) => {
       byId.forEach((r) => next.push(r)); // ids the client didn't know about stay, at the end
       await writeAll(store, next);
       return Response.json({ ok: true, count: next.length });
+    }
+
+    if (body.action === "visibility") {
+      const id = clean(body.id);
+      const arr = await readAll(store);
+      const idx = arr.findIndex((r) => clean(r.id) === id);
+      if (idx < 0) return Response.json({ ok: false, error: "Listing not found: " + id }, { status: 404 });
+      arr[idx] = { ...arr[idx], hidden: asHidden(body.hidden) };
+      await writeAll(store, arr);
+      return Response.json({ ok: true, id, hidden: arr[idx].hidden === "1" });
     }
 
     if (body.action === "seed") {

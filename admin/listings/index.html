@@ -75,6 +75,13 @@
   .pill.available { background: #e3f5e9; color: #1c7a3f; }
   .pill.pending { background: #fdf0d9; color: #9a6a12; }
   .pill.sold { background: #f1f0f2; color: #53575f; }
+  /* "Live" checkbox: is this listing on the public site? Unchecked rows dim. */
+  .listing .live { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px;
+    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-600, #53575f);
+    cursor: pointer; user-select: none; }
+  .listing .live input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--terracotta-500, #d9743f); }
+  .listing.off .thumb, .listing.off .meta, .listing.off .pill { opacity: .45; }
+  .listing.off .live { color: var(--terracotta-500, #d9743f); }
 
   /* photos */
   .dropzone { border: 2px dashed var(--ink-300, #c0c3cb); border-radius: 12px; padding: 22px; text-align: center;
@@ -159,7 +166,9 @@
     <div class="card">
       <div class="row">
         <div class="field"><label>Listing ID (also the photo folder)</label><input id="f_id" placeholder="e.g. 280sparkling"><div class="hint">Lowercase, no spaces. Can't be changed after first save.</div></div>
-        <div class="field"><label>Status</label><select id="f_status"><option value="available">Available</option><option value="pending">Pending</option><option value="sold">Sold</option></select></div>
+        <div class="field"><label>Status</label><select id="f_status"><option value="available">Available</option><option value="pending">Pending</option><option value="sold">Sold</option></select>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer"><input id="f_live" type="checkbox" style="width:16px;height:16px;margin:0"> Show on the live site</label>
+          <div class="hint">Unchecked = hidden everywhere public (cards, its page, sitemap) but still here in the admin.</div></div>
       </div>
       <div class="field"><label>Street address</label><input id="f_address" placeholder="280 Sparkling Springs Dr"></div>
       <div class="row three">
@@ -283,16 +292,33 @@
     listings.forEach((row, i) => {
       const folder = (row.photos || "").trim();
       const status = (row.status || "available").toLowerCase();
+      const hidden = String(row.hidden || "").trim() === "1";
       const div = document.createElement("div");
-      div.className = "listing"; div.draggable = true; div.dataset.i = i;
+      div.className = "listing" + (hidden ? " off" : ""); div.draggable = true; div.dataset.i = i;
       div.innerHTML =
         '<span class="grip" title="Drag to reorder">⋮⋮</span>' +
         '<img class="thumb" src="' + (folder ? "/photos/" + folder + "/1.jpg" : "") + '" onerror="this.style.visibility=\'hidden\'">' +
         '<div class="meta"><div class="addr">' + esc(row.address || "(no address)") + '</div>' +
         '<div class="sub">' + esc(row.city || "") + (row.price ? " · $" + esc(row.price) : "") +
         (row.beds ? " · " + esc(row.beds) + "bd" : "") + (row.baths ? "/" + esc(row.baths) + "ba" : "") + '</div></div>' +
-        '<span class="pill ' + status + '">' + esc(status) + '</span>';
+        '<span class="pill ' + status + '">' + esc(status) + '</span>' +
+        '<label class="live" title="Show this listing on the public site"><input type="checkbox"' + (hidden ? "" : " checked") + '> Live</label>';
       div.onclick = () => openEditor(row);
+      const live = div.querySelector(".live");
+      live.onclick = (e) => e.stopPropagation(); // the label is inside the clickable row
+      live.querySelector("input").onchange = async (e) => {
+        const box = e.target; const nowHidden = !box.checked;
+        box.disabled = true;
+        try {
+          await api("admin-listings", { action: "visibility", id: row.id, hidden: nowHidden });
+          row.hidden = nowHidden ? "1" : "";
+          div.classList.toggle("off", nowHidden);
+          toast(nowHidden ? "Hidden from the live site." : "Live on the site.");
+        } catch (err) {
+          box.checked = !box.checked; // revert — the server didn't take it
+          toast(String(err.message || err), true);
+        } finally { box.disabled = false; }
+      };
       addListDrag(div);
       el.appendChild(div);
     });
@@ -333,6 +359,7 @@
     const g = (k) => (row && row[k] != null ? row[k] : "");
     $("f_id").value = g("id"); $("f_id").readOnly = !!row;
     $("f_status").value = (g("status") || "available").toLowerCase();
+    $("f_live").checked = String(g("hidden") || "").trim() !== "1"; // new listings default to live
     $("f_address").value = g("address"); $("f_city").value = g("city");
     $("f_state").value = g("state") || "TX"; $("f_zip").value = g("zip");
     $("f_price").value = g("price"); $("f_beds").value = g("beds"); $("f_baths").value = g("baths");
@@ -359,6 +386,7 @@
     return {
       id: id,
       status: $("f_status").value,
+      hidden: $("f_live").checked ? "" : "1",
       price: $("f_price").value.trim(),
       address: $("f_address").value.trim(),
       city: $("f_city").value.trim(),

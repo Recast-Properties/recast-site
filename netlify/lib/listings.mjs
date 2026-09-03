@@ -20,10 +20,15 @@ export async function readTemplate(rel) {
 const STORE = "listings-data";
 const KEY = "listings.json";
 
+// A listing the admin has unchecked ("hidden" = "1") is invisible to the public:
+// it drops out here, so /homes/, /homes/<id> (→ 404), the sitemap and the
+// JSON-LD all agree without each caller remembering to filter.
+export const isHidden = (o) => String((o && o.hidden) || "").trim() === "1";
+
 export async function readListings() {
   try {
     const raw = await getStore({ name: STORE, consistency: "strong" }).get(KEY, { type: "json" });
-    if (Array.isArray(raw)) return raw.map(normalizeListing);
+    if (Array.isArray(raw)) return raw.filter((o) => !isHidden(o)).map(normalizeListing);
   } catch (_) { /* fall through */ }
   return [];
 }
