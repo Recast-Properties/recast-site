@@ -95,13 +95,18 @@ project (Admin SDK is already on).
 
 1. Go to **recast-properties.com/admin** (laptop or phone), enter the admin
    password, and open **Listings Admin** (or go straight to
-   `recast-properties.com/admin/listings`). You stay logged in for that browser
-   session.
+   `recast-properties.com/admin/listings`). The login is remembered on that
+   device until you hit **Sign out** (since 2026-09-03).
 2. **+ New listing** — fill in the fields, drag in photos, hit **Save**. It's
    live on the site immediately. No deploy, no spreadsheet.
 3. **Click any listing** to edit it — change text, add/remove/reorder photos
    (the first photo is the cover), then **Save**.
-4. **Delete** removes the listing and all its photos.
+4. **Live checkbox** (right end of every row) — untick it and the property
+   disappears from the public site everywhere (cards, its own page, sitemap)
+   but stays here, dimmed. Tick it to put it back. Saves on click.
+5. **View live site ↗** (pill beside the "Listings" heading) opens the public
+   `/homes/` page in a new tab to check what visitors see.
+6. **Delete** removes the listing and all its photos.
 
 **The Listing ID** doubles as the photo folder name (e.g. `104ashburne`). Pick a
 short, lowercase, no-spaces id when you create a listing; it can't be changed
@@ -261,7 +266,9 @@ public on the live site, so nothing secret is exposed; the password only gates
   that flag (`save` normalizes every field, so a partial save would have
   blanked the rest); the editor's Save carries the flag through. Unchecked rows
   dim in the admin. Older rows have no `hidden` field and read as visible, so
-  nothing on the site changed when this shipped.
+  nothing on the site changed when this shipped. Same day: a **View live site
+  ↗** pill beside the "Listings" heading, right-aligned with the cards, opens
+  the public `/homes/` page in a new tab.
 
 - **2026-09-03** — **Admin login is remembered.** `/admin`, `/admin/listings/`
   and `/admin/email/` kept the password in `sessionStorage`, so every new tab
