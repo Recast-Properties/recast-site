@@ -244,12 +244,12 @@ totals and neighboring blocks shift automatically).
 The morning email and the Filed tab show the sheet cell each item landed in —
 edit the row on the sheet directly. (Filed items are read-only in the queue.)
 
-### Repoint old Link cells at Gmail (one-time, after 2026-09-03)
-Rows filed 2026-08-22 → 09-03 link to the stored-copy viewer. In the
-**Receipts Sheet Writer** project run `relinkToGmail_DRYRUN` (logs the count
-and the first cells it would change), then `relinkToGmail_LIVE`. It rewrites
-only `HYPERLINK` formulas that contain `view.html?m=`; a second LIVE run finds
-0. The queue page needs no migration — it prefers the envelope's Gmail URL.
+### Repoint old Link cells at Gmail — DONE 2026-09-03
+Rows filed 2026-08-22 → 09-03 linked to the stored-copy viewer; Paul ran
+`relinkToGmail_DRYRUN` then `relinkToGmail_LIVE` in the **Receipts Sheet
+Writer** project and every Link now opens Gmail. The functions stay in the
+writer: they rewrite only `HYPERLINK` formulas containing `view.html?m=`, so a
+re-run is a safe no-op (finds 0) if a viewer link ever reappears.
 
 ### Re-sort a block that has drifted out of date order
 Rows are appended in the order receipts are PROCESSED, so a backfill or a
@@ -324,7 +324,10 @@ edits do Deploy → Manage deployments → ✏️ → New version.
 
 ## STATUS — LIVE since 2026-08-22 (~3:30 PM Central)
 
-**The bookkeeper is in production.** Writer v7 points at **RECAST BIZ**;
+**The bookkeeper is in production.** Writer **v10** (deployment `@10`, the
+first version with the sheet-based duplicate check actually live — see
+2026-09-03 in the change log) points at **RECAST BIZ**; every receipt link
+opens the Gmail message;
 triggers: `pollReceipts` every 15 min, `dailySummary` daily 3–4 AM Central
 (Paul wants the digest waiting first thing). Go-live drain: the live poller
 was run by hand until empty — ~190 messages across receipts@ + travel@ within
@@ -375,8 +378,9 @@ ones would simply vanish from the queue).
   the fallback when a record has no Gmail URL. Old queue records need no
   migration: `receipts-data` prefers the envelope's Gmail URL over the item's
   stored `sourceUrl` on both list and Approve. Old **sheet** rows do —
-  `relinkToGmail_DRYRUN` / `relinkToGmail_LIVE` in the writer (see Operating
-  notes). The stored copies under `file/<msgId>/*` are still written.
+  `relinkToGmail_DRYRUN` / `relinkToGmail_LIVE` in the writer — **run by Paul
+  the same day; all existing rows now open Gmail.** The stored copies under
+  `file/<msgId>/*` are still written.
 
 - **2026-09-03** — **The sheet-based duplicate check was never actually live —
   now deployed (writer v10).** The 2026-08-25 note suspected the deployed
