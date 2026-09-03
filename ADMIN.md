@@ -12,8 +12,9 @@ nothing else.
 ## The admin hub (since 2026-08-11)
 
 **`/admin` is the landing page for all internal tools.** One password
-(`ADMIN_PASSWORD`), one session (`sessionStorage` key `recast_admin_token`
-shared by every page — sign in once, use them all):
+(`ADMIN_PASSWORD`), one remembered login (`localStorage` key
+`recast_admin_token`, shared by every page and by `/receipts` — sign in once
+on a device and it stays signed in until **Sign out**):
 
 | URL | Tool |
 |---|---|
@@ -242,6 +243,15 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-09-03** — **Admin login is remembered.** `/admin`, `/admin/listings/`
+  and `/admin/email/` kept the password in `sessionStorage`, so every new tab
+  or browser restart asked for it again. Switched to `localStorage` (reading
+  the old `sessionStorage` key as a fallback so an open session isn't logged
+  out by the deploy), matching what `/receipts` has done since 2026-08-21.
+  **Sign out** clears both. The stored value is still the password itself,
+  validated against `admin-ping` on every page load — a wrong or rotated
+  password just lands on the login screen.
 
 - **2026-08-12** — **Group model verified live** end to end (create `testremove@`
   + remove, all steps green). One hiccup found and fixed: Google's members call

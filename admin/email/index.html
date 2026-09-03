@@ -186,7 +186,7 @@
   const $ = (id) => document.getElementById(id);
   const FN = "/.netlify/functions/";
   const DOMAIN = "recast-properties.com";
-  let token = sessionStorage.getItem("recast_admin_token") || "";
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
 
   async function api(body) {
     const res = await fetch(FN + "email-setup", {
@@ -201,13 +201,13 @@
     return data;
   }
 
-  // ---- auth (same pattern + sessionStorage key as /admin) ----
+  // ---- auth (same pattern + localStorage key as /admin) ----
   async function tryLogin(pw) {
     const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
     return res.ok;
   }
   function signOut() {
-    token = ""; sessionStorage.removeItem("recast_admin_token");
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
   }
   async function showApp() {
@@ -221,7 +221,7 @@
     $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
     try {
       if (await tryLogin(pw)) {
-        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        token = pw; localStorage.setItem("recast_admin_token", pw);
         $("pw").value = "";
         await showApp();
       } else {

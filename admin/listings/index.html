@@ -209,7 +209,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const FN = "/.netlify/functions/";
-  let token = sessionStorage.getItem("recast_admin_token") || "";
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
   let listings = [];
   let current = null;        // listing being edited (null = new)
   let photoItems = [];       // [{type:'keep',index} | {type:'new',dataUrl}], each with .src for preview
@@ -244,7 +244,7 @@
     return res.ok;
   }
   function signOut() {
-    token = ""; sessionStorage.removeItem("recast_admin_token");
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
     $("app").classList.add("hidden"); $("editor").classList.add("hidden"); $("login").classList.remove("hidden");
   }
   $("loginBtn").onclick = async () => {
@@ -253,7 +253,7 @@
     $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
     try {
       if (await tryLogin(pw)) {
-        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        token = pw; localStorage.setItem("recast_admin_token", pw);
         $("pw").value = ""; // clear so Chrome stops re-prompting to save it
         $("login").classList.add("hidden");
         await showList();

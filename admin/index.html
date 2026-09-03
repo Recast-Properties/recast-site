@@ -129,14 +129,14 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const FN = "/.netlify/functions/";
-  let token = sessionStorage.getItem("recast_admin_token") || "";
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
 
   async function tryLogin(pw) {
     const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
     return res.ok;
   }
   function signOut() {
-    token = ""; sessionStorage.removeItem("recast_admin_token");
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
   }
   function showApp() {
@@ -148,7 +148,7 @@
     $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
     try {
       if (await tryLogin(pw)) {
-        token = pw; sessionStorage.setItem("recast_admin_token", pw);
+        token = pw; localStorage.setItem("recast_admin_token", pw);
         $("pw").value = ""; // clear so Chrome stops re-prompting to save it
         showApp();
       } else {
