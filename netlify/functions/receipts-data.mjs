@@ -17,6 +17,12 @@
 // each ingest writes only its own key, so there is no read-modify-write race.
 // This API mutates one envelope at a time, located via the item's sourceMsgId.
 //
+// Receipt links: every link the queue shows and the sheet stores points at the
+// Gmail message itself (envelope.gmailUrl). Items ingested 2026-08-22 → 09-03
+// carry the stored-copy viewer in item.sourceUrl instead; receiptLink() prefers
+// the envelope's Gmail URL so those old records link to the email too, with
+// no data migration.
+//
 // POST JSON (header x-admin-token == ADMIN_PASSWORD):
 //   { action:"list" }                                   -> { ok, rows }
 //   { action:"seed", force? }                           -> { ok, count }
@@ -127,6 +133,10 @@ async function findItem(store, id, sourceMsgId) {
   return null;
 }
 
+// The link a receipt should open: the Gmail message, falling back to whatever
+// the item recorded (the stored-copy viewer for 2026-08-22 → 09-03 records).
+const receiptLink = (env, it) => clean(env && env.gmailUrl) || clean(it && it.sourceUrl);
+
 // Flatten envelopes into UI rows. A still-processing (or crashed-pre-items)
 // envelope surfaces as one synthetic read-only row so nothing is invisible.
 function toRows(envelopes) {
@@ -134,7 +144,7 @@ function toRows(envelopes) {
   for (const env of envelopes) {
     const items = Array.isArray(env.items) ? env.items : [];
     for (const it of items) {
-      rows.push({ ...normalize(it), sourceMsgId: clean(it.sourceMsgId) || clean(env.msgId), emailUrl: clean(env.gmailUrl), envStatus: env.status || "done" });
+      rows.push({ ...normalize(it), sourceUrl: receiptLink(env, it), sourceMsgId: clean(it.sourceMsgId) || clean(env.msgId), emailUrl: clean(env.gmailUrl), envStatus: env.status || "done" });
     }
     if (env.status === "processing" && items.length === 0) {
       rows.push({
@@ -225,7 +235,7 @@ export default async (req) => {
               vendor: item.vendor,
               date: item.date,
               item: item.item,
-              link: item.sourceUrl,        // clickable link to the source email
+              link: receiptLink(hit.env, item), // clickable link to the source email
               amount: sheetAmount(item),   // tax-inclusive when taxable
               subtotal: item.amount,
               taxable: item.taxable,

@@ -147,10 +147,12 @@ function buildContent(payload) {
   return content;
 }
 
-// Save the receipt itself (attachments + email text) so the queue page, the
-// sheet Link column, and the morning email can show the actual receipt with
-// one click (via receipts/view.html + receipts-file.mjs) instead of a Gmail
-// search. Keys: file/<msgId>/<n> (base64 in the blob, mime in metadata).
+// Keep a stored copy of the receipt (attachments + email text) under
+// file/<msgId>/<n> (base64 in the blob, mime in metadata), served by
+// receipts/view.html + receipts-file.mjs. Since 2026-09-03 this is only the
+// FALLBACK link target: every link points at the Gmail message itself (Paul
+// found the viewer's plain-text rendering of an email receipt unhelpful and
+// wants the real email). The copy survives if a message ever leaves Gmail.
 async function saveReceiptFiles(store, msgId, body) {
   const files = [];
   let i = 0;
@@ -458,9 +460,12 @@ export default async (req) => {
       if (m === "image/heic" || m === "image/heif") await convertHeic(att);
     }
 
-    // Keep a copy of the receipt itself; every link points at the viewer.
+    // Keep a stored copy of the receipt, then decide the link every item and
+    // the sheet's Link column will carry: the Gmail message itself, with the
+    // viewer only as the fallback for a record that has no Gmail URL.
     envelope.files = await saveReceiptFiles(store, msgId, body);
     const viewerUrl = VIEWER_BASE + encodeURIComponent(msgId);
+    const receiptUrl = envelope.gmailUrl || viewerUrl;
     await store.setJSON(key, envelope);
 
     const client = new Anthropic();
@@ -483,7 +488,7 @@ export default async (req) => {
           duplicate: clean(it.duplicate) || "no",
           notes: it.notes,
           channel,
-          sourceUrl: viewerUrl,
+          sourceUrl: receiptUrl,
           sourceMsgId: msgId,
         }));
     }
@@ -512,7 +517,7 @@ export default async (req) => {
     if (!items.length && !isEmpty) {
       console.warn(`[ingest] NO-ITEMS -> review placeholder msg=${msgId} subject="${envelope.subject}" atts=${attCount}`);
       items = [reviewPlaceholder(body, msgId, channel, "Claude could not extract line items")];
-      items[0].sourceUrl = viewerUrl;
+      items[0].sourceUrl = receiptUrl;
     }
 
     // Fresh view of what OTHER ingests filed/approved in the last hours. This

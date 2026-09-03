@@ -220,7 +220,9 @@ toward the Travel category — not forced.
 **The sheet:** id `1isEbfNKPO32Wpf08EtLkNHX85c0rTIl8tpH9bUdgQbs`, tab `RECAST
 BIZ`. Each category is a 5-column block (Vendor | Date | Description | Link |
 Price) under a header row carrying the running total; Link is a `HYPERLINK` to
-the source email. ⚠️ The June-2026 Link-column migration missed the **Tools**
+the **Gmail message itself** (`mail.google.com/mail/u/0/#all/<messageId>`) —
+Paul's call 2026-09-03; the stored-copy viewer at `receipts/view.html` is now
+only the fallback for a record with no Gmail URL. ⚠️ The June-2026 Link-column migration missed the **Tools**
 block on RECAST BIZ (it is still 4-wide, price in its 4th column) — the writer
 assumes 5-wide, so **at go-live insert one column left of Tools' price column**
 (done on TEST 2026-08-21: right-click the price column → Insert 1 column left;
@@ -241,6 +243,13 @@ totals and neighboring blocks shift automatically).
 ### Fix a wrongly auto-filed item
 The morning email and the Filed tab show the sheet cell each item landed in —
 edit the row on the sheet directly. (Filed items are read-only in the queue.)
+
+### Repoint old Link cells at Gmail (one-time, after 2026-09-03)
+Rows filed 2026-08-22 → 09-03 link to the stored-copy viewer. In the
+**Receipts Sheet Writer** project run `relinkToGmail_DRYRUN` (logs the count
+and the first cells it would change), then `relinkToGmail_LIVE`. It rewrites
+only `HYPERLINK` formulas that contain `view.html?m=`; a second LIVE run finds
+0. The queue page needs no migration — it prefers the envelope's Gmail URL.
 
 ### Re-sort a block that has drifted out of date order
 Rows are appended in the order receipts are PROCESSED, so a backfill or a
@@ -356,6 +365,18 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-09-03** — **Receipt links now open the Gmail message, not the
+  stored-copy viewer.** Paul's call: the viewer (`receipts/view.html`) rendered
+  an emailed receipt as its plain-text body, which is not the receipt he wants
+  to see. Every link — the sheet's Link column, the queue's 🧾, the review
+  placeholder — now carries `envelope.gmailUrl`
+  (`mail.google.com/mail/u/0/#all/<messageId>`), with the viewer kept only as
+  the fallback when a record has no Gmail URL. Old queue records need no
+  migration: `receipts-data` prefers the envelope's Gmail URL over the item's
+  stored `sourceUrl` on both list and Approve. Old **sheet** rows do —
+  `relinkToGmail_DRYRUN` / `relinkToGmail_LIVE` in the writer (see Operating
+  notes). The stored copies under `file/<msgId>/*` are still written.
 
 - **2026-09-03** — **The sheet-based duplicate check was never actually live —
   now deployed (writer v10).** The 2026-08-25 note suspected the deployed

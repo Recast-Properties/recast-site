@@ -348,6 +348,52 @@ function addLinkColumns_(tabName) {
   return done;
 }
 
+// ---- one-time migration: repoint Link cells from the stored-copy viewer to Gmail
+// The bookkeeper's first ten days (2026-08-22 → 09-03) wrote every Link as
+// receipts/view.html?m=<gmailMessageId>. Paul wants the real email instead, so
+// new rows now link to https://mail.google.com/mail/u/0/#all/<id>, and this
+// rewrites the existing ones — same message id, different host. Formulas only:
+// values, number formats and every other cell are untouched, and a cell whose
+// HYPERLINK already points elsewhere is left alone. Run DRYRUN first (it logs
+// the count and the first cells it would change), then LIVE. Idempotent: a
+// second LIVE run finds 0.
+
+const VIEWER_LINK_RE = /view\.html\?m=([A-Za-z0-9%._-]+)/;
+const GMAIL_MSG_URL = 'https://mail.google.com/mail/u/0/#all/';
+
+function relinkToGmail_DRYRUN() { return relinkToGmail_(CONFIG.TAB_NAME, true); }
+function relinkToGmail_LIVE()   { return relinkToGmail_(CONFIG.TAB_NAME, false); }
+
+function relinkToGmail_(tabName, dryRun) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error('Tab not found: ' + tabName);
+
+  const formulas = sheet.getDataRange().getFormulas();
+  const changes = [];
+  for (let r = 0; r < formulas.length; r++) {
+    for (let c = 0; c < formulas[r].length; c++) {
+      const f = formulas[r][c];
+      if (!f || f.indexOf('HYPERLINK') === -1) continue;
+      const m = f.match(VIEWER_LINK_RE);
+      if (!m) continue;
+      const id = decodeURIComponent(m[1]);
+      const next = f.replace(/"[^"]*view\.html\?m=[^"]*"/, '"' + GMAIL_MSG_URL + id + '"');
+      if (next !== f) changes.push({ row: r + 1, col: c + 1, to: next });
+    }
+  }
+
+  console.log((dryRun ? '[DRY RUN] ' : '') + tabName + ': ' + changes.length + ' Link cell(s) point at the viewer');
+  changes.forEach(function (ch, i) {
+    const a1 = sheet.getRange(ch.row, ch.col).getA1Notation();
+    if (i < 25) console.log((dryRun ? 'would relink ' : 'relinking ') + a1 + ' -> ' + ch.to);
+    if (!dryRun) sheet.getRange(ch.row, ch.col).setFormula(ch.to);
+  });
+  if (changes.length > 25) console.log('… and ' + (changes.length - 25) + ' more');
+  if (!dryRun) SpreadsheetApp.flush();
+  return { tab: tabName, found: changes.length, changed: dryRun ? 0 : changes.length };
+}
+
 // ---- shared -----------------------------------------------------------------
 
 function clean_(value) {
