@@ -357,6 +357,44 @@ ones would simply vanish from the queue).
 
 ## Change log
 
+- **2026-09-03** — **The sheet-based duplicate check was never actually live —
+  now deployed (writer v10).** The 2026-08-25 note suspected the deployed
+  writer didn't match local `receipts-sheet.gs`. Verified with clasp: the
+  remote **source** is byte-identical to local (MD5 `d32db22…`), and a
+  version 9 titled "restore readRecent + blockHasRow_ via clasp" already
+  existed — but the **web-app deployment was still pinned to version 8**.
+  An Apps Script `/exec` URL serves a pinned version, not HEAD, so production
+  had been running v8 since the v8 work landed on 2026-08-24: no `readRecent_`,
+  no `blockHasRow_`.
+
+  What that meant in practice: every ingest's `sheetBooksContext()` POSTed
+  `action:"readRecent"` to a deployment that doesn't implement it, so the call
+  fell through to `append_` and came back `Missing category` (400). That
+  function catches and returns `""`, so the failure was silent — Claude judged
+  duplicates on the **queue-only** view for ten days, blind to every row typed
+  onto the sheet by hand (exactly the case v8 was built to cover). The
+  deterministic `blockHasRow_` backstop never ran either. Plausibly explains
+  part of the Jan–May backfill duplicate noise in STATUS.
+
+  Fix: cut version 10 from HEAD (identical to local) and repointed deployment
+  `AKfycbyh2Yc…` from `@8` to `@10`. Reversible with `-V 8`.
+
+  **Expect more Pending cards for a few days** — the sheet check is now
+  catching charges it previously couldn't see. It fails safe: `blockHasRow_`
+  only ever returns 409, which the ingest turns into a held Pending item, never
+  a dropped one; human Approve sends `force:true` and bypasses it.
+
+  **Lesson for next time: `clasp push` is not a deploy.** Pushing updates HEAD;
+  the live `/exec` URL keeps serving whatever version its deployment is pinned
+  to. After any writer change, run `clasp list-deployments` and confirm the
+  versioned deployment moved — a push alone is inert.
+
+  Also noted: `clasp list-scripts` shows only the "RECAST BIZ Sorter" project,
+  because clasp's `drive.file` scope only sees projects clasp itself created.
+  The hand-made projects are invisible to it, so their Script IDs have to come
+  from script.google.com. Receipts Sheet Writer is
+  `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u`.
+
 - **2026-08-31** — **Rideshare rules: airport = business; tip-updated
   receipts.** Prompt now carries Paul's rule that any Uber/Lyft ride with an
   airport pickup or dropoff is a business expense — Travel, high confidence
