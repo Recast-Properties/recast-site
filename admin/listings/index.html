@@ -28,9 +28,11 @@
   .brand img { height: 28px; display: block; }
   .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
     color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
-  .title-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  .title-row .site-link { font-size: 13px; font-weight: 700; color: var(--terracotta-500, #d9743f); text-decoration: none; }
-  .title-row .site-link:hover { text-decoration: underline; }
+  /* Heading on the left, live-site pill flush with the right edge of the cards */
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+  .title-row .page-title { margin: 0; }
+  .site-link { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; text-decoration: none;
+    color: var(--ink-800, #2a2c31); }
   .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
     margin: 2px 0 16px; color: var(--ink-900, #18191c); }
   .page-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -146,7 +148,7 @@
   <div class="wrap">
     <div class="title-row">
       <h1 class="page-title">Listings</h1>
-      <a class="site-link" href="https://recast-properties.com/homes/" target="_blank" rel="noopener">View live site ↗</a>
+      <a class="btn sm site-link" href="https://recast-properties.com/homes/" target="_blank" rel="noopener">View live site ↗</a>
     </div>
     <div id="list"></div>
     <p id="listEmpty" class="muted hidden">No listings yet.</p>
