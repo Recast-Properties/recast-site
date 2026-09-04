@@ -348,6 +348,7 @@
     if (e === "seed") b.push('<span class="src seed">Test item</span>');
     if (r.confidence && r.status !== "processing") b.push('<span class="conf ' + esc(r.confidence) + '">' + esc(r.confidence) + " confidence</span>");
     if (r.duplicate === "suspected") b.push('<span class="src dup">Possible duplicate</span>');
+    if (r.txnId) b.push('<span class="src" title="Transaction / order / invoice number on the receipt">txn #' + esc(r.txnId) + "</span>");
     if (r.channel === "travel") b.push('<span class="src travel">Travel</span>');
     if (r.autoFiled) b.push('<span class="src auto">auto-filed</span>');
     if (r.sheetCell) b.push('<span class="cell">→ sheet ' + esc(r.sheetCell) + "</span>");

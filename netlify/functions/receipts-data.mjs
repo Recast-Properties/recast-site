@@ -64,6 +64,7 @@ function normalize(it) {
     taxable: asBool(it.taxable, true),
     confidence: clean(it.confidence),
     duplicate: clean(it.duplicate),
+    txnId: clean(it.txnId),   // the receipt's own transaction/order/invoice number
     notes: clean(it.notes),
     channel: clean(it.channel) || "receipts",
     sourceUrl: clean(it.sourceUrl),

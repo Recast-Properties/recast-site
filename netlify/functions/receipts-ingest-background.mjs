@@ -59,10 +59,11 @@ const senderName = (from) => {
 const EXTRACT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["vendor", "date", "subtotal", "items"],
+  required: ["vendor", "date", "transactionId", "subtotal", "items"],
   properties: {
     vendor: { type: "string", description: "Store/merchant name, '' if unknown" },
     date: { type: "string", description: "Purchase date MM/DD/YY, '' if unknown" },
+    transactionId: { type: "string", description: "The receipt's own transaction / order / invoice / confirmation / payment / trip number, exactly as printed (digits, letters, dashes); '' if the receipt shows none" },
     subtotal: { type: "number", description: "The receipt's stated pre-tax subtotal (or pre-tax total if no subtotal line); 0 if the receipt shows none" },
     items: {
       type: "array",
@@ -89,6 +90,10 @@ const SYSTEM_PROMPT = `You are the automated bookkeeper for Recast Properties, a
 Extract EVERY purchased line item — completeness is critical: your item amounts are reconciled against the "subtotal" field, and a receipt with missing lines corrupts the books.
 
 Amounts policy — record what was ACTUALLY PAID: amounts must include shipping, delivery fees, airline taxes and carrier fees, tips, out-of-state taxes — everything the business was charged — EXCLUDING ONLY Texas sales tax (the system re-adds 8.25% per taxable item, so TX sales tax must never be inside an amount). If a receipt includes shipping/delivery/handling charges, do NOT itemize it: return ONE item summarizing the whole purchase (name the main products in the description) with the full amount paid. Restaurant/food/drink receipts are NEVER itemized: one line ("Meal at <restaurant>") with the full amount paid including tip (still excluding TX sales tax). Itemize only product receipts without shipping (e.g. in-store hardware/materials purchases). Never include TX-sales-tax, subtotal, or total lines as items. Set "subtotal" to the amount charged minus any TX sales tax (i.e. what your item amounts should sum to); 0 if it cannot be determined.
+
+Transaction numbers are decisive. Every receipt with a transaction, order, invoice, confirmation, payment or trip number must return it in "transactionId" exactly as printed. The recently processed receipts you are shown carry their numbers too (the "txn" column). If this receipt's number matches one of them, this IS the same charge — duplicate "confirmed" — no matter how the emails differ. If the numbers are both present and DIFFERENT, these are separate charges — duplicate "no" — even when vendor, amount and date all match (a $5 top-up that recurs, two same-day orders); do not lower confidence for that, just state the two numbers in the notes. Only fall back to judging by vendor/amount/date when one side has no number.
+
+Category precedent: when the books already show this vendor under a category, use that category and treat it as certain — the owner chose it. Do not drop to medium because another category is arguable.
 
 Duplicate detection — you may be shown a list of charges already recorded in the books. Judge each item: "confirmed" duplicate when this email clearly documents a charge that is already recorded (e.g. an invoice email and a receipt email for the same payment, same vendor + amount + service period); "suspected" when it plausibly is but you cannot be sure (e.g. same vendor and amount but the receipt does not show a distinguishing date/period/invoice number); "no" otherwise. Two genuinely separate charges that happen to match (two months of the same subscription with different periods) are NOT duplicates. Explain your duplicate reasoning in that item's notes. If the receipt has no itemized list (gas, a single service charge, a hotel folio total), return one item describing the whole purchase with its pre-tax amount. If the email is not a receipt at all (marketing, shipping notice with no charges), return an empty items array with a note of why in vendor position is not needed — just items: [].
 
@@ -234,7 +239,7 @@ async function recentItemsContext(store) {
         if (it.status === "dismissed") continue;
         const t = Date.parse(it.approvedAt || it.receivedAt) || 0;
         if (t < cutoff) continue;
-        lines.push(clean(it.vendor) + " | " + clean(it.date) + " | " + clean(it.item).slice(0, 60) + " | $" + clean(it.amount) + " | " + it.status);
+        lines.push(clean(it.vendor) + " | " + clean(it.date) + " | " + clean(it.item).slice(0, 60) + " | $" + clean(it.amount) + " | " + it.status + " | txn " + (clean(it.txnId) || "-"));
       }
     }
     return lines.slice(-60).join("\n");
@@ -261,7 +266,7 @@ async function extractReceipt(client, payload, useSchema, recentContext) {
   }
   if (recentContext && recentContext.queue) {
     content.push({ type: "text", text:
-      "--- Recently processed receipts (queue records, last 60 days; status shown) ---\n" + recentContext.queue });
+      "--- Recently processed receipts (queue records, last 60 days: vendor | date | description | amount | status | txn number) ---\n" + recentContext.queue });
   }
   const messages = [{ role: "user", content }];
   const req = {
@@ -334,7 +339,7 @@ function autoFileGate(item) {
 // writer's serialized duplicate gate rejected it (same vendor+amount+date
 // already written by another message — the caller holds the item for review),
 // or throws on a real error.
-async function sheetAppend(item, msgId) {
+async function sheetAppend(item, msgId, force) {
   const sheetUrl = process.env.RECEIPTS_SHEET_URL || "";
   if (!sheetUrl) throw new Error("RECEIPTS_SHEET_URL not set");
   const res = await fetch(sheetUrl, {
@@ -352,6 +357,7 @@ async function sheetAppend(item, msgId) {
       subtotal: item.amount,
       taxable: item.taxable,
       msgId,                      // lets the writer allow same-receipt repeats
+      force: !!force,             // transaction number proved it a separate charge
     }),
   });
   let j = {};
@@ -372,6 +378,7 @@ function makeItem(base) {
     taxable: base.taxable !== false,
     confidence: clean(base.confidence) || "low",
     duplicate: clean(base.duplicate) || "no",
+    txnId: clean(base.txnId),
     notes: sanitizeNote(base.notes),
     channel: clean(base.channel) || "receipts",
     sourceUrl: clean(base.sourceUrl),
@@ -486,6 +493,7 @@ export default async (req) => {
           category: CATEGORIES.includes(it.category) ? it.category : "",
           confidence: it.confidence,
           duplicate: clean(it.duplicate) || "no",
+          txnId: parsed.transactionId,
           notes: it.notes,
           channel,
           sourceUrl: receiptUrl,
@@ -532,12 +540,21 @@ export default async (req) => {
     // keep that window tiny.
     const justFiled = new Map();
     const justFiledRides = [];   // same-day rideshare charges for the tip-pair hold
+    // Transaction numbers settle what vendor+amount cannot (2026-09-03, Paul:
+    // "you should be smart enough to check the transaction numbers"). Every
+    // non-dismissed record from another email, keyed vendor|amount, with its
+    // number — compared below before any twin hold fires.
+    const knownTxns = new Map();   // vendor|amount -> [{ txnId, cell, status }]
     try {
       const { blobs } = await store.list({ prefix: "msg/" });
       const cutoffT = Date.now() - 6 * 60 * 60 * 1000;
       const others = await Promise.all((blobs || []).filter((b) => b.key !== key).map((b) => store.get(b.key, { type: "json" })));
       for (const env2 of others) {
         for (const it2 of (env2 && env2.items) || []) {
+          if (it2.status === "dismissed") continue;
+          const k2 = clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2);
+          if (!knownTxns.has(k2)) knownTxns.set(k2, []);
+          knownTxns.get(k2).push({ txnId: clean(it2.txnId), cell: clean(it2.sheetCell), status: it2.status });
           if (it2.status !== "filed" && it2.status !== "approved") continue;
           if ((Date.parse(it2.approvedAt) || 0) < cutoffT) continue;
           justFiled.set(clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2),
@@ -569,7 +586,37 @@ export default async (req) => {
         continue;
       }
       if (autoFileGate(item)) {
-        const twin = justFiled.get(clean(item.vendor).toLowerCase() + "|" + num(item.amount).toFixed(2));
+        const k = clean(item.vendor).toLowerCase() + "|" + num(item.amount).toFixed(2);
+        // Transaction-number verdict against every known record with this
+        // vendor+amount: "same" = this exact charge is already recorded →
+        // auto-dismiss; "distinct" = every prior record carries a number and
+        // none is this one → a separate charge, so the twin holds AND the
+        // writer's vendor|amount|date gate are bypassed (force). Anything
+        // less certain falls through to the holds below as before. Rideshare
+        // is excluded: a ride's base and tipped receipts describe one trip,
+        // and whatever number the model pulls from them is not proof either way.
+        const priors = knownTxns.get(k) || [];
+        let verdict = "unknown";
+        if (item.txnId && priors.length && !isRideshare(item.vendor)) {
+          if (priors.some((p) => p.txnId && p.txnId === item.txnId)) verdict = "same";
+          else if (priors.every((p) => p.txnId)) verdict = "distinct";
+        }
+        if (verdict === "same") {
+          const hit = priors.find((p) => p.txnId === item.txnId);
+          item.duplicate = "confirmed";
+          item.status = "dismissed";
+          item.notes = clean("Auto-dismissed: transaction #" + item.txnId + " is already recorded" + (hit.cell ? " (sheet " + hit.cell + ")" : hit.status === "pending" ? " (waiting in Pending)" : "") + ". " + item.notes).slice(0, 300);
+          console.warn(`[ingest] TXN-SAME-DISMISS msg=${msgId} vendor="${item.vendor}" amount=${item.amount} txn=${item.txnId}`);
+          dismissed++;
+          continue;
+        }
+        const forceDistinct = verdict === "distinct";
+        if (forceDistinct) {
+          const others = priors.map((p) => "#" + p.txnId + (p.cell ? " (" + p.cell + ")" : "")).slice(0, 3).join(", ");
+          item.notes = clean("Transaction #" + item.txnId + " differs from " + others + " already recorded — separate charge. " + item.notes).slice(0, 300);
+          console.log(`[ingest] TXN-DISTINCT-FILE msg=${msgId} vendor="${item.vendor}" amount=${item.amount} txn=${item.txnId} vs=${priors.map((p) => p.txnId).join(",")}`);
+        }
+        const twin = forceDistinct ? null : justFiled.get(k);
         if (twin) {
           item.duplicate = "suspected";
           item.status = "pending";
@@ -587,7 +634,7 @@ export default async (req) => {
         // just filed from another email is held instead of filed: the sheet
         // must keep ONE row per ride, at the tip-included total. A genuine
         // second same-day ride gets held too — its note says to just Approve.
-        if (isRideshare(item.vendor)) {
+        if (isRideshare(item.vendor) && !forceDistinct) {
           const d = dateDigits(item.date), amt = num(item.amount);
           const ride = justFiledRides.find((r) => r.date && d && r.date === d &&
             Math.abs(r.amount - amt) > 0.005 &&
@@ -604,7 +651,7 @@ export default async (req) => {
           }
         }
         try {
-          const wrote = await sheetAppend(item, msgId);
+          const wrote = await sheetAppend(item, msgId, forceDistinct);
           if (wrote.duplicate) {
             // The writer's serialized gate saw this charge land from another
             // message — the airtight backstop for twins racing within seconds.

@@ -123,6 +123,25 @@ taxes, out-of-state taxes are all included; only TX sales tax is excluded
    key (a receipt can list identical lines twice), and `force:true` — sent by
    the queue's human Approve — always writes.
 
+**Transaction numbers are decisive (2026-09-03).** Every receipt's own
+transaction / order / invoice / confirmation / trip number is extracted
+(`transactionId`) and stored on each item as `txnId` (shown on the queue card
+as `txn #…`). Before any twin hold fires, the ingest compares the item against
+every non-dismissed record with the same vendor + amount:
+- **same number** → this exact charge is already recorded → auto-dismissed
+  (`TXN-SAME-DISMISS`), note names the sheet cell;
+- **every prior record has a number and none is this one** → a separate charge
+  (a recurring $5 top-up, two same-day orders) → filed, bypassing the twin
+  holds and the writer's vendor|amount|date gate with `force` (`TXN-DISTINCT-FILE`);
+- **either side lacks a number** → the holds below run exactly as before.
+Rideshare is excluded: a ride's base and tipped receipts describe one trip,
+so no number pulled from them proves anything either way. The model sees the
+same numbers in its queue context and is told to treat a matching number as a
+confirmed duplicate and differing numbers as separate charges without dropping
+confidence. Residual gap: a row Paul typed onto the sheet by hand has no number,
+so a distinct-number file can still twin a hand-entered row — the store only
+knows what the bookkeeper wrote.
+
 An item files automatically only when **all** hold: `confidence === "high"`,
 valid category, amount > 0, vendor and date present — **and** the receipt
 reconciles: the extracted line items must sum to the receipt's stated pre-tax
@@ -368,6 +387,23 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-09-03** — **Transaction numbers settle duplicates.** Paul, looking at
+  two Telnyx $5 receipts held in Pending: "you should be smart enough to check
+  the transaction numbers." The model had in fact written *"distinct txn ID …
+  so not a duplicate"* in its own note — and the deterministic vendor+amount
+  gate held the card anyway, because nothing stored or compared the number.
+  Now the receipt's number is extracted (`transactionId` in the schema), kept
+  on the item (`txnId`), shown to the model for every recent queue record, and
+  compared by the ingest before any hold: same number → auto-dismiss; all
+  priors numbered and none match → file with `force`; otherwise the old holds.
+  Two prompt rules added: a matching number is a confirmed duplicate and
+  differing numbers are separate charges (confidence unaffected); and when the
+  books already show a vendor under a category, that category is certain — the
+  other Telnyx card was held only because Marketing vs Subscriptions was
+  "arguable". Full rule under *The autofile gate → Transaction numbers*.
+  Records filed before today have no `txnId`, so comparisons against them
+  fall back to the old behavior until the history fills in.
 
 - **2026-09-03** — **Receipt links now open the Gmail message, not the
   stored-copy viewer.** Paul's call: the viewer (`receipts/view.html`) rendered
