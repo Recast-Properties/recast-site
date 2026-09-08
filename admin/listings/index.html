@@ -202,6 +202,7 @@
         <div class="field"><label>Agent name (who to call)</label><input id="f_agentName" placeholder="Dennis Little"><div class="hint">Shown on the listing's call button. Leave blank to use the site default.</div></div>
         <div class="field"><label>Agent phone</label><input id="f_agentPhone" placeholder="214.906.4994"></div>
       </div>
+      <div class="field"><label>3D walkthrough URL (Matterport)</label><input id="f_tourUrl" type="url" placeholder="https://my.matterport.com/show/?m=XXXXXXXX"><div class="hint">Paste the Matterport share link. The listing page gets a "3D walkthrough" button that opens it. Leave blank for none.</div></div>
       <div class="field"><label>Tagline</label><input id="f_tagline" placeholder="One-line headline shown on the listing"></div>
       <div class="field"><label>Description</label><textarea id="f_description" rows="7"></textarea></div>
       <div class="field"><label>Highlights (one per line)</label><textarea id="f_highlights" rows="6" placeholder="2024 Build&#10;Dedicated Office&#10;EV Charging Port"></textarea></div>
@@ -374,6 +375,7 @@
     $("f_sqft").value = g("sqft"); $("f_lot").value = g("lot"); $("f_year").value = g("year");
     $("f_type").value = g("type") || "Single-family"; $("f_mlsId").value = g("mlsId");
     $("f_agentName").value = g("agentName"); $("f_agentPhone").value = g("agentPhone");
+    $("f_tourUrl").value = g("tourUrl");
     $("f_tagline").value = g("tagline"); $("f_description").value = g("description");
     $("f_highlights").value = String(g("highlights") || "").split("|").map((s) => s.trim()).filter(Boolean).join("\n");
 
@@ -412,6 +414,7 @@
       mlsId: $("f_mlsId").value.trim(),
       agentName: $("f_agentName").value.trim(),
       agentPhone: $("f_agentPhone").value.trim(),
+      tourUrl: $("f_tourUrl").value.trim(),
       photos: id, // folder name == id
     };
   }

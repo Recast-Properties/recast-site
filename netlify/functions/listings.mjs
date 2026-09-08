@@ -6,7 +6,7 @@ import { getStore } from "@netlify/blobs";
 
 const STORE = "listings-data";
 const KEY = "listings.json";
-const HEADERS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","photos"];
+const HEADERS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","tourUrl","photos"];
 
 const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
 

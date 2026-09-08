@@ -107,6 +107,9 @@ project (Admin SDK is already on).
 5. **View live site ↗** (pill beside the "Listings" heading) opens the public
    `/homes/` page in a new tab to check what visitors see.
 6. **Delete** removes the listing and all its photos.
+7. **3D walkthrough** — paste the Matterport share link into the "3D walkthrough
+   URL" field and Save. The listing page gets a 3D walkthrough button; clear the
+   field to remove it.
 
 **The Listing ID** doubles as the photo folder name (e.g. `104ashburne`). Pick a
 short, lowercase, no-spaces id when you create a listing; it can't be changed
@@ -141,13 +144,19 @@ the single source of truth.
 
 ### Listing fields
 `id, status, price, address, city, state, zip, beds, baths, sqft, lot, year,
-type, tagline, description, highlights, mlsId, agentName, agentPhone, photos,
-hidden`
+type, tagline, description, highlights, mlsId, agentName, agentPhone, tourUrl,
+photos, hidden`
 - `highlights` is stored pipe-delimited (`a|b|c`); the admin shows one per line.
 - `agentName` / `agentPhone` are the **per-property "who to call"** shown on the
   listing's orange call button. Leave both blank to use the site-wide default
   (`window.RECAST_AGENT` in `homes/data.js`). The `tel:` link is derived by
   stripping non-digits from `agentPhone`.
+- `tourUrl` is the optional **3D walkthrough** link (a Matterport share URL like
+  `https://my.matterport.com/show/?m=XXXX`). When set, the listing page shows a
+  "3D walkthrough" chip on the gallery hero and a "View 3D walkthrough" button
+  under the call button; both open the tour in an in-page viewer (iframe, with
+  an "Open in new tab" link). Only an `http(s)://` value is stored — anything
+  else is dropped server-side. Blank = no button.
 - `photos` holds the **folder name** (= the `id`).
 - `status` is `available | pending | sold`.
 - `hidden` is `"1"` or `""` — the **Live** checkbox on each row of the listings
@@ -255,6 +264,18 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-09-08** — **3D walkthrough (Matterport) per listing.** New optional
+  `tourUrl` field in the admin editor, stored with the listing and carried
+  through the CSV feed, `netlify/lib/listings.mjs` and `sheet-loader.js`
+  (http(s) only). On the detail page a `TourButton` (in `detail.jsx`) renders a
+  chip on the gallery hero and a full-width button in the inquiry card; either
+  opens `TourViewer`, a modal iframe styled like the photo viewer, with the
+  Matterport URL given `play=1` so it starts without the splash screen, plus an
+  "Open in new tab" link. The server-rendered crawler content gains a plain
+  "3D walkthrough" link. Bumped `detail.js` to v30 / BUILD 30 and
+  `sheet-loader.js` to v9 on both homes pages. No card badge on the grid (not
+  built).
 
 - **2026-09-03** — **Per-listing "Live" checkbox.** Each row of the listings
   admin (and the editor, next to Status) has a **Live** checkbox that controls

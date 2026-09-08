@@ -22,7 +22,7 @@ const KEY = "listings.json";
 // "hidden" ("1" or "") keeps a listing OUT of every public surface — cards,
 // /homes/<id> (404), sitemap, JSON-LD — while the admin still shows it. Absent
 // on older rows, which reads as visible, so nothing changed when it was added.
-const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","photos","hidden"];
+const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","tourUrl","photos","hidden"];
 // One-time seed source: the previously-published listings sheet.
 const SEED_CSV_URL = "https://docs.google.com/spreadsheets/d/1lpCONle2BfovuOu7_9k17hYwCuDKxnvE0ddeQLdGI5k/gviz/tq?tqx=out:csv&gid=701320222";
 
@@ -46,6 +46,9 @@ function normalize(listing) {
   const o = {};
   FIELDS.forEach((f) => { o[f] = clean(listing[f]); });
   o.hidden = asHidden(listing.hidden);
+  // tourUrl (3D walkthrough, e.g. a Matterport share link) becomes an iframe src
+  // and an href on the public page — only a real http(s) URL is kept.
+  o.tourUrl = /^https?:\/\//i.test(o.tourUrl) ? o.tourUrl : "";
   return o;
 }
 

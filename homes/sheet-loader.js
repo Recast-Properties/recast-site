@@ -1,9 +1,9 @@
 /* ============================================================
-   Recast Properties — Google Sheet loader
-   Fetches the published-CSV sheet (if RECAST_SHEET_CSV_URL is
-   set in data.js), parses it, and maps rows → listing objects.
+   Recast Properties — listings feed loader
+   Fetches the CSV feed at RECAST_SHEET_CSV_URL (set in data.js —
+   today the /listings Netlify function, fed by the admin tool),
+   parses it, and maps rows → listing objects.
    Falls back to RECAST_SAMPLE_LISTINGS on any error or if blank.
-   No build step, no API key — uses Google's "Publish to web → CSV".
    ============================================================ */
 (function () {
   // --- RFC-4180-ish CSV parser (handles quotes, commas, newlines) ---
@@ -49,7 +49,8 @@
     highlights: "highlights", features: "highlights",
     mlsid: "mlsId", mls: "mlsId", photos: "photos", photourls: "photos",
     agentname: "agentName", agent: "agentName",
-    agentphone: "agentPhone", agentnumber: "agentPhone"
+    agentphone: "agentPhone", agentnumber: "agentPhone",
+    toururl: "tourUrl", tour: "tourUrl", matterport: "tourUrl", walkthrough: "tourUrl"
   };
 
   function rowsToListings(rows) {
@@ -77,6 +78,7 @@
         mlsId: o.mlsId || "",
         agentName: o.agentName || "",
         agentPhone: o.agentPhone || "",
+        tourUrl: /^https?:\/\//i.test(o.tourUrl || "") ? o.tourUrl : "",
         photos: /https?:\/\/|\|/.test(o.photos) ? list(o.photos) : [],
         photoFolder: (/https?:\/\/|\|/.test(o.photos) ? "" : (o.photos || "")).trim()
       });

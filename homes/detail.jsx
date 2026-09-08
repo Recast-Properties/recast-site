@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 29", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 30", "color:#EA9B60;font-weight:700");
 
 /* Resolve the agent to show for a listing: prefer the per-property name/phone set
    in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
@@ -31,6 +31,81 @@ function AgentPill({ compact, p }) {
         <span style={{ display: "block", fontWeight: 700, fontSize: compact ? 14 : 15, opacity: 0.95 }}>{a.phone}</span>
       </span>
     </a>
+  );
+}
+
+/* 3D walkthrough (Matterport). A listing may carry a tourUrl set in the admin;
+   when present, TourButton renders a button that opens the tour in an in-page
+   viewer (iframe) with an "open in new tab" escape hatch. Renders nothing when
+   the listing has no tour, so every call site can include it unconditionally. */
+function tourEmbedUrl(url) {
+  const u = String(url || "").trim();
+  if (!/^https?:\/\//i.test(u)) return "";
+  // Matterport: play=1 skips the "click to start" splash inside the iframe.
+  if (/my\.matterport\.com\/show/i.test(u) && !/[?&]play=/.test(u)) return u + (u.includes("?") ? "&" : "?") + "play=1";
+  return u;
+}
+
+function TourViewer({ p, onClose }) {
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (window.lucide) window.lucide.createIcons();
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, []);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(24,25,28,0.62)",
+      display: "flex", justifyContent: "center" }}>
+      <div className="gallery-modal-panel" onClick={e => e.stopPropagation()} style={{ background: "var(--white)",
+        width: "min(1180px, 92vw)", height: "100%", display: "flex", flexDirection: "column",
+        boxShadow: "0 24px 80px rgba(0,0,0,0.45)" }}>
+        <div className="gallery-modal-bar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14,
+          padding: "16px 28px", borderBottom: "1px solid var(--color-divider)", flexShrink: 0 }}>
+          <button onClick={onClose} aria-label="Close 3D walkthrough" style={{ display: "inline-flex", alignItems: "center", gap: 9,
+            background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)",
+            fontWeight: 700, fontSize: 16, color: "var(--color-fg)", padding: 0 }}>
+            <LIcon name="x" className="ic" style={{ width: 20, height: 20 }} />close
+          </button>
+          <span className="tour-title" style={{ flex: 1, minWidth: 0, textAlign: "center", fontFamily: "var(--font-display)", fontWeight: 700,
+            fontSize: 16, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>3D walkthrough · {p.address}</span>
+          <a href={p.tourUrl} target="_blank" rel="noopener" style={{ display: "inline-flex", alignItems: "center", gap: 7,
+            fontWeight: 700, fontSize: 14, color: "var(--color-brand-press)", textDecoration: "none", whiteSpace: "nowrap" }}>
+            <LIcon name="external-link" className="ic" style={{ width: 16, height: 16 }} />Open in new tab
+          </a>
+        </div>
+        <iframe title={"3D walkthrough of " + p.address} src={tourEmbedUrl(p.tourUrl)}
+          allow="xr-spatial-tracking; fullscreen; gyroscope; accelerometer" allowFullScreen
+          style={{ flex: 1, width: "100%", border: 0, display: "block", background: "var(--ink-900)" }}></iframe>
+      </div>
+    </div>
+  );
+}
+
+/* variant="pill": overlay chip for the gallery hero. Default: full-width secondary button. */
+function TourButton({ p, variant }) {
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [open]);
+  if (!p || !tourEmbedUrl(p.tourUrl)) return null;
+  const onClick = e => { e.preventDefault(); e.stopPropagation(); setOpen(true); };
+  const btn = variant === "pill" ? (
+    <button className="tour-pill" onClick={onClick} aria-label="Open the 3D walkthrough" style={{ position: "absolute", top: 12, right: 12,
+      display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(24,25,28,0.72)", color: "#fff", border: "none",
+      cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 700, padding: "7px 13px",
+      borderRadius: "var(--radius-pill)", backdropFilter: "blur(4px)" }}>
+      <LIcon name="rotate-3d" className="ic" style={{ width: 15, height: 15 }} />3D walkthrough
+    </button>
+  ) : (
+    <button className="btn btn-secondary" onClick={onClick} style={{ display: "inline-flex", width: "100%", justifyContent: "center", marginTop: 12 }}>
+      <LIcon name="rotate-3d" className="ic" style={{ color: "var(--color-brand)" }} />View 3D walkthrough
+    </button>
+  );
+  return (
+    <React.Fragment>
+      {btn}
+      {open && <TourViewer p={p} onClose={() => setOpen(false)} />}
+    </React.Fragment>
   );
 }
 
@@ -159,6 +234,7 @@ function Gallery({ p }) {
             <LIcon name="images" className="ic" style={{ width: 15, height: 15 }} />
             {count > 1 ? "View " + count + " photos" : "View photos"}
           </div>
+          <TourButton p={p} variant="pill" />
         </div>
         <div style={{ display: "grid", gridTemplateRows: "1fr 1fr", gap: 12, minHeight: 0 }}>
           <ListingPhoto src={second} label="Photo 2" alt="" onClick={openViewer} style={{ borderRadius: "var(--radius-lg)", overflow: "hidden", minHeight: 0, cursor: second ? "pointer" : "default" }} />
@@ -210,6 +286,7 @@ function InquiryCard({ p }) {
       <div style={{ marginBottom: 20 }}><StatusBadge status={p.status} /></div>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Call for a showing or more info</div>
       <AgentPill p={p} />
+      <TourButton p={p} />
     </div>
   );
 }
@@ -282,4 +359,4 @@ function PropertyDetail({ p }) {
   );
 }
 
-Object.assign(window, { AgentPill, GalleryViewer, Gallery, FactGrid, InquiryCard, PropertyDetail });
+Object.assign(window, { AgentPill, TourViewer, TourButton, GalleryViewer, Gallery, FactGrid, InquiryCard, PropertyDetail });

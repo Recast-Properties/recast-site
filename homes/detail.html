@@ -17,6 +17,8 @@
   .nav-link { transition: color var(--dur) var(--ease-out); }
   .nav-link:hover { color: var(--color-brand-press); }
   .agent-pill:hover { background: var(--terracotta-600) !important; transform: translateY(-1px); }
+  .tour-pill:hover { background: rgba(24,25,28,0.9) !important; }
+  @media (max-width: 520px) { .tour-title { display: none !important; } }
   @media (max-width: 860px) {
     .gallery-spacer { display: none !important; }
     .gallery-gap { height: 24px !important; }
@@ -60,11 +62,11 @@
 </form>
 
 <script src="data.js?v=6"></script>
-<script src="sheet-loader.js?v=8"></script>
+<script src="sheet-loader.js?v=9"></script>
 <script src="../lead-config.js"></script>
 <!-- Precompiled from *.jsx by `npm run build` (no in-browser Babel). -->
 <script src="listing-components.js?v=14"></script>
-<script src="detail.js?v=29"></script>
+<script src="detail.js?v=30"></script>
 <script src="app-detail.js?v=27"></script>
 </body>
 </html>

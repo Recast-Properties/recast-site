@@ -53,6 +53,7 @@ export function normalizeListing(o) {
     highlights: String(o.highlights || "").split("|").map((s) => s.trim()).filter(Boolean),
     mlsId: o.mlsId || "",
     agentName: o.agentName || "", agentPhone: o.agentPhone || "",
+    tourUrl: /^https?:\/\//i.test(String(o.tourUrl || "").trim()) ? String(o.tourUrl).trim() : "",
     photos: external ? photos.split("|").map((s) => s.trim()).filter(Boolean) : [],
     photoFolder: external ? "" : photos.trim(),
   };
@@ -151,6 +152,7 @@ export function listingContentHtml(l) {
     <h2>Facts</h2>
     <ul>${facts.map(([k, v]) => `<li>${esc(k)}: ${esc(v)}</li>`).join("")}</ul>
     ${l.highlights.length ? `<h2>Highlights</h2><ul>${l.highlights.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
+    ${l.tourUrl ? `<h2>3D walkthrough</h2><p><a href="${esc(l.tourUrl)}" rel="noopener">Take the 3D walkthrough of ${esc(l.address)}</a></p>` : ""}
     <h2>Call for a showing or more info</h2>
     <p>${esc(l.agentName || "Recast Properties")} — <a href="tel:${esc((l.agentPhone || "214.906.4992").replace(/[^0-9]/g, ""))}">${esc(l.agentPhone || "214.906.4992")}</a></p>
   </article>`;
