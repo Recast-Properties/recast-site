@@ -1,7 +1,8 @@
 # Recast Properties site config.
 # Static site published from the repo root; Netlify Functions in netlify/functions.
-# No build step — the site is plain files. The package.json exists only so the
-# functions can use @netlify/blobs (bundled into each function at deploy time).
+# Build step = JSX precompile only (see [build] below); the site is otherwise plain
+# files. package.json carries the functions' deps (@netlify/blobs, heic-convert)
+# and the build's devDependencies.
 
 [build]
   publish = "."

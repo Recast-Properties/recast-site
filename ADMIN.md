@@ -258,6 +258,13 @@ public on the live site, so nothing secret is exposed; the password only gates
 - **Deploy:** from `/Users/paulbjork/Desktop/Claude/Recast-site`, either
   `npm run build && netlify deploy --prod --no-build`, or `netlify deploy --prod`
   (which runs the build). Git/CI deploys run the build command automatically.
+  **The `netlify` CLI is not on PATH on this Mac** (found 2026-09-08): no global
+  install, no Homebrew copy. The working binary is the npx cache at
+  `~/.npm/_npx/b3ca12a867cd0704/node_modules/.bin/netlify` (netlify-cli 27.4.1,
+  logged in as paul@, linked to site `1452cbfc-…`). `npx netlify-cli` without a
+  version tries to download the newest release and stops for confirmation, so
+  either call that binary directly or `npm i -g netlify-cli` once.
+- **Repo:** local-only `.git` on `main`, no remote. "Push" is not a step here.
 - **Local dev:** `netlify dev` (Blobs is emulated locally). Note: Blobs-dependent
   behavior is most reliably verified against a deploy preview / prod.
 
@@ -265,7 +272,8 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
-- **2026-09-08** — **3D walkthrough (Matterport) per listing.** New optional
+- **2026-09-08** — **3D walkthrough (Matterport) per listing** (deployed, commit
+  `117a70e`). New optional
   `tourUrl` field in the admin editor, stored with the listing and carried
   through the CSV feed, `netlify/lib/listings.mjs` and `sheet-loader.js`
   (http(s) only). On the detail page a `TourButton` (in `detail.jsx`) renders a

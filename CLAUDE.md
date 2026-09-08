@@ -18,7 +18,8 @@ as calendar events with metadata; there is no separate database.
 - Nylas v3 -> Google Calendar (paul@recast-properties.com primary calendar).
 - Telnyx voice assistant calls `appointment-action` as a tool.
 - Deploy: `netlify deploy --prod` from the repo root (`/Users/paulbjork/Desktop/Claude/Recast-site`).
-  There is no package.json at the root.
+  The root `package.json` holds the functions' deps + the JSX build step (see `ADMIN.md`
+  → Build / deploy, including where the `netlify` binary actually lives on this Mac).
 - Tests: `node tests/parser.test.js` (12/12 green; parser-only) and
   `node tests/call-completed.test.js` (9/9 green; Telnyx Ed25519 verify + row assembly).
 - Business hours: Mon-Fri 09:00-18:00 Central, 60-min slots. Weekday-only is hard-coded
