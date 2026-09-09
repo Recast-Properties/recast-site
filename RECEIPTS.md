@@ -207,11 +207,19 @@ no-store` on `/receipts/*`.
 ### Apps Scripts (`apps-script/`)
 
 Standalone projects running as **paul@**; the `.gs` files here are the source
-of record — live copies are pasted into script.google.com.
+of record. **Push with clasp, not paste** (since 2026-09-09 the Bookkeeper
+project is byte-identical to the repo): `clasp clone <id>` into a scratch
+folder, copy the repo files over the cloned ones (`receipts-poller.gs` →
+`Code.js`, `receipts-daily-summary.gs` → `summary.js`, `receipts-backfill-scan.gs`
+→ `backfill-scan.js`), `clasp push -f`, then re-clone and `cmp`. clasp only
+*lists* projects it created, but clone-by-id works for all of them. Pasting
+into the editor mangles em dashes; if the token has expired
+(`invalid_grant / invalid_rapt`) Paul runs `clasp login`.
 
 | Script | Type | Purpose |
 |---|---|---|
 | `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), `testPollBatch()` (process without labeling done), and **`dryRunIngest()`** (re-read specific message ids through the bookkeeper with nothing written — results land as `[DRY RUN …]` cards in Pending; edit its `MSG_IDS` list first). |
+| `receipts-backfill-scan.gs` | Manual, one-off; lives as `backfill-scan.gs` in the **same project as the poller** (added to the repo 2026-09-09 — it had only ever existed live) | READ-ONLY pre-receipts@ backfill scan from 2026-08-24: searches Gmail and writes findings to a Drive JSON file. Never writes the sheet, labels, mails, or POSTs. Delete from the project when the backfill is done. `receipts-bookkeeper.appsscript.json` is that project's manifest. |
 | `receipts-daily-summary.gs` | Time trigger (daily **3–4 AM Central**); lives as `summary.gs` in the **same project as the poller** | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. `dailySummary()` = yesterday (the trigger); `summaryToday()` = an on-demand "today so far" digest. Project timezone is America/Chicago. Keep user-facing strings ASCII (`\uXXXX` escapes) — pasting into the editor mangles UTF-8. |
 | `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
 | `receipts-sheet-sort.gs` | Manual run; project **"RECAST BIZ Sorter"**, id `1dE6KeuDNNkto-9XTDvgRAk1M6k710k4Bdl7voht1wzoJYKxbW3ObaMNa` | Maintenance: sorts the rows inside every category block by date, oldest at top, and normalizes the date column to `MM/dd/yy`. Rows land in PROCESSED order, not DATED order, so blocks drift — re-run whenever one looks out of order. Locates blocks by NAME in row 1 (never hardcoded columns), backs the tab up first, carries HYPERLINK formulas and per-cell number formats with their rows, aborts if the poller appends mid-run, and refuses to finish if any block's row count or total moved. ONE entry point (`sortRecastBizByDate`) so the editor preselects it; `SORT_CFG.DRY_RUN` picks report-only vs apply, and is left **true** in the repo. |
@@ -357,8 +365,9 @@ and the receipts functions. The poller's `CONFIG.INGEST_URL` and the summary
 script's URLs point at this alias.
 
 **Apps Script changes:** poller + daily-summary scripts run latest *saved*
-code (no redeploy); `receipts-sheet.gs` serves the *deployed* version — after
-edits do Deploy → Manage deployments → ✏️ → New version.
+code (a `clasp push` counts as saved — no redeploy); `receipts-sheet.gs` serves
+the *deployed* version — after edits do Deploy → Manage deployments → ✏️ → New
+version. See the Apps Scripts section for the clasp push recipe.
 
 ---
 
