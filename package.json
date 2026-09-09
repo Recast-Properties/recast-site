@@ -6,7 +6,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@netlify/blobs": "^8.2.0",
-    "heic-convert": "^2.1.0"
+    "heic-convert": "^2.1.0",
+    "jimp": "^1.6.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",

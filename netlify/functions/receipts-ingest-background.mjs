@@ -2,9 +2,19 @@
 // "-background" suffix gives it a 15-minute limit and callers an immediate 202).
 //
 // Receives one receipt email from the Gmail poller (apps-script/receipts-poller.gs),
-// has Claude (Opus 5 + web search for SKU lookups) itemize + categorize it, and:
+// has Claude (Opus 5) itemize + categorize it, and:
 //   • files high-confidence items STRAIGHT into the expense sheet (status "filed"),
 //   • leaves uncertain/unreadable items in the queue for review (status "pending").
+//
+// The model is the DIRECTOR of the read, not a form-filler (2026-09-09, Paul:
+// "I want the API to solve it"). It runs with extended thinking and a tool
+// loop: `zoom` crops any region of an attachment at full resolution (blurry
+// pump displays, small print), `read_books` queries the real expense sheet,
+// `search_records` queries the queue's own history — plus server-side web
+// search for SKU lookups. It is told to LOOK before it guesses and to CHECK
+// before it calls anything a duplicate. The deterministic gates further down
+// (subtotal reconcile, txn numbers, ride-pair hold, the writer's ScriptLock
+// gate) stay as seatbelts.
 //
 // Never silently drops a receipt: the FIRST thing this function does is write a
 // visible "processing" record to Blobs, so even a hard crash leaves a trail the
@@ -28,12 +38,16 @@
 import { getStore } from "@netlify/blobs";
 import Anthropic from "@anthropic-ai/sdk";
 import heicConvert from "heic-convert";
+import { Jimp } from "jimp";
 
 const STORE = "receipts-data";
 const VIEWER_BASE = "https://receipts--incomparable-raindrop-8f3d22.netlify.app/receipts/view.html?m=";
 const TAX_RATE = 0.0825;
 const MODEL = "claude-opus-5";
-const MAX_TURNS = 8;               // hard cap on the agentic loop (pause_turn resumes)
+const MAX_TURNS = 20;              // hard cap on the tool loop (each zoom/read/search is a turn)
+const THINKING = { type: "adaptive" };   // extended thinking — the model reasons before it answers
+const ZOOM_MAX_EDGE = 1568;        // API downsamples beyond this; crops come back at native res up to it
+const ZOOM_MIN_EDGE = 800;         // small crops are upscaled so digits aren't a handful of pixels
 const CATEGORIES = ["Tools","Materials","Marketing","Meals","Travel","Office","Gas/Truck/Trailer","Subscriptions","Website","Business"];
 
 const clean = (v) => (v == null ? "" : String(v).trim());
@@ -87,15 +101,23 @@ const EXTRACT_SCHEMA = {
 
 const SYSTEM_PROMPT = `You are the automated bookkeeper for Recast Properties, a small real-estate rehab business in Ellis County, Texas. You receive one receipt email at a time (text, PDF, or photo) and itemize it for the expense sheet. Your output is filed with no human in the loop when you mark it high-confidence, so be honest about uncertainty.
 
+You are in charge of this read — you have tools, and you are expected to use them the way a careful bookkeeper would, rather than guessing from a single glance:
+- zoom: crops any region of a photo/image attachment and returns it at full resolution. The image you were handed is downscaled; small print, 7-segment pump displays, handwriting and faded thermal paper are often unreadable in the full frame but clear when zoomed. Whenever ANY digit, word or line you need is not crisp, zoom in on it BEFORE you decide what it says. Zoom more than once if the first crop is not enough (a tighter region, or a different part of the receipt). Never mark an amount you had to squint at as high confidence without having zoomed on it.
+- read_books: queries what is actually recorded on the expense sheet — including rows the owner typed in by hand that never passed through you. Before you decide whether this charge is or is not already recorded, look it up (by vendor, and by category/date range when the vendor name might differ). Category precedent lives here too: the vendor's existing rows show which category the owner uses.
+- search_records: queries your own recent history (every receipt processed in the last 90 days, with status, sheet cell and transaction number). Use it alongside read_books when judging duplicates and rideshare tip pairs.
+- web_search / web_fetch: identify cryptic SKUs, model codes and unfamiliar vendors.
+
+Make the numbers reconcile before you answer. Line items must sum to the receipt's pre-tax subtotal. A fuel pump shows gallons and total, and gallons × a plausible per-gallon price (pump prices end in 9/10 of a cent, e.g. $3.539) must reproduce the total to the cent — if it doesn't, you misread a digit: zoom and re-read (7-segment confusions: 0/8, 6/8, 9/8, 1/7, 3/9, 5/6). A total that does not equal subtotal + tax means a line was missed or a digit misread — go back and look. When you have zoomed, checked the books and reconciled the arithmetic, say what you verified in the notes and give the confidence the evidence earns; when you genuinely cannot resolve something after looking, say exactly what is unresolved so the human can settle it quickly.
+
 Extract EVERY purchased line item — completeness is critical: your item amounts are reconciled against the "subtotal" field, and a receipt with missing lines corrupts the books.
 
 Amounts policy — record what was ACTUALLY PAID: amounts must include shipping, delivery fees, airline taxes and carrier fees, tips, out-of-state taxes — everything the business was charged — EXCLUDING ONLY Texas sales tax (the system re-adds 8.25% per taxable item, so TX sales tax must never be inside an amount). If a receipt includes shipping/delivery/handling charges, do NOT itemize it: return ONE item summarizing the whole purchase (name the main products in the description) with the full amount paid. Restaurant/food/drink receipts are NEVER itemized: one line ("Meal at <restaurant>") with the full amount paid including tip (still excluding TX sales tax). Itemize only product receipts without shipping (e.g. in-store hardware/materials purchases). Never include TX-sales-tax, subtotal, or total lines as items. Set "subtotal" to the amount charged minus any TX sales tax (i.e. what your item amounts should sum to); 0 if it cannot be determined.
 
-Transaction numbers are decisive. Every receipt with a transaction, order, invoice, confirmation, payment or trip number must return it in "transactionId" exactly as printed. The recently processed receipts you are shown carry their numbers too (the "txn" column). If this receipt's number matches one of them, this IS the same charge — duplicate "confirmed" — no matter how the emails differ. If the numbers are both present and DIFFERENT, these are separate charges — duplicate "no" — even when vendor, amount and date all match (a $5 top-up that recurs, two same-day orders); do not lower confidence for that, just state the two numbers in the notes. Only fall back to judging by vendor/amount/date when one side has no number.
+Transaction numbers are decisive. Every receipt with a transaction, order, invoice, confirmation, payment or trip number must return it in "transactionId" exactly as printed. The records search_records returns carry their numbers too (the "txn" column). If this receipt's number matches one of them, this IS the same charge — duplicate "confirmed" — no matter how the emails differ. If the numbers are both present and DIFFERENT, these are separate charges — duplicate "no" — even when vendor, amount and date all match (a $5 top-up that recurs, two same-day orders); do not lower confidence for that, just state the two numbers in the notes. Only fall back to judging by vendor/amount/date when one side has no number.
 
 Category precedent: when the books already show this vendor under a category, use that category and treat it as certain — the owner chose it. Do not drop to medium because another category is arguable.
 
-Duplicate detection — you may be shown a list of charges already recorded in the books. Judge each item: "confirmed" duplicate when this email clearly documents a charge that is already recorded (e.g. an invoice email and a receipt email for the same payment, same vendor + amount + service period); "suspected" when it plausibly is but you cannot be sure (e.g. same vendor and amount but the receipt does not show a distinguishing date/period/invoice number); "no" otherwise. Two genuinely separate charges that happen to match (two months of the same subscription with different periods) are NOT duplicates. Explain your duplicate reasoning in that item's notes. If the receipt has no itemized list (gas, a single service charge, a hotel folio total), return one item describing the whole purchase with its pre-tax amount. If the email is not a receipt at all (marketing, shipping notice with no charges), return an empty items array with a note of why in vendor position is not needed — just items: [].
+Duplicate detection — read_books and search_records show you what is already recorded; check them. Judge each item: "confirmed" duplicate when this email clearly documents a charge that is already recorded (e.g. an invoice email and a receipt email for the same payment, same vendor + amount + service period); "suspected" when it plausibly is but you cannot be sure (e.g. same vendor and amount but the receipt does not show a distinguishing date/period/invoice number); "no" otherwise. Two genuinely separate charges that happen to match (two months of the same subscription with different periods) are NOT duplicates. Explain your duplicate reasoning in that item's notes. If the receipt has no itemized list (gas, a single service charge, a hotel folio total), return one item describing the whole purchase with its pre-tax amount. If the email is not a receipt at all (marketing, shipping notice with no charges), return an empty items array with a note of why in vendor position is not needed — just items: [].
 
 Rideshare rules (Uber and Lyft RIDES — not Uber Eats or any food delivery): a ride is always ONE item, amount = everything paid including the tip. Write the description as route and time, e.g. "Uber 5:12 PM DFW Airport -> Waxahachie" — route and time are how a later receipt for the same ride gets matched, so always include them when the receipt shows them. Uber's "[Personal]" subject tag is a profile label, not a verdict on the expense. Standing owner rule: any ride whose pickup OR dropoff is an airport (an airport name or code — DFW, DAL, PDX, "International Airport", etc.) IS a business expense — category Travel, and the [Personal] tag alone must not keep such a ride from high confidence. A [Personal] ride with no airport end stays a human call: confidence at most medium, and say why in the notes. [Personal] food delivery is usually a personal expense — never high confidence.
 
@@ -118,11 +140,11 @@ Sales tax is applied PER LINE ITEM at 8.25%. Set taxable=true when Texas sales t
 Cryptic line items: receipts often abbreviate ("HDX 27GAL TOTE", SKU numbers, model codes). You may use web search — and fetch a retailer page — to identify what a product actually is. Keep it to a couple of lookups per receipt, on the lines where identity actually changes the category. Record what a code decoded to in that item's notes. If a lookup fails, keep the raw text and lower the confidence.
 
 Confidence per item — this is the autofile gate:
-- "high": vendor, date, amount, taxability, and category are all certain. The item files to the books with no review.
-- "medium"/"low": anything is uncertain — unclear product, ambiguous category, unreadable amount, guessed date. A human will review it. When in doubt, do NOT say high.
-notes: one short line per item — why this category, what a SKU decoded to, or what is uncertain. Keep it terse.
+- "high": vendor, date, amount, taxability, and category are all certain BECAUSE YOU CHECKED — zoomed where it was unclear, reconciled the arithmetic, looked up the books. The item files with no review.
+- "medium"/"low": something is still uncertain after you looked — unclear product, ambiguous category, an amount you could not resolve, guessed date. A human will review it. Do not say high on a hunch; do not say medium out of laziness when a zoom or a lookup would have settled it.
+notes: one short line per item — what you verified (e.g. "zoomed pump display: 22.318 gal x $3.539 = $78.98"), why this category, what a SKU decoded to, or what is still uncertain. Keep it terse.
 
-Return ONLY the JSON object matching the schema. No prose, no markdown fences.`;
+When you are done using tools, return ONLY the JSON object matching the schema. No prose, no markdown fences.`;
 
 // ---- build the user content (email text + attachments) ---------------------
 function buildContent(payload) {
@@ -137,19 +159,182 @@ function buildContent(payload) {
     (clean(payload.body) ? clean(payload.body).slice(0, 20000) : "(no text body)");
 
   const content = [{ type: "text", text: ctx }];
+  let n = 0;
   for (const att of payload.attachments || []) {
     let mime = clean(att.mimeType).toLowerCase();
     const data = clean(att.dataBase64);
     if (!data) continue;
     if (mime === "image/jpg") mime = "image/jpeg";
     if (mime === "application/pdf") {
+      content.push({ type: "text", text: `[attachment ${n}: ${clean(att.filename) || "document"} (PDF — zoom is not available on PDFs)]` });
       content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data } });
+      n++;
     } else if (/^image\/(jpeg|png|gif|webp)$/.test(mime)) {
+      // Label each image with its index so the model can name it to `zoom`.
+      content.push({ type: "text", text: `[attachment ${n}: ${clean(att.filename) || "image"} — you may zoom on this one]` });
       content.push({ type: "image", source: { type: "base64", media_type: mime, data } });
+      n++;
     }
     // Unsupported types (e.g. unconverted HEIC) are skipped -> review placeholder.
   }
   return content;
+}
+
+// ---- the model's tools -----------------------------------------------------
+// Indices given to the model count only the attachments it was actually shown
+// (same order as buildContent), so resolve them the same way here.
+function shownAttachments(payload) {
+  return (payload.attachments || []).filter((att) => {
+    const mime = clean(att.mimeType).toLowerCase();
+    return clean(att.dataBase64) && (mime === "application/pdf" || /^image\/(jpeg|jpg|png|gif|webp)$/.test(mime));
+  });
+}
+
+const TOOLS = [
+  {
+    name: "zoom",
+    description: "Crop a region of an image attachment and return it at full resolution. The images you were shown are downscaled; use this on any digits, small print, handwriting or faded text you cannot read with certainty. Coordinates are FRACTIONS of the image (0..1) measured from the top-left corner. Not available for PDF attachments.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["attachment", "left", "top", "right", "bottom"],
+      properties: {
+        attachment: { type: "integer", description: "Index of the attachment as labeled ([attachment N])" },
+        left: { type: "number", minimum: 0, maximum: 1 },
+        top: { type: "number", minimum: 0, maximum: 1 },
+        right: { type: "number", minimum: 0, maximum: 1 },
+        bottom: { type: "number", minimum: 0, maximum: 1 },
+        why: { type: "string", description: "What you are trying to read (for the log)" },
+      },
+    },
+  },
+  {
+    name: "read_books",
+    description: "Query what is actually recorded on the RECAST BIZ expense sheet — every row, including ones the owner typed by hand. Returns rows as 'category | vendor | date MM/DD/YY | description | amount incl. tax'. Filter by vendor substring and/or category; leave both empty for the most recent rows of every category.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        vendor: { type: "string", description: "Case-insensitive substring of the vendor name ('' for any)" },
+        category: { type: "string", description: "One of the category names ('' for all)" },
+        days: { type: "integer", description: "Only rows dated within the last N days (default 120; 0 = no date filter)" },
+      },
+    },
+  },
+  {
+    name: "search_records",
+    description: "Query the bookkeeper's own recent history: every receipt processed in the last 90 days, one line per item as 'vendor | date | description | amount | status | sheet cell | txn number'. Status filed/approved = on the sheet, pending = waiting for review, dismissed = judged a duplicate or not an expense. Filter by vendor substring and/or amount.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        vendor: { type: "string", description: "Case-insensitive substring of the vendor name ('' for any)" },
+        amount: { type: "number", description: "Match items within ±$0.01 of this pre-tax amount (omit for any)" },
+        days: { type: "integer", description: "Lookback window in days (default 90)" },
+      },
+    },
+  },
+];
+
+// zoom: crop from the bytes we hold (already the best copy we have — the
+// poller's Drive shrink is ~2000px, which is still well above what the API
+// shows the model in the full frame) and hand the crop back as an image block.
+async function toolZoom(payload, input) {
+  const atts = shownAttachments(payload);
+  const att = atts[Number(input.attachment)];
+  if (!att) return { error: `No attachment ${input.attachment} (there are ${atts.length})` };
+  const mime = clean(att.mimeType).toLowerCase();
+  if (mime === "application/pdf") return { error: "zoom is not available on PDF attachments" };
+  const l = Math.max(0, Math.min(1, Number(input.left) || 0));
+  const t = Math.max(0, Math.min(1, Number(input.top) || 0));
+  const r = Math.max(0, Math.min(1, Number(input.right) || 0));
+  const b = Math.max(0, Math.min(1, Number(input.bottom) || 0));
+  if (r - l < 0.02 || b - t < 0.02) return { error: "Region too small — give a box at least 2% of the image on each side" };
+  const img = await Jimp.read(Buffer.from(att.dataBase64, "base64"));
+  const W = img.width, H = img.height;
+  const x = Math.floor(l * W), y = Math.floor(t * H);
+  const w = Math.max(8, Math.min(W - x, Math.ceil((r - l) * W)));
+  const h = Math.max(8, Math.min(H - y, Math.ceil((b - t) * H)));
+  const crop = img.clone().crop({ x, y, w, h });
+  const longEdge = Math.max(w, h);
+  if (longEdge < ZOOM_MIN_EDGE) {
+    const s = ZOOM_MIN_EDGE / longEdge;
+    crop.resize({ w: Math.round(w * s), h: Math.round(h * s) });
+  } else if (longEdge > ZOOM_MAX_EDGE) {
+    const s = ZOOM_MAX_EDGE / longEdge;
+    crop.resize({ w: Math.round(w * s), h: Math.round(h * s) });
+  }
+  const out = await crop.getBuffer("image/jpeg", { quality: 92 });
+  return {
+    text: `Crop of attachment ${input.attachment}: source ${W}x${H}px, region x=${x} y=${y} w=${w} h=${h}, returned at ${crop.width}x${crop.height}px.`,
+    image: { type: "image", source: { type: "base64", media_type: "image/jpeg", data: out.toString("base64") } },
+  };
+}
+
+// Parse "MM/DD/YY" (or MM/DD/YYYY) into a timestamp; 0 when unparseable.
+function dateTs(s) {
+  const m = clean(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return 0;
+  const yy = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+  return new Date(yy, parseInt(m[1], 10) - 1, parseInt(m[2], 10)).getTime();
+}
+
+// read_books: the writer's readRecent (up to 200 rows per block), filtered here.
+async function toolReadBooks(input) {
+  const sheetUrl = process.env.RECEIPTS_SHEET_URL || "";
+  if (!sheetUrl) return { error: "Expense sheet not configured" };
+  const res = await fetch(sheetUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: process.env.RECEIPTS_SHEET_TOKEN || "", action: "readRecent", maxPerBlock: 200 }),
+  });
+  const j = await res.json();
+  if (!j || !Array.isArray(j.rows)) return { error: "Sheet read failed: " + clean(j && j.error) };
+  const vendor = clean(input.vendor).toLowerCase();
+  const category = clean(input.category).toLowerCase();
+  const days = input.days === 0 ? 0 : (parseInt(input.days, 10) || 120);
+  const cutoff = days ? Date.now() - days * 86400000 : 0;
+  let rows = j.rows.filter((r) =>
+    (!vendor || clean(r.vendor).toLowerCase().includes(vendor)) &&
+    (!category || clean(r.category).toLowerCase() === category) &&
+    (!cutoff || !dateTs(r.date) || dateTs(r.date) >= cutoff));
+  const total = rows.length;
+  if (!vendor && !category) rows = rows.slice(-120);
+  const text = rows.map((r) => `${clean(r.category)} | ${clean(r.vendor)} | ${clean(r.date)} | ${clean(r.item)} | $${clean(r.amount)}`).join("\n");
+  return { text: `${total} matching row(s) on tab "${clean(j.tab)}"${rows.length < total ? ` (showing last ${rows.length})` : ""}:\n${text || "(none)"}` };
+}
+
+// search_records: the queue's own envelopes, filtered.
+async function toolSearchRecords(store, input, selfKey) {
+  const vendor = clean(input.vendor).toLowerCase();
+  const amount = input.amount == null || input.amount === "" ? null : Number(input.amount);
+  const days = parseInt(input.days, 10) || 90;
+  const cutoff = Date.now() - days * 86400000;
+  const { blobs } = await store.list({ prefix: "msg/" });
+  const envs = await Promise.all((blobs || []).filter((b) => b.key !== selfKey).map((b) => store.get(b.key, { type: "json" })));
+  const lines = [];
+  for (const env of envs) {
+    if (!env || env.dryRun) continue;   // dry-run cards are test artifacts, never evidence
+    for (const it of env.items || []) {
+      const t = Date.parse(it.approvedAt || it.receivedAt) || 0;
+      if (t < cutoff) continue;
+      if (vendor && !clean(it.vendor).toLowerCase().includes(vendor)) continue;
+      if (amount != null && Math.abs(num(it.amount) - amount) > 0.011) continue;
+      lines.push(`${clean(it.vendor)} | ${clean(it.date)} | ${clean(it.item).slice(0, 70)} | $${clean(it.amount)} | ${it.status} | ${clean(it.sheetCell) || "-"} | txn ${clean(it.txnId) || "-"}`);
+    }
+  }
+  return { text: `${lines.length} record(s):\n${lines.slice(-150).join("\n") || "(none)"}` };
+}
+
+async function runTool(name, input, ctx) {
+  try {
+    if (name === "zoom") return await toolZoom(ctx.payload, input || {});
+    if (name === "read_books") return await toolReadBooks(input || {});
+    if (name === "search_records") return await toolSearchRecords(ctx.store, input || {}, ctx.selfKey);
+    return { error: "Unknown tool " + name };
+  } catch (e) {
+    return { error: String((e && e.message) || e).slice(0, 300) };
+  }
 }
 
 // Keep a stored copy of the receipt (attachments + email text) under
@@ -200,88 +385,32 @@ function parseJsonLoose(text) {
   try { return JSON.parse(s.slice(start, end + 1)); } catch { return null; }
 }
 
-// What is ACTUALLY recorded in the expense sheet, straight from the tab. This
-// is the duplicate context that matters: the queue only knows what passed
-// through it, so anything typed onto the sheet by hand is invisible to a
-// store-only check (Paul confirmed 2026-08-23 he hand-entered a fair number of
-// Tools purchases during the June-system stall). Best-effort — on any failure
-// we fall back to the store-only view rather than blocking the ingest.
-async function sheetBooksContext() {
-  const sheetUrl = process.env.RECEIPTS_SHEET_URL || "";
-  if (!sheetUrl) return "";
-  try {
-    const res = await fetch(sheetUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: process.env.RECEIPTS_SHEET_TOKEN || "", action: "readRecent", maxPerBlock: 40 }),
-    });
-    const j = await res.json();
-    if (!j || !Array.isArray(j.rows)) return "";
-    return j.rows
-      .map((r) => `${clean(r.category)} | ${clean(r.vendor)} | ${clean(r.date)} | ${clean(r.item)} | $${clean(r.amount)}`)
-      .join("\n");
-  } catch (e) {
-    console.warn("[ingest] sheet books context failed: " + String((e && e.message) || e));
-    return "";
-  }
-}
 
-// Compact list of recently recorded charges, shown to Claude so it can catch
-// duplicates (a vendor's invoice email + receipt email for the same payment).
-async function recentItemsContext(store) {
-  try {
-    const { blobs } = await store.list({ prefix: "msg/" });
-    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
-    const lines = [];
-    const envs = await Promise.all((blobs || []).slice(-80).map((b) => store.get(b.key, { type: "json" })));
-    for (const env of envs) {
-      for (const it of (env && env.items) || []) {
-        if (it.status === "dismissed") continue;
-        const t = Date.parse(it.approvedAt || it.receivedAt) || 0;
-        if (t < cutoff) continue;
-        lines.push(clean(it.vendor) + " | " + clean(it.date) + " | " + clean(it.item).slice(0, 60) + " | $" + clean(it.amount) + " | " + it.status + " | txn " + (clean(it.txnId) || "-"));
-      }
-    }
-    return lines.slice(-60).join("\n");
-  } catch (e) {
-    console.warn("[ingest] recent-items context failed: " + String((e && e.message) || e));
-    return "";
-  }
-}
-
-// ---- the agentic extraction call -------------------------------------------
-// One conversation per receipt: Opus 5 + server-side web search/fetch (SKU
-// lookups run on Anthropic's servers — no tool loop to execute here). We only
-// have to resume "pause_turn" until the model finishes. Structured output
-// guarantees the JSON shape; if the API rejects the schema+tools combination we
-// retry once without the schema and parse loosely.
-async function extractReceipt(client, payload, useSchema, recentContext) {
-  const content = buildContent(payload);
-  if (recentContext && recentContext.books) {
-    content.push({ type: "text", text:
-      "--- WHAT IS ALREADY ON THE EXPENSE SHEET (category | vendor | date MMDDYY | description | amount incl. tax) ---\n" +
-      "These rows are the actual books. Some were typed in by hand and never passed through the queue. " +
-      "If this receipt documents a charge already listed here, say so: mark the item duplicate \"confirmed\" " +
-      "(or \"suspected\" if you cannot be sure) and explain which row it matches.\n" + recentContext.books });
-  }
-  if (recentContext && recentContext.queue) {
-    content.push({ type: "text", text:
-      "--- Recently processed receipts (queue records, last 60 days: vendor | date | description | amount | status | txn number) ---\n" + recentContext.queue });
-  }
-  const messages = [{ role: "user", content }];
+// ---- the extraction: a tool loop the model directs ---------------------------
+// One conversation per receipt. Extended thinking on; client-side tools
+// (zoom / read_books / search_records) are executed here and their results
+// fed back; server-side web search/fetch run on Anthropic's side and only
+// need "pause_turn" resumed. Structured output guarantees the JSON shape; if
+// the API rejects the schema alongside tools/thinking we retry once without
+// it and parse loosely.
+async function extractReceipt(client, payload, useSchema, ctx) {
+  const messages = [{ role: "user", content: buildContent(payload) }];
   const req = {
     model: MODEL,
     max_tokens: 16000,
+    thinking: THINKING,
     system: SYSTEM_PROMPT,
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     tools: [
+      ...TOOLS,
       { type: "web_search_20260209", name: "web_search", max_uses: 4 },
       { type: "web_fetch_20260209", name: "web_fetch", max_uses: 6 },
     ],
   };
   if (useSchema) req.output_config = { format: { type: "json_schema", schema: EXTRACT_SCHEMA } };
 
+  let toolCalls = 0;
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const res = await client.beta.messages.create({ ...req, messages });
     if (res.stop_reason === "pause_turn") {
@@ -292,23 +421,44 @@ async function extractReceipt(client, payload, useSchema, recentContext) {
       console.warn("[ingest] Claude refused; leaving for review");
       return null;
     }
+    if (res.stop_reason === "tool_use") {
+      // Assistant turn goes back verbatim (thinking blocks + signatures included).
+      messages.push({ role: "assistant", content: res.content });
+      const results = [];
+      for (const block of res.content) {
+        if (block.type !== "tool_use") continue;
+        toolCalls++;
+        const out = await runTool(block.name, block.input, ctx);
+        const why = block.input && block.input.why ? ` (${clean(block.input.why).slice(0, 80)})` : "";
+        console.log(`[ingest] tool ${block.name}${why} msg=${ctx.msgId} -> ${out.error ? "ERROR " + out.error : (out.text || "").split("\n")[0].slice(0, 120)}`);
+        const content = [];
+        if (out.error) content.push({ type: "text", text: "Error: " + out.error });
+        if (out.text) content.push({ type: "text", text: out.text });
+        if (out.image) content.push(out.image);
+        results.push({ type: "tool_result", tool_use_id: block.id, content, is_error: !!out.error });
+      }
+      messages.push({ role: "user", content: results });
+      continue;
+    }
     const text = (res.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+    const u = res.usage || {};
+    console.log(`[ingest] extract done msg=${ctx.msgId} turns=${turn + 1} tools=${toolCalls} in=${u.input_tokens || 0} out=${u.output_tokens || 0}`);
     return parseJsonLoose(text);
   }
-  console.warn("[ingest] hit MAX_TURNS without a final answer");
+  console.warn(`[ingest] hit MAX_TURNS (${MAX_TURNS}) without a final answer msg=${ctx.msgId}`);
   return null;
 }
 
-async function extractWithFallback(client, payload, recentContext) {
+async function extractWithFallback(client, payload, ctx) {
   try {
-    return await extractReceipt(client, payload, true, recentContext);
+    return await extractReceipt(client, payload, true, ctx);
   } catch (e) {
-    // If structured output is rejected alongside server tools, degrade to
+    // If structured output is rejected alongside tools/thinking, degrade to
     // prompt-only JSON. Anything else (auth, overload) propagates to the
     // error handler, which leaves a review placeholder.
     if (e && e.status === 400) {
       console.warn("[ingest] 400 with output_config, retrying without schema: " + String(e.message || e).slice(0, 200));
-      return await extractReceipt(client, payload, false, recentContext);
+      return await extractReceipt(client, payload, false, ctx);
     }
     throw e;
   }
@@ -420,20 +570,29 @@ export default async (req) => {
   const msgId = clean(body.gmailMessageId);
   if (!msgId) return Response.json({ ok: false, error: "Missing gmailMessageId" }, { status: 400 });
   const channel = clean(body.channel) === "travel" ? "travel" : "receipts";
-  const key = "msg/" + msgId;
+  // Dry run (testing the bookkeeper's READ without touching the books): the
+  // full extraction runs, nothing is written to the sheet, and the result is
+  // stored under its own key "msg/dry-<id>" so it shows up in the queue's
+  // Pending tab as a separate, clearly labeled envelope — the real record for
+  // that email (if any) is left alone. Delete dry-run cards from the queue
+  // when done. Triggered by the poller's dryRunIngest().
+  const dryRun = body.dryRun === true || body.dryRun === "true";
+  const recordId = dryRun ? "dry-" + msgId : msgId;   // what the queue knows this envelope as
+  const key = "msg/" + recordId;
   const store = getStore({ name: STORE, consistency: "strong" });
 
   // Idempotency: this key has exactly one writer (us), so a plain existence
-  // check is race-free. A prior "error" record may be reprocessed.
+  // check is race-free. A prior "error" record may be reprocessed; a dry run
+  // always re-runs.
   const existing = await store.get(key, { type: "json" });
-  if (existing && existing.status !== "error") {
+  if (existing && existing.status !== "error" && !dryRun) {
     return Response.json({ ok: true, added: 0, skipped: "already ingested" });
   }
 
   // FIRST WRITE: a visible processing record. If anything below crashes hard,
   // this record (and the morning summary's stale-processing check) is the trail.
   const envelope = {
-    msgId, channel,
+    msgId: recordId, channel, dryRun,
     gmailUrl: clean(body.gmailUrl),
     subject: clean(body.subject),
     from: clean(body.from),
@@ -476,9 +635,9 @@ export default async (req) => {
     await store.setJSON(key, envelope);
 
     const client = new Anthropic();
-    const [books, queue] = await Promise.all([sheetBooksContext(), recentItemsContext(store)]);
-    const recentContext = { books, queue };
-    const parsed = await extractWithFallback(client, body, recentContext);
+    // The model pulls the books / queue history itself via tools now, so
+    // nothing is pre-chewed into the prompt.
+    const parsed = await extractWithFallback(client, body, { payload: body, store, selfKey: key, msgId });
 
     let items = [];
     if (parsed && Array.isArray(parsed.items)) {
@@ -497,7 +656,7 @@ export default async (req) => {
           notes: it.notes,
           channel,
           sourceUrl: receiptUrl,
-          sourceMsgId: msgId,
+          sourceMsgId: recordId,
         }));
     }
 
@@ -524,7 +683,7 @@ export default async (req) => {
     // placeholder linking to the email.
     if (!items.length && !isEmpty) {
       console.warn(`[ingest] NO-ITEMS -> review placeholder msg=${msgId} subject="${envelope.subject}" atts=${attCount}`);
-      items = [reviewPlaceholder(body, msgId, channel, "Claude could not extract line items")];
+      items = [reviewPlaceholder(body, recordId, channel, "Claude could not extract line items")];
       items[0].sourceUrl = receiptUrl;
     }
 
@@ -550,7 +709,8 @@ export default async (req) => {
       const cutoffT = Date.now() - 6 * 60 * 60 * 1000;
       const others = await Promise.all((blobs || []).filter((b) => b.key !== key).map((b) => store.get(b.key, { type: "json" })));
       for (const env2 of others) {
-        for (const it2 of (env2 && env2.items) || []) {
+        if (!env2 || env2.dryRun) continue;   // dry-run cards are test artifacts, never evidence
+        for (const it2 of env2.items || []) {
           if (it2.status === "dismissed") continue;
           const k2 = clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2);
           if (!knownTxns.has(k2)) knownTxns.set(k2, []);
@@ -651,7 +811,7 @@ export default async (req) => {
           }
         }
         try {
-          const wrote = await sheetAppend(item, msgId, forceDistinct);
+          const wrote = dryRun ? { wrote: "(dry run)" } : await sheetAppend(item, msgId, forceDistinct);
           if (wrote.duplicate) {
             // The writer's serialized gate saw this charge land from another
             // message — the airtight backstop for twins racing within seconds.
@@ -679,6 +839,22 @@ export default async (req) => {
       }
     }
 
+    // Dry run: nothing was written; every item goes to Pending carrying the
+    // verdict it WOULD have received, so the read can be judged in the queue.
+    if (dryRun) {
+      for (const item of items) {
+        const verdict = item.status === "filed" ? "would AUTO-FILE to " + item.category + " at $" + sheetAmount(item)
+          : item.status === "dismissed" ? "would AUTO-DISMISS"
+          : "would HOLD for review";
+        item.status = "pending";
+        item.autoFiled = false;
+        item.sheetCell = "";
+        item.approvedAt = "";
+        item.notes = clean("[DRY RUN " + verdict + "] " + item.notes).slice(0, 300);
+      }
+      filed = 0; dismissed = 0; pending = items.length;
+    }
+
     envelope.status = "done";
     envelope.processedAt = new Date().toISOString();
     envelope.vendor = clean(parsed && parsed.vendor);
@@ -696,7 +872,7 @@ export default async (req) => {
     envelope.status = "error";
     envelope.error = err.slice(0, 500);
     envelope.processedAt = new Date().toISOString();
-    envelope.items = [reviewPlaceholder(body, msgId, channel, "Ingest error: " + err.slice(0, 200))];
+    envelope.items = [reviewPlaceholder(body, recordId, channel, "Ingest error: " + err.slice(0, 200))];
     try { await store.setJSON(key, envelope); } catch (_) {}
     // An error envelope is re-ingestable; the poller re-uploads attachments
     // on the retry, so the transient blobs can go now either way.

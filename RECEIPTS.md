@@ -55,8 +55,10 @@ receipt → receipts@ or travel@ ──(Gmail: travel@ POP-imported into paul@)�
                          • loads attachment bytes from Blobs; HEIC → JPEG
                          • reads the REAL sheet (receipts-sheet readRecent) so it can
                            spot charges already on the books — incl. hand-entered rows
-                         • Claude Opus 5 + web search: itemize, decode SKUs,
-                           categorize, per-item tax, per-item confidence, duplicate call
+                         • Claude Opus 5 DIRECTS the read (thinking + tool loop):
+                           zoom (full-res crops), read_books (the real sheet),
+                           search_records (queue history), web search (SKUs)
+                           → itemize, categorize, per-item tax/confidence/duplicate
                          • HIGH confidence → files directly to the sheet ("filed")
                          • uncertain / duplicate → queued "pending" with a why-note
                                         │
@@ -178,7 +180,7 @@ All Netlify v2 (`.mjs`, `export default`).
 | `receipts-ping.mjs` | `x-admin-token` == `ADMIN_PASSWORD` | Login check for the queue page. |
 | `receipts-upload.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | **Synchronous** (6 MB cap) attachment drop: parks one attachment's base64 in Blobs at `upload/<msgId>/<i>`. Exists because the BACKGROUND ingest is an async invocation with a **~256 KB request cap** — attachment bytes can never ride the ingest POST (every photo 413-bounced until 2026-08-21). The poller uploads here first; the ingest gets blob references, loads the bytes, and deletes the transient keys. |
 | `receipts-data.mjs` | `x-admin-token` == `ADMIN_PASSWORD` | Queue API: `list` / `seed` / `update` / `approve` / `dismiss` / `delete` / `clear` / `migrate` (one-time legacy `queue.json` split). Mutations locate the owning envelope via the item's `sourceMsgId`. **Approve** computes the tax-inclusive amount and POSTs to the sheet-writer; only marks approved if that write succeeds. |
-| `receipts-ingest-background.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | **Background function** (202 immediately, up to 15 min). The bookkeeper itself: processing-record-first, HEIC→JPEG, Claude `claude-opus-5` via `@anthropic-ai/sdk` with server-side `web_search` (max 4) + `web_fetch` (max 6) for SKU lookups, structured-output JSON (loose-parse fallback), `pause_turn` resume loop, refusal fallbacks enabled. Files high-confidence items to the sheet, queues the rest. **Idempotent** by Gmail message id; **never silently drops** (crash → `error` record + ⚠️ review item). |
+| `receipts-ingest-background.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | **Background function** (202 immediately, up to 15 min). The bookkeeper itself: processing-record-first, HEIC→JPEG, then Claude `claude-opus-5` via `@anthropic-ai/sdk` **as the director of the read** (2026-09-09): adaptive extended thinking + a client-side tool loop — `zoom` (crops any region of an image attachment via `jimp` and returns it at full resolution), `read_books` (queries the writer's `readRecent`, filtered by vendor/category/days), `search_records` (queries the queue's own 90-day history by vendor/amount) — plus server-side `web_search` (max 4) + `web_fetch` (max 6) for SKU lookups; up to 20 tool turns. Structured-output JSON (loose-parse fallback), refusal fallbacks enabled. Files high-confidence items to the sheet, queues the rest. **Idempotent** by Gmail message id; **never silently drops** (crash → `error` record + ⚠️ review item). `dryRun:true` runs the full read, writes nothing to the sheet, and stores the result under `msg/dry-<id>` as `[DRY RUN …]` Pending cards. |
 | `receipts-summary.mjs` | body `token` == `RECEIPTS_SHEET_TOKEN` | Data for the morning email: yesterday's auto-filed items by category + totals, all pending review items, stuck-processing and errored ingests, and `lostMsgIds` reconciliation (receipts-done emails with no record). |
 
 ### The queue page (`receipts/index.html`)
@@ -209,7 +211,7 @@ of record — live copies are pasted into script.google.com.
 
 | Script | Type | Purpose |
 |---|---|---|
-| `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), and `testPollBatch()` (process without labeling done). |
+| `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), `testPollBatch()` (process without labeling done), and **`dryRunIngest()`** (re-read specific message ids through the bookkeeper with nothing written — results land as `[DRY RUN …]` cards in Pending; edit its `MSG_IDS` list first). |
 | `receipts-daily-summary.gs` | Time trigger (daily **3–4 AM Central**); lives as `summary.gs` in the **same project as the poller** | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. `dailySummary()` = yesterday (the trigger); `summaryToday()` = an on-demand "today so far" digest. Project timezone is America/Chicago. Keep user-facing strings ASCII (`\uXXXX` escapes) — pasting into the editor mangles UTF-8. |
 | `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
 | `receipts-sheet-sort.gs` | Manual run; project **"RECAST BIZ Sorter"**, id `1dE6KeuDNNkto-9XTDvgRAk1M6k710k4Bdl7voht1wzoJYKxbW3ObaMNa` | Maintenance: sorts the rows inside every category block by date, oldest at top, and normalizes the date column to `MM/dd/yy`. Rows land in PROCESSED order, not DATED order, so blocks drift — re-run whenever one looks out of order. Locates blocks by NAME in row 1 (never hardcoded columns), backs the tab up first, carries HYPERLINK formulas and per-cell number formats with their rows, aborts if the poller appends mid-run, and refuses to finish if any block's row count or total moved. ONE entry point (`sortRecastBizByDate`) so the editor preselects it; `SORT_CFG.DRY_RUN` picks report-only vs apply, and is left **true** in the repo. |
@@ -281,10 +283,29 @@ block's total is unchanged. Re-running when nothing has drifted is a no-op.
 POST `{token, action:"inspect"}` to the sheet-writer `/exec` URL for each
 block's position, item count, next-write cell, and headroom.
 
+### Test the bookkeeper's READ without touching the books (dry run)
+Put the Gmail message id(s) in `MSG_IDS` inside `dryRunIngest()` (Receipts
+Bookkeeper project) and run it. Each email is re-read by the full bookkeeper —
+thinking, zoom, books lookup — but nothing is written to the sheet and the
+real record is untouched; the result appears in the queue's **Pending** tab as
+a card whose note starts `[DRY RUN would AUTO-FILE … / would HOLD … / would
+AUTO-DISMISS]`. Judge the read, then delete the dry-run card (the queue's
+delete, or `netlify blobs:delete receipts-data msg/dry-<id>` — same effect; the
+`file/<id>/*` blobs are shared with the real record and are left alone either
+way). Dry-run records are ignored as duplicate evidence by real ingests.
+Editor gotcha (2026-09-09): the function dropdown only honors a selection
+after a real click on the dropdown, arrow keys to the name, then a
+mouse-drag from the dropdown button onto the option — a plain click or Enter
+changes the label but Run still executes the previously selected function.
+Confirm on the Executions page which function actually ran.
+
 ### Tune cost vs accuracy
-Extraction runs `claude-opus-5` with web search capped (4 searches / 6 fetches
-per receipt). Switch the `MODEL` constant in `receipts-ingest-background.mjs`
-to `claude-haiku-4-5` to cut cost (expect more pending items).
+Extraction runs `claude-opus-5` with adaptive thinking and a tool loop (zoom /
+read_books / search_records; web search capped at 4 searches / 6 fetches per
+receipt; 20 tool turns max). Expect roughly 3–5× the tokens of the old one-shot
+read on a receipt that needs zooming — single-digit dollars a month at current
+volume. Switch the `MODEL` constant in `receipts-ingest-background.mjs` to a
+cheaper model to cut cost (expect more pending items).
 
 ---
 
@@ -327,7 +348,7 @@ Published to the stable Netlify **alias** (permanent no-cache URL, separate
 from the production deploy):
 
 ```
-npm install                                  # bundles @anthropic-ai/sdk + heic-convert
+npm install                                  # bundles @anthropic-ai/sdk + heic-convert + jimp
 netlify deploy --no-build --alias receipts   # from /Users/paulbjork/Desktop/Claude/Recast-site
 ```
 
@@ -342,6 +363,17 @@ edits do Deploy → Manage deployments → ✏️ → New version.
 ---
 
 ## STATUS — LIVE since 2026-08-22 (~3:30 PM Central)
+
+**2026-09-09 — the model-directed read is live on the alias** (thinking + zoom +
+read_books + search_records; see the change log). Verified by dry run before
+anything else touched it: the Tom Thumb pump photo now reads **$78.98** (zoomed,
+22.318 × $3.539 reconciled, high) and is recognized as already on the sheet; both
+legs of the 08/30 Uber base/tip pair reconcile to the cent and come back
+"confirmed duplicate"; the Local Government Solutions receipt that was held on
+"items $10.00 ≠ subtotal $10.30" now finds the $0.30 fee line (10.00 + 0.30 =
+10.30) and would file it; the 09/02 Home Depot "Fwd:" twin is a confirmed
+duplicate. No schema/tool/thinking 400 seen — the schema stays. Text receipts
+took 2–3 turns and 2–6 tool calls each; only the photo needed zoom.
 
 **The bookkeeper is in production.** Writer **v10** (deployment `@10`, the
 first version with the sheet-based duplicate check actually live — see
@@ -387,6 +419,33 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-09-09** — **The model directs the read: thinking + zoom + books
+  lookup.** Trigger: a Tom Thumb pump-display photo (09/06) sat in Pending at
+  $70.90 medium-confidence; the display actually read **$78.98** for 22.318
+  gal, and 22.318 × $3.539 = $78.98 to the cent — the bookkeeper had even
+  written the tell-tale "$3.177/gal" in its own note without being able to
+  act on it. Paul: "every time I ask you to look at it you solve it. I want
+  the API to solve it." Root cause: the ingest was a one-shot form-filler —
+  one downscaled image, a pre-chewed text dump of the books, no way to look
+  closer or look anything up (the only tool it ever had was web search).
+  Now `extractReceipt` is a real tool loop with adaptive extended thinking:
+  `zoom` (crop any region of an image attachment at full resolution, via
+  `jimp`; small crops upscaled to ≥800px), `read_books` (the writer's
+  `readRecent`, filtered), `search_records` (queue history, filtered) — and
+  the prompt tells it the METHOD: zoom before deciding what a blurry digit
+  says, check the books before calling anything a duplicate, make the
+  arithmetic reconcile (line items ↔ subtotal; gallons × a real x.xx9 pump
+  price ↔ total), and say in the note what it verified. Business rules are
+  unchanged. Every deterministic seatbelt stays (subtotal reconcile, txn
+  numbers, twin holds, ride-pair hold, the writer's ScriptLock gate) — ripping
+  those out is a later pass once the model has made them redundant.
+  Added `dryRun` to the ingest + `dryRunIngest()` to the poller so the read
+  can be judged in the queue with nothing written (see Operating notes).
+  Deps: `jimp@^1.6`. Poller change is a paste into the Bookkeeper project;
+  no writer change. **Deployed to the alias and verified by dry run the same
+  day** — five historically hard emails (pump photo, Uber base/tip pair, LGS
+  subtotal hold, Fwd twin) all read correctly; details under STATUS.
 
 - **2026-09-03** — **Transaction numbers settle duplicates.** Paul, looking at
   two Telnyx $5 receipts held in Pending: "you should be smart enough to check
