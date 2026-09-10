@@ -84,11 +84,13 @@ const EXTRACT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["description", "amount", "taxable", "category", "confidence", "duplicate", "notes"],
+        required: ["description", "amount", "taxable", "category", "confidence", "duplicate", "supersedesAmount", "supersedesCell", "notes"],
         properties: {
           description: { type: "string" },
           amount: { type: "number", description: "What was actually paid for this line, excluding ONLY Texas sales tax" },
-          duplicate: { enum: ["no", "suspected", "confirmed"], description: "Is this charge already recorded in the books shown to you?" },
+          duplicate: { enum: ["no", "suspected", "confirmed", "supersedes"], description: "Is this charge already recorded in the books? 'supersedes' = this receipt is an UPDATED version of a charge that is already recorded (Uber's tipped receipt after the base receipt was filed; a corrected invoice) and the recorded row must be changed to THIS amount" },
+          supersedesAmount: { type: "number", description: "When duplicate is 'supersedes': the amount currently recorded for that charge, exactly as read_books / search_records showed it; 0 otherwise" },
+          supersedesCell: { type: "string", description: "When duplicate is 'supersedes' and search_records showed a sheet cell for the recorded charge, that cell (e.g. Z65:AD65); '' otherwise" },
           taxable: { type: "boolean" },
           category: { enum: [...CATEGORIES, ""] },
           confidence: { enum: ["high", "medium", "low"] },
@@ -117,9 +119,9 @@ Transaction numbers are decisive. Every receipt with a transaction, order, invoi
 
 Category precedent: when the books already show this vendor under a category, use that category and treat it as certain — the owner chose it. Do not drop to medium because another category is arguable.
 
-Duplicate detection — read_books and search_records show you what is already recorded; check them. Judge each item: "confirmed" duplicate when this email clearly documents a charge that is already recorded (e.g. an invoice email and a receipt email for the same payment, same vendor + amount + service period); "suspected" when it plausibly is but you cannot be sure (e.g. same vendor and amount but the receipt does not show a distinguishing date/period/invoice number); "no" otherwise. Two genuinely separate charges that happen to match (two months of the same subscription with different periods) are NOT duplicates. Explain your duplicate reasoning in that item's notes. If the receipt has no itemized list (gas, a single service charge, a hotel folio total), return one item describing the whole purchase with its pre-tax amount. If the email is not a receipt at all (marketing, shipping notice with no charges), return an empty items array with a note of why in vendor position is not needed — just items: [].
+Duplicate detection — read_books and search_records show you what is already recorded; check them. Judge each item: "confirmed" duplicate when this email clearly documents a charge that is already recorded (e.g. an invoice email and a receipt email for the same payment, same vendor + amount + service period); "suspected" when it plausibly is but you cannot be sure (e.g. same vendor and amount but the receipt does not show a distinguishing date/period/invoice number); "no" otherwise. Two genuinely separate charges that happen to match (two months of the same subscription with different periods) are NOT duplicates. A fourth verdict, "supersedes", is for an UPDATED version of a charge that is already recorded: the recorded row is right about the charge but wrong about the amount, and this receipt has the final number (Uber's tipped receipt after the base receipt was filed; a corrected or amended invoice). Give supersedesAmount = the recorded amount exactly as the books/records showed it, and supersedesCell = the sheet cell if search_records showed one. The system then updates that row to this amount by itself — nothing waits for a human — so use "supersedes" only when you have actually found the recorded row and are sure it is the same charge. Explain your duplicate reasoning in that item's notes. If the receipt has no itemized list (gas, a single service charge, a hotel folio total), return one item describing the whole purchase with its pre-tax amount. If the email is not a receipt at all (marketing, shipping notice with no charges), return an empty items array with a note of why in vendor position is not needed — just items: [].
 
-Rideshare rules (Uber and Lyft RIDES — not Uber Eats or any food delivery): a ride is always ONE item, amount = everything paid including the tip. Write the description as route and time, e.g. "Uber 5:12 PM DFW Airport -> Waxahachie" — route and time are how a later receipt for the same ride gets matched, so always include them when the receipt shows them. Uber's "[Personal]" subject tag is a profile label, not a verdict on the expense. Standing owner rule: any ride whose pickup OR dropoff is an airport (an airport name or code — DFW, DAL, PDX, "International Airport", etc.) IS a business expense — category Travel, and the [Personal] tag alone must not keep such a ride from high confidence. A [Personal] ride with no airport end stays a human call: confidence at most medium, and say why in the notes. [Personal] food delivery is usually a personal expense — never high confidence.
+Rideshare rules (Uber and Lyft RIDES — not Uber Eats or any food delivery): a ride is always ONE item, amount = everything paid including the tip. Write the description as route and time, e.g. "Uber 5:12 PM DFW Airport -> Waxahachie" — route and time are how a later receipt for the same ride gets matched, so always include them when the receipt shows them. Uber sends a base-fare receipt and, once the rider tips, an UPDATED receipt for the same ride at a higher total; the books must hold ONE row per ride at the tip-included total. If the base ride is already recorded (same route and time) and this is the tipped receipt, that is duplicate "supersedes" with supersedesAmount = the recorded amount; if this is the base receipt and the tipped total is already recorded, that is duplicate "confirmed"; an identical amount already recorded for the same ride is "confirmed" too. Uber's "[Personal]" subject tag is a profile label, not a verdict on the expense. Standing owner rule: any ride whose pickup OR dropoff is an airport (an airport name or code — DFW, DAL, PDX, "International Airport", etc.) IS a business expense — category Travel, and the [Personal] tag alone must not keep such a ride from high confidence. A [Personal] ride with no airport end stays a human call: confidence at most medium, and say why in the notes. [Personal] food delivery is usually a personal expense — never high confidence.
 
 Tipped updates: Uber often sends TWO receipts for one ride — the base fare first, then an updated receipt that includes the tip. The tip-included receipt is the authoritative total; the books must hold exactly ONE row per ride, at the tipped total. If the books already show what looks like the same ride (same date, matching route/time, LOWER amount) and THIS receipt includes the tip, mark the item duplicate "suspected" with a note naming both amounts, e.g. "Tipped total $23.45 replaces the untipped $19.80 already on the sheet — fix that row to $23.45, then dismiss this card." If the books already show the ride at a HIGHER (tipped) total and this receipt is the earlier untipped version, mark it duplicate "confirmed" — the charge is already recorded. Two rides on the same day with different routes or times are separate charges, not duplicates.
 
@@ -517,6 +519,62 @@ async function sheetAppend(item, msgId, force) {
   return { wrote: j.wrote || "" };
 }
 
+// Update the row that a superseding receipt replaces (2026-09-10, Paul: "if it
+// caught and adjusted the Uber ride then why does it need my review?"). The
+// writer finds the row by vendor + date inside the category block (amount
+// disambiguates when several match) and rewrites description, link and price.
+// Returns { updated, from } or { notFound: true }; throws on a real error.
+async function sheetUpdate(target, item, msgId) {
+  const sheetUrl = process.env.RECEIPTS_SHEET_URL || "";
+  if (!sheetUrl) throw new Error("RECEIPTS_SHEET_URL not set");
+  const res = await fetch(sheetUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      token: process.env.RECEIPTS_SHEET_TOKEN || "",
+      action: "update",
+      category: target.category,
+      vendor: target.vendor,
+      date: target.date,
+      oldAmount: target.oldAmount,   // as recorded (tax-inclusive on the sheet)
+      cell: target.cell,             // hint only
+      item: item.item,
+      link: item.sourceUrl,
+      amount: sheetAmount(item),
+      msgId,
+    }),
+  });
+  let j = {};
+  try { j = await res.json(); } catch (_) {}
+  if (j.notFound) return { notFound: true, error: clean(j.error) };
+  if (!res.ok || j.ok === false) throw new Error(j.error || ("sheet HTTP " + res.status));
+  return { updated: clean(j.updated), from: clean(j.from) };
+}
+
+// After the writer's serialized gate bounced a write as "already written by
+// another email", look at the record that won the race — it persisted the
+// moment it filed, so its transaction number is available now even though it
+// was not when this ingest's scans ran (twins in the same poll batch, 2026-09-09
+// Anthropic original + Fwd). Returns { txnId, cell, status } or null.
+async function findCompetitor(store, selfKey, existingCell, vendorAmountKey) {
+  const { blobs } = await store.list({ prefix: "msg/" });
+  const envs = await Promise.all((blobs || []).filter((b) => b.key !== selfKey).map((b) => store.get(b.key, { type: "json" })));
+  let byKey = null;
+  for (const env of envs) {
+    if (!env || env.dryRun) continue;
+    for (const it of env.items || []) {
+      if (it.status !== "filed" && it.status !== "approved") continue;
+      if (existingCell && clean(it.sheetCell) && clean(it.sheetCell) === existingCell) {
+        return { txnId: clean(it.txnId), cell: clean(it.sheetCell), status: it.status };
+      }
+      if (!byKey && clean(it.vendor).toLowerCase() + "|" + num(it.amount).toFixed(2) === vendorAmountKey) {
+        byKey = { txnId: clean(it.txnId), cell: clean(it.sheetCell), status: it.status };
+      }
+    }
+  }
+  return byKey;
+}
+
 function makeItem(base) {
   return {
     id: newId(),
@@ -528,6 +586,8 @@ function makeItem(base) {
     taxable: base.taxable !== false,
     confidence: clean(base.confidence) || "low",
     duplicate: clean(base.duplicate) || "no",
+    supersedesAmount: num(base.supersedesAmount) || 0,
+    supersedesCell: clean(base.supersedesCell),
     txnId: clean(base.txnId),
     notes: sanitizeNote(base.notes),
     channel: clean(base.channel) || "receipts",
@@ -652,6 +712,8 @@ export default async (req) => {
           category: CATEGORIES.includes(it.category) ? it.category : "",
           confidence: it.confidence,
           duplicate: clean(it.duplicate) || "no",
+          supersedesAmount: it.supersedesAmount,
+          supersedesCell: it.supersedesCell,
           txnId: parsed.transactionId,
           notes: it.notes,
           channel,
@@ -704,10 +766,13 @@ export default async (req) => {
     // non-dismissed record from another email, keyed vendor|amount, with its
     // number — compared below before any twin hold fires.
     const knownTxns = new Map();   // vendor|amount -> [{ txnId, cell, status }]
+    const otherEnvs = [];          // [{ key, env }] of every other real envelope, for supersede lookups
     try {
       const { blobs } = await store.list({ prefix: "msg/" });
       const cutoffT = Date.now() - 6 * 60 * 60 * 1000;
-      const others = await Promise.all((blobs || []).filter((b) => b.key !== key).map((b) => store.get(b.key, { type: "json" })));
+      const otherKeys = (blobs || []).filter((b) => b.key !== key).map((b) => b.key);
+      const others = await Promise.all(otherKeys.map((k2) => store.get(k2, { type: "json" })));
+      others.forEach((env2, i) => { if (env2 && !env2.dryRun) otherEnvs.push({ key: otherKeys[i], env: env2 }); });
       for (const env2 of others) {
         if (!env2 || env2.dryRun) continue;   // dry-run cards are test artifacts, never evidence
         for (const it2 of env2.items || []) {
@@ -735,6 +800,72 @@ export default async (req) => {
     envelope.items = items;
     let filed = 0, pending = 0, dismissed = 0;
     for (const item of items) {
+      // The model found the recorded row and says THIS receipt has the final
+      // number for it (tipped Uber receipt, amended invoice): update that row,
+      // then retire this card. Only on a high-confidence read; otherwise the
+      // card waits with the model's instructions in the note.
+      if (item.duplicate === "supersedes") {
+        const newAmt = num(item.amount), oldAmt = num(item.supersedesAmount);
+        const vend = clean(item.vendor).toLowerCase();
+        const sameVendor = (v) => { const o = clean(v).toLowerCase(); return o && vend && (o.includes(vend) || vend.includes(o)); };
+        // The recorded charge, if the bookkeeper filed it: its envelope + item.
+        let hit = null;
+        for (const { key: k2, env: env2 } of otherEnvs) {
+          for (const it2 of env2.items || []) {
+            if (it2.status !== "filed" && it2.status !== "approved") continue;
+            const cellMatch = item.supersedesCell && clean(it2.sheetCell) === item.supersedesCell;
+            const rowMatch = sameVendor(it2.vendor) && dateDigits(it2.date) === dateDigits(item.date) &&
+              oldAmt > 0 && (Math.abs(num(it2.amount) - oldAmt) < 0.011 || Math.abs(num(sheetAmount(it2)) - oldAmt) < 0.011);
+            if (cellMatch || rowMatch) { hit = { key: k2, env: env2, it: it2 }; break; }
+          }
+          if (hit) break;
+        }
+        const target = hit
+          ? { category: hit.it.category, vendor: hit.it.vendor, date: hit.it.date, oldAmount: sheetAmount(hit.it), cell: clean(hit.it.sheetCell) }
+          : { category: item.category, vendor: item.vendor, date: item.date, oldAmount: oldAmt, cell: item.supersedesCell };
+        const where = (target.cell ? "sheet " + target.cell : target.category + " block") + " (" + target.vendor + " " + target.date + " $" + num(target.oldAmount).toFixed(2) + ")";
+        if (!autoFileGate(item) || !(oldAmt > 0) || !(newAmt > 0) || !CATEGORIES.includes(target.category)) {
+          item.status = "pending";
+          item.notes = clean("Supersedes " + where + " → $" + newAmt.toFixed(2) + ", but not filed automatically (" + (autoFileGate(item) ? "recorded row not identified" : "confidence " + item.confidence) + ") — fix that row by hand, then Dismiss this card. " + item.notes).slice(0, 300);
+          console.warn(`[ingest] SUPERSEDE-HOLD msg=${msgId} vendor="${item.vendor}" ${oldAmt}->${newAmt} conf=${item.confidence}`);
+          pending++;
+          continue;
+        }
+        if (dryRun) {
+          item.status = "dismissed";
+          item.notes = clean("Supersedes " + where + " → $" + sheetAmount(item) + ". " + item.notes).slice(0, 300);
+          dismissed++;
+          continue;
+        }
+        try {
+          const upd = await sheetUpdate(target, item, msgId);
+          if (upd.notFound) {
+            item.status = "pending";
+            item.notes = clean("Supersedes " + where + " → $" + newAmt.toFixed(2) + ", but that row was not found on the sheet (" + upd.error + ") — fix by hand, then Dismiss this card. " + item.notes).slice(0, 300);
+            console.warn(`[ingest] SUPERSEDE-NOTFOUND msg=${msgId} vendor="${item.vendor}" ${where}`);
+            pending++;
+            continue;
+          }
+          item.status = "dismissed";
+          item.sheetCell = upd.updated;
+          item.notes = clean("Updated " + upd.updated + " from $" + num(upd.from || target.oldAmount).toFixed(2) + " to $" + sheetAmount(item) + " — this receipt supersedes the recorded charge. " + item.notes).slice(0, 300);
+          console.log(`[ingest] SUPERSEDE-UPDATED msg=${msgId} vendor="${item.vendor}" cell=${upd.updated} ${upd.from}->${sheetAmount(item)}`);
+          dismissed++;
+          if (hit) {
+            // Keep the queue's record of the recorded charge in step with the sheet.
+            hit.it.amount = item.amount;
+            hit.it.item = item.item;
+            hit.it.sourceUrl = item.sourceUrl;
+            hit.it.notes = clean("Updated to $" + sheetAmount(item) + " by a later receipt for the same charge (" + msgId + "). " + hit.it.notes).slice(0, 300);
+            try { await store.setJSON(hit.key, hit.env); } catch (_) {}
+          }
+        } catch (e) {
+          item.status = "pending";
+          item.notes = clean("Supersedes " + where + " → $" + newAmt.toFixed(2) + " — sheet update failed: " + String((e && e.message) || e) + ". Fix by hand, then Dismiss this card. " + item.notes).slice(0, 300);
+          pending++;
+        }
+        continue;
+      }
       if (item.duplicate === "confirmed") {
         item.status = "dismissed";
         item.notes = clean("Auto-dismissed as duplicate. " + item.notes).slice(0, 300);
@@ -811,10 +942,34 @@ export default async (req) => {
           }
         }
         try {
-          const wrote = dryRun ? { wrote: "(dry run)" } : await sheetAppend(item, msgId, forceDistinct);
+          let wrote = dryRun ? { wrote: "(dry run)" } : await sheetAppend(item, msgId, forceDistinct);
           if (wrote.duplicate) {
             // The writer's serialized gate saw this charge land from another
             // message — the airtight backstop for twins racing within seconds.
+            // Before holding, ask the record that won the race for its number:
+            // same number → this is the same charge, dismiss; different numbers
+            // → separate charges, write it after all. Rideshare stays a hold
+            // (its numbers do not settle base/tip pairs).
+            let rival = null;
+            if (item.txnId && !isRideshare(item.vendor)) {
+              try { rival = await findCompetitor(store, key, wrote.existing, k); }
+              catch (e) { console.warn("[ingest] competitor lookup failed: " + String((e && e.message) || e)); }
+            }
+            if (rival && rival.txnId && rival.txnId === item.txnId) {
+              item.duplicate = "confirmed";
+              item.status = "dismissed";
+              item.notes = clean("Auto-dismissed: transaction #" + item.txnId + " was recorded moments ago from another email" + (rival.cell ? " (sheet " + rival.cell + ")" : "") + " — same receipt arrived twice. " + item.notes).slice(0, 300);
+              console.warn(`[ingest] TXN-SAME-DISMISS-AFTER-BOUNCE msg=${msgId} vendor="${item.vendor}" amount=${item.amount} txn=${item.txnId}`);
+              dismissed++;
+              continue;
+            }
+            if (rival && rival.txnId && rival.txnId !== item.txnId) {
+              item.notes = clean("Transaction #" + item.txnId + " differs from #" + rival.txnId + (rival.cell ? " (" + rival.cell + ")" : "") + " recorded moments ago — separate charge. " + item.notes).slice(0, 300);
+              console.log(`[ingest] TXN-DISTINCT-FILE-AFTER-BOUNCE msg=${msgId} vendor="${item.vendor}" amount=${item.amount} txn=${item.txnId} vs=${rival.txnId}`);
+              wrote = await sheetAppend(item, msgId, true);
+            }
+          }
+          if (wrote.duplicate) {
             item.duplicate = "suspected";
             item.status = "pending";
             item.notes = clean("⚠️ Same vendor + amount + date" + (wrote.existing ? " (sheet " + wrote.existing + ")" : "") + " was already written by another email — possible original/forward pair. Verify before approving. " + item.notes).slice(0, 300);
@@ -844,6 +999,7 @@ export default async (req) => {
     if (dryRun) {
       for (const item of items) {
         const verdict = item.status === "filed" ? "would AUTO-FILE to " + item.category + " at $" + sheetAmount(item)
+          : item.status === "dismissed" && item.duplicate === "supersedes" ? "would UPDATE the recorded row to $" + sheetAmount(item) + " and retire this card"
           : item.status === "dismissed" ? "would AUTO-DISMISS"
           : "would HOLD for review";
         item.status = "pending";

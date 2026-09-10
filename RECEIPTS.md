@@ -171,6 +171,18 @@ can't see. The writer can't edit existing rows, so the tipped-update case
 surfaces as a Pending card telling you exactly which row to fix, not a silent
 auto-repair.
 
+**Supersede (2026-09-10):** when the model says a receipt *supersedes* a
+recorded charge (Uber's tipped receipt after the base fare filed; an amended
+invoice) and the read is high-confidence, the ingest updates that sheet row in
+place through the writer's `update` action and dismisses the card with a note
+naming the cell and both amounts. No human step. If the row can't be found or
+confidence is lower, the card waits with the fix spelled out.
+
+**Twins that race (2026-09-10):** when the writer's lock bounces a write as
+"already written by another email", the ingest now reads the winning record's
+transaction number before deciding: same number → auto-dismiss, different →
+file with `force`, no numbers → hold as before.
+
 ### Netlify functions (`netlify/functions/`)
 
 All Netlify v2 (`.mjs`, `export default`).
@@ -218,10 +230,10 @@ into the editor mangles em dashes; if the token has expired
 
 | Script | Type | Purpose |
 |---|---|---|
-| `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), `testPollBatch()` (process without labeling done), and **`dryRunIngest()`** (re-read specific message ids through the bookkeeper with nothing written — results land as `[DRY RUN …]` cards in Pending; edit its `MSG_IDS` list first). |
+| `receipts-poller.gs` | Time trigger (every 15 min); project **"Receipts Bookkeeper"**, id `1c7Y3GZKeMUGltRco4-3lMzEDbw8Ykiqcw7x6aQCUK2vo422FyQ68Hei8` | Searches Gmail `(to:receipts@… OR to:travel@… OR label:receipts OR label:travel) -label:receipts-done`, tags each message with its `channel` (travel@ in To/Cc → `travel`), POSTs to the background ingest, labels the thread `receipts-done` on **202** (accepted). **Hard guard:** a message is only ever ingested if it is actually addressed (To/Cc) to receipts@ or travel@, or its thread carries the explicit `receipts`/`travel` label — a search over-match can never feed other mail to the bookkeeper. `LockService` guard against overlapping runs. Oversized photos are shrunk via a Drive rendition; attachments are uploaded to Blobs first (see `receipts-upload.mjs`) and only references are POSTed. Also holds the maintenance entry points: **`setupTriggers()`** (creates both triggers from code — poll 15 min, summary 3–4 AM Central), **`reprocessLegacyDryRun()` / `reprocessLegacy()`** (one-off: release records+labels so a stalled-era batch can be re-read), `testPollBatch()` (process without labeling done), **`dryRunIngest()`** (re-read specific message ids through the bookkeeper with nothing written — results land as `[DRY RUN …]` cards in Pending; edit the `MSG_IDS` list in `sendIds_` first), and **`reingestIds()`** (same ids, for REAL — delete each message's existing record first or the ingest skips it). |
 | `receipts-backfill-scan.gs` | Manual, one-off; lives as `backfill-scan.gs` in the **same project as the poller** (added to the repo 2026-09-09 — it had only ever existed live) | READ-ONLY pre-receipts@ backfill scan from 2026-08-24: searches Gmail and writes findings to a Drive JSON file. Never writes the sheet, labels, mails, or POSTs. Delete from the project when the backfill is done. `receipts-bookkeeper.appsscript.json` is that project's manifest. |
 | `receipts-daily-summary.gs` | Time trigger (daily **3–4 AM Central**); lives as `summary.gs` in the **same project as the poller** | Collects yesterday's `receipts-done` message ids, POSTs to `receipts-summary`, formats + sends the morning email to paul@ via GmailApp. `dailySummary()` = yesterday (the trigger); `summaryToday()` = an on-demand "today so far" digest. Project timezone is America/Chicago. Keep user-facing strings ASCII (`\uXXXX` escapes) — pasting into the editor mangles UTF-8. |
-| `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u` | Writes an approved/filed row into the matching category block (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
+| `receipts-sheet.gs` | Web app (`/exec`); project **"Receipts Sheet Writer"**, id `1HCWjBfXOAKwx0dWg5z7eW91L9eOji4orBPjBtnw4xZk0mK6JVNIqIs6u`; deployment `AKfycbyh2Y…BXxAGA` (bump with `clasp deploy -i <that id> -d "..."`) | Writes an approved/filed row into the matching category block; `update` (2026-09-10) rewrites the row a superseding receipt replaces (first empty row inside the block's 5 columns — never inserts a full sheet row). Serialized **duplicate gate** (see "The autofile gate"): rejects a vendor+amount+date already written by another `msgId` in the last 6h; `force:true` (human Approve) bypasses. `inspect` action reports block positions + headroom. Auth: body `token` == script property `WEBHOOK_SECRET`. Target tab `CONFIG.TAB_NAME` (**`RECAST BIZ`**; use `TEST` while verifying changes). |
 | `receipts-sheet-sort.gs` | Manual run; project **"RECAST BIZ Sorter"**, id `1dE6KeuDNNkto-9XTDvgRAk1M6k710k4Bdl7voht1wzoJYKxbW3ObaMNa` | Maintenance: sorts the rows inside every category block by date, oldest at top, and normalizes the date column to `MM/dd/yy`. Rows land in PROCESSED order, not DATED order, so blocks drift — re-run whenever one looks out of order. Locates blocks by NAME in row 1 (never hardcoded columns), backs the tab up first, carries HYPERLINK formulas and per-cell number formats with their rows, aborts if the poller appends mid-run, and refuses to finish if any block's row count or total moved. ONE entry point (`sortRecastBizByDate`) so the editor preselects it; `SORT_CFG.DRY_RUN` picks report-only vs apply, and is left **true** in the repo. |
 
 ### Configuration
@@ -306,6 +318,13 @@ after a real click on the dropdown, arrow keys to the name, then a
 mouse-drag from the dropdown button onto the option — a plain click or Enter
 changes the label but Run still executes the previously selected function.
 Confirm on the Executions page which function actually ran.
+No-editor alternative (2026-09-10): the ingest accepts a direct POST — build the
+payload from the stored copy (`netlify blobs:get receipts-data file/<id>/body`,
+attachments as `dataBase64` from `file/<id>/<n>`; `token` =
+`RECEIPTS_SHEET_TOKEN`, plus `gmailMessageId`, `subject`, `from`,
+`receivedDate`, `channel`, `dryRun:true`) and `curl` it at
+`/.netlify/functions/receipts-ingest-background` on the alias. Same payload with
+`dryRun:false` (after deleting `msg/<id>`) is a real re-ingest.
 
 ### Tune cost vs accuracy
 Extraction runs `claude-opus-5` with adaptive thinking and a tool loop (zoom /
@@ -384,9 +403,9 @@ legs of the 08/30 Uber base/tip pair reconcile to the cent and come back
 duplicate. No schema/tool/thinking 400 seen — the schema stays. Text receipts
 took 2–3 turns and 2–6 tool calls each; only the photo needed zoom.
 
-**The bookkeeper is in production.** Writer **v10** (deployment `@10`, the
-first version with the sheet-based duplicate check actually live — see
-2026-09-03 in the change log) points at **RECAST BIZ**; every receipt link
+**The bookkeeper is in production.** Writer **v11** (same deployment id as
+`@10`, bumped 2026-09-10 for the `update` action; v10 was the first version
+with the sheet-based duplicate check live — see 2026-09-03 in the change log) points at **RECAST BIZ**; every receipt link
 opens the Gmail message;
 triggers: `pollReceipts` every 15 min, `dailySummary` daily 3–4 AM Central
 (Paul wants the digest waiting first thing). Go-live drain: the live poller
@@ -417,9 +436,10 @@ stays: judge by reading the sheet; the queue is the exception lane.
 - Photos > 3 MB are shrunk via Drive; PDFs > 3 MB are skipped → review item.
 - A full category block returns BLOCKED → item waits in Pending; add rows
   under the block and Approve.
-- Two same-day rideshare charges within a tip-sized ratio: the second is held
-  as a possible base/tipped pair for one ride — fix the filed row (if this is
-  the tipped total) or Approve (if they're genuinely two rides), per the note.
+- A tipped Uber receipt arriving after the base fare filed updates that row
+  in place (since 2026-09-10) — you'll see it in the Dismissed tab as
+  "Updated Z65:AD65 from $103.61 to $122.33". Only when the model is unsure
+  does the old hold fire: fix the filed row or Approve, per the note.
 
 **If something looks wrong**: Reprocess a receipt (Operating notes above);
 `summaryToday` in the Receipts Bookkeeper project emails an on-demand digest;
@@ -428,6 +448,34 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-09-10** — **The model's verdict is the action: "supersedes" + number
+  check after a bounce.** First live day of the director read produced two
+  Pending cards whose notes had already solved the problem — the tipped Uber
+  receipt ("fix Z65 to $122.33, then dismiss this card") and an Anthropic
+  original whose "Fwd:" twin had filed seconds earlier with the same receipt
+  number. Paul: "if it caught and adjusted the Uber ride then why does it need
+  my review? … I'm paying for the API to reason this stuff out." Root causes:
+  (1) the schema had no verdict meaning "this replaces a row you already
+  filed" and the writer had no update action, so the model said "suspected"
+  and the card went to Pending; (2) when the writer's serialized gate bounced
+  a twin, the ingest held it without looking at the record that won the race,
+  even though that record carried the same transaction number. Now:
+  `duplicate: "supersedes"` (+ `supersedesAmount`, `supersedesCell`) — on a
+  high-confidence read the ingest finds the recorded charge (queue record by
+  cell/vendor/date/amount, else the model's own pointer), calls the writer's
+  new **`update`** action (writer **v11**: locates the row by vendor + date in
+  the block, amount disambiguates; rewrites description/link/price, never adds
+  a row), retires the new card as dismissed with "Updated Z65:AD65 from
+  $103.61 to $122.33", and keeps the queue's record of the old row in step.
+  Not high confidence / row not found → Pending with the instruction in the
+  note (the old behavior). And after a writer bounce the ingest re-reads the
+  rival record: same number → auto-dismiss; different numbers → write with
+  `force`; no numbers → the old hold. Prompt: rideshare rule now says the
+  tipped receipt supersedes the base row. Poller: `reingestIds()` (real
+  re-ingest of `MSG_IDS`; delete the record first). Dry-run verdict label
+  "would UPDATE the recorded row to $X". Verified by dry run on both live
+  cards before deploy.
 
 - **2026-09-09** — **The model directs the read: thinking + zoom + books
   lookup.** Trigger: a Tom Thumb pump-display photo (09/06) sat in Pending at

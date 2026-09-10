@@ -185,32 +185,39 @@ function pollReceipts() {
 // hold). Judge the read there, then delete the dry-run cards from the queue.
 // Put Gmail message ids in MSG_IDS (the id from the message's Gmail URL, e.g.
 // mail.google.com/mail/u/0/#all/<id>) and run dryRunIngest().
-function dryRunIngest() {
+function dryRunIngest() { return sendIds_(true); }
+
+// REAL re-ingest of the same MSG_IDS (2026-09-10): the full bookkeeper runs and
+// WRITES. The ingest skips any message that already has a queue record (other
+// than an error one), so delete that record first — e.g. the pending card —
+// via the queue's delete or `netlify blobs:delete receipts-data msg/<id>`.
+function reingestIds() { return sendIds_(false); }
+
+function sendIds_(dry) {
   const MSG_IDS = [
-    '1a054074eaf436d8',  // Uber 08/30 afternoon trip $129.44 (with tip) - pair with next
-    '1a053d964db0573d',  // Uber 08/30 afternoon trip $99.44 base charge summary
-    '19c976016b5f86ab',  // Local Government Solutions 02/26 - held on items $10.00 vs subtotal $10.30
-    '1a0640d53a18c970'   // Home Depot 09/02 'Fwd:' twin of an already-filed original
+    '1a0871e249a9c786',  // Uber 09/09 DFW tipped receipt $122.33 - supersedes the $103.61 row at Z65
+    '1a08752080169ebc'   // Anthropic 09/09 original $10.69 - its Fwd twin filed first at AR66 (same receipt #)
   ];
-  // Verified 2026-09-09: the four above plus the Tom Thumb pump photo
-  // (1a07796cc6f0bfa8, $78.98 / 22.318 gal) all read correctly in dry run.
+  // Earlier verified sets: Tom Thumb pump photo 1a07796cc6f0bfa8 ($78.98);
+  // Uber 08/30 pair 1a054074eaf436d8 + 1a053d964db0573d; LGS 19c976016b5f86ab;
+  // Home Depot Fwd twin 1a0640d53a18c970 (all read correctly 2026-09-09).
   const token = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET');
   if (!token) throw new Error('Missing script property WEBHOOK_SECRET');
   MSG_IDS.forEach(function (id) {
     try {
       const message = GmailApp.getMessageById(id);
       const payload = buildPayload_(message, token);
-      payload.dryRun = true;
+      if (dry) payload.dryRun = true;
       const res = UrlFetchApp.fetch(CONFIG.INGEST_URL, {
         method: 'post', contentType: 'application/json',
         payload: JSON.stringify(payload), muteHttpExceptions: true
       });
-      console.log('dry-run ' + id + ' -> ' + res.getResponseCode() + ' "' + message.getSubject() + '"');
+      console.log((dry ? 'dry-run ' : 'REINGEST ') + id + ' -> ' + res.getResponseCode() + ' "' + message.getSubject() + '"');
     } catch (err) {
-      console.error('dry-run ' + id + ' FAILED: ' + String(err));
+      console.error((dry ? 'dry-run ' : 'REINGEST ') + id + ' FAILED: ' + String(err));
     }
   });
-  console.log('Dry run sent for ' + MSG_IDS.length + ' message(s). Results appear in the queue Pending tab in ~1-2 min as [DRY RUN ...] cards.');
+  console.log((dry ? 'Dry run' : 'Re-ingest') + ' sent for ' + MSG_IDS.length + ' message(s). ' + (dry ? 'Results appear in the queue Pending tab in ~1-2 min as [DRY RUN ...] cards.' : 'Results land as real records in ~1-2 min.'));
 }
 
 // ---- TEST HARNESS: process a small batch of REAL receipts WITHOUT marking

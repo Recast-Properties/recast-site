@@ -26,6 +26,11 @@
  *   { action:"inspect" }  -> layout of every category block (for setup/debug)
  *   { action:"append", category, vendor, date, item, link, amount,
  *     msgId?, force? } -> writes a row
+ *   { action:"update", category, vendor, date, oldAmount, amount, item, link,
+ *     msgId? } -> rewrites the row a superseding receipt replaces (2026-09-10:
+ *     Uber's tipped receipt updating the base-fare row). Locates the row by
+ *     vendor + date inside the block; amount disambiguates when several match.
+ *     Returns { ok, updated:<a1>, from:<old price> } or { ok:false, notFound }.
  *
  * Duplicate gate (2026-08-21): doPost already serializes on a ScriptLock, so
  * this is the ONE place concurrent ingests can be reliably deduplicated —
@@ -72,6 +77,7 @@ function doPost(e) {
 
     if (data.action === 'inspect') return inspect_(sheet);
     if (data.action === 'readRecent') return readRecent_(sheet, data);
+    if (data.action === 'update') return update_(sheet, data);
     return append_(sheet, data);
   } catch (err) {
     console.error('RECEIPTS-SHEET ERROR: ' + String(err && err.stack ? err.stack : err));
@@ -239,6 +245,60 @@ function append_(sheet, data) {
     try { CacheService.getScriptCache().put(dupKey, msgId + '|' + a1, 21600); } catch (err) {}
   }
   return jsonResponse_({ ok: true, wrote: a1, category: category });
+}
+
+// ---- update -----------------------------------------------------------------
+// Rewrite the row a superseding receipt replaces. Row = same vendor + date in
+// the category block; if more than one, the one whose price is oldAmount (or
+// oldAmount + 8.25% tax). Never adds a row; never touches any other cell.
+function update_(sheet, data) {
+  const category = String(data.category || '').trim();
+  if (!category) return jsonResponse_({ ok: false, error: 'Missing category' }, 400);
+  const values = sheet.getDataRange().getValues();
+  const hdr = findHeader_(values, category);
+  if (!hdr) return jsonResponse_({ ok: false, notFound: true, error: 'Category block "' + category + '" not found' }, 404);
+
+  const wantV = normVendor_(data.vendor), wantD = normDate_(data.date);
+  const oldNum = parseFloat(String(data.oldAmount == null ? '' : data.oldAmount).replace(/[^0-9.\-]/g, ''));
+  if (!wantV || !wantD) return jsonResponse_({ ok: false, notFound: true, error: 'Need vendor and date to locate the row' }, 400);
+  const cands = [];
+  for (let r = hdr.row + 1; r < values.length; r++) {
+    if (isHeaderRow_(values, r, hdr.col)) break;
+    const v = getCell_(values, r, hdr.col);
+    if (isEmpty_(v) && isEmpty_(getCell_(values, r, hdr.col + 1))) continue;
+    if (normVendor_(v) === wantV && normDate_(getCell_(values, r, hdr.col + 1)) === wantD) cands.push(r);
+  }
+  let row = -1;
+  if (cands.length === 1) row = cands[0];
+  else if (cands.length > 1 && isFinite(oldNum)) {
+    const near = function (r, a) { return Math.abs(parseFloat(normAmount_(getCell_(values, r, hdr.col + 4))) - a) < 0.011; };
+    const exact = cands.filter(function (r) { return near(r, oldNum); });
+    const taxed = exact.length ? exact : cands.filter(function (r) { return near(r, Math.round(oldNum * 1.0825 * 100) / 100); });
+    if (taxed.length === 1) row = taxed[0];
+  }
+  if (row < 0) {
+    return jsonResponse_({ ok: false, notFound: true,
+      error: cands.length ? cands.length + ' rows match ' + data.vendor + ' ' + data.date + ' and none has price ' + data.oldAmount
+                          : 'No row for ' + data.vendor + ' ' + data.date + ' in the ' + category + ' block' }, 404);
+  }
+
+  const writeRow = row + 1, writeCol = hdr.col + 1;
+  const from = getCell_(values, row, hdr.col + 4);
+  const amountNum = parseFloat(String(data.amount).replace(/[^0-9.\-]/g, ''));
+  const amountCell = isFinite(amountNum) ? amountNum : clean_(data.amount);
+  const url = String(data.link || '').trim().replace(/"/g, '');
+  const linkCell = url ? '=HYPERLINK("' + url + '","Receipt")' : null;
+
+  sheet.getRange(writeRow, writeCol + 2).setValue(clean_(data.item));
+  if (linkCell) sheet.getRange(writeRow, writeCol + 3).setFormula(linkCell);
+  sheet.getRange(writeRow, writeCol + 4).setValue(amountCell);
+
+  const a1 = sheet.getRange(writeRow, writeCol, 1, 5).getA1Notation();
+  // Remember the NEW amount as written by this message, so a twin of the
+  // superseding receipt is bounced like any other twin.
+  const dupKey = dupKey_({ vendor: data.vendor, amount: amountCell, date: data.date });
+  if (dupKey) { try { CacheService.getScriptCache().put(dupKey, String(data.msgId || '') + '|' + a1, 21600); } catch (err) {} }
+  return jsonResponse_({ ok: true, updated: a1, from: normAmount_(from), category: category });
 }
 
 // ---- readRecent -------------------------------------------------------------
