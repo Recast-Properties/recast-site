@@ -403,6 +403,12 @@ legs of the 08/30 Uber base/tip pair reconcile to the cent and come back
 duplicate. No schema/tool/thinking 400 seen — the schema stays. Text receipts
 took 2–3 turns and 2–6 tool calls each; only the photo needed zoom.
 
+**2026-09-10 — the model's verdict is the action.** First live day surfaced two
+Pending cards the model had already solved in its notes; now a tipped Uber
+receipt updates the filed row in place (`supersedes` → writer v11 `update`) and
+a twin that loses the race is dismissed on its transaction number instead of
+held. Both fixed live and verified on the sheet the same day (change log).
+
 **The bookkeeper is in production.** Writer **v11** (same deployment id as
 `@10`, bumped 2026-09-10 for the `update` action; v10 was the first version
 with the sheet-based duplicate check live — see 2026-09-03 in the change log) points at **RECAST BIZ**; every receipt link
@@ -475,7 +481,13 @@ ones would simply vanish from the queue).
   tipped receipt supersedes the base row. Poller: `reingestIds()` (real
   re-ingest of `MSG_IDS`; delete the record first). Dry-run verdict label
   "would UPDATE the recorded row to $X". Verified by dry run on both live
-  cards before deploy.
+  cards before deploy, then for real: the Uber card re-ingested and rewrote
+  Z65:AD65 from $103.61 to $122.33 (the other same-day Uber row was left
+  alone — the writer disambiguated by amount), the Anthropic original
+  auto-dismissed on its receipt number; both confirmed on the sheet via
+  `readRecent`. Writer deployed as v11 by Paul (`clasp deploy` is blocked for
+  Claude Code's auto mode — the push/deploy command is in the Apps Scripts
+  section).
 
 - **2026-09-09** — **The model directs the read: thinking + zoom + books
   lookup.** Trigger: a Tom Thumb pump-display photo (09/06) sat in Pending at
