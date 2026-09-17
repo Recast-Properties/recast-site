@@ -556,6 +556,10 @@ async function sheetUpdate(target, item, msgId) {
 // moment it filed, so its transaction number is available now even though it
 // was not when this ingest's scans ran (twins in the same poll batch, 2026-09-09
 // Anthropic original + Fwd). Returns { txnId, cell, status } or null.
+// Any non-dismissed record counts: the writer has just said the sheet already
+// holds this row, and the record that wrote it may not have persisted its
+// "filed" status yet (2026-09-14 Netlify twin: bounced ~1 s before the winner
+// saved, so the same-number match was missed and the card went to Pending).
 async function findCompetitor(store, selfKey, existingCell, vendorAmountKey) {
   const { blobs } = await store.list({ prefix: "msg/" });
   const envs = await Promise.all((blobs || []).filter((b) => b.key !== selfKey).map((b) => store.get(b.key, { type: "json" })));
@@ -563,7 +567,7 @@ async function findCompetitor(store, selfKey, existingCell, vendorAmountKey) {
   for (const env of envs) {
     if (!env || env.dryRun) continue;
     for (const it of env.items || []) {
-      if (it.status !== "filed" && it.status !== "approved") continue;
+      if (it.status === "dismissed") continue;
       if (existingCell && clean(it.sheetCell) && clean(it.sheetCell) === existingCell) {
         return { txnId: clean(it.txnId), cell: clean(it.sheetCell), status: it.status };
       }
@@ -573,6 +577,14 @@ async function findCompetitor(store, selfKey, existingCell, vendorAmountKey) {
     }
   }
   return byKey;
+}
+
+// The record from ANOTHER email carrying this item's transaction number at a
+// different amount, or null. Rideshare excluded (base/tip pairs share a trip).
+export function txnAmountMismatch(knownByTxn, item) {
+  if (!item.txnId || isRideshare(item.vendor)) return null;
+  const mine = num(item.amount).toFixed(2);
+  return (knownByTxn.get(clean(item.vendor).toLowerCase() + "|" + clean(item.txnId)) || []).find((p) => p.amount !== mine) || null;
 }
 
 function makeItem(base) {
@@ -766,6 +778,11 @@ export default async (req) => {
     // non-dismissed record from another email, keyed vendor|amount, with its
     // number — compared below before any twin hold fires.
     const knownTxns = new Map();   // vendor|amount -> [{ txnId, cell, status }]
+    // The same number recorded at a DIFFERENT amount (2026-09-16: CoreLogic
+    // #1520-7474 arrived as one $435 receipt and, forwarded with the owner's note,
+    // as $235 + $200 — the vendor|amount keys above never met, so both filed and
+    // the sheet carried $870). Keyed vendor|txnId so a split or re-read is caught.
+    const knownByTxn = new Map();  // vendor|txnId -> [{ amount, cell, status }]
     const otherEnvs = [];          // [{ key, env }] of every other real envelope, for supersede lookups
     try {
       const { blobs } = await store.list({ prefix: "msg/" });
@@ -780,6 +797,11 @@ export default async (req) => {
           const k2 = clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2);
           if (!knownTxns.has(k2)) knownTxns.set(k2, []);
           knownTxns.get(k2).push({ txnId: clean(it2.txnId), cell: clean(it2.sheetCell), status: it2.status });
+          if (clean(it2.txnId)) {
+            const kt = clean(it2.vendor).toLowerCase() + "|" + clean(it2.txnId);
+            if (!knownByTxn.has(kt)) knownByTxn.set(kt, []);
+            knownByTxn.get(kt).push({ amount: num(it2.amount).toFixed(2), cell: clean(it2.sheetCell), status: it2.status });
+          }
           if (it2.status !== "filed" && it2.status !== "approved") continue;
           if ((Date.parse(it2.approvedAt) || 0) < cutoffT) continue;
           justFiled.set(clean(it2.vendor).toLowerCase() + "|" + num(it2.amount).toFixed(2),
@@ -900,6 +922,22 @@ export default async (req) => {
           console.warn(`[ingest] TXN-SAME-DISMISS msg=${msgId} vendor="${item.vendor}" amount=${item.amount} txn=${item.txnId}`);
           dismissed++;
           continue;
+        }
+        // Same number, different amount, from another email: one receipt read
+        // twice (a split, a re-read). Hold this one and name the other rather than
+        // filing money twice; the owner keeps one. Rideshare excluded as above.
+        if (verdict === "unknown") {
+          const other = txnAmountMismatch(knownByTxn, item);
+          if (other) {
+            item.duplicate = "suspected";
+            item.status = "pending";
+            item.notes = clean("⚠️ Transaction #" + item.txnId + " is already recorded at $" + other.amount +
+              (other.cell ? " (sheet " + other.cell + ")" : other.status === "pending" ? " (waiting in Pending)" : "") +
+              " — same receipt read twice at different amounts (a split or a re-read). Keep ONE: Approve this and fix that row, or Dismiss this. " + item.notes).slice(0, 300);
+            console.warn(`[ingest] TXN-AMOUNT-MISMATCH-HOLD msg=${msgId} vendor="${item.vendor}" amount=${item.amount} txn=${item.txnId} other=${other.amount}`);
+            pending++;
+            continue;
+          }
         }
         const forceDistinct = verdict === "distinct";
         if (forceDistinct) {

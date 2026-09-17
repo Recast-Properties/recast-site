@@ -135,7 +135,13 @@ every non-dismissed record with the same vendor + amount:
 - **every prior record has a number and none is this one** → a separate charge
   (a recurring $5 top-up, two same-day orders) → filed, bypassing the twin
   holds and the writer's vendor|amount|date gate with `force` (`TXN-DISTINCT-FILE`);
-- **either side lacks a number** → the holds below run exactly as before.
+- **either side lacks a number** → the holds below run exactly as before;
+- **same number, DIFFERENT amount** on another email (2026-09-16) → one receipt read
+  twice (a split per Paul's forwarding note, a re-read) → held with the other
+  amount and cell named (`TXN-AMOUNT-MISMATCH-HOLD`); Paul keeps one. Before this,
+  CoreLogic #1520-7474 filed as $435 and again as $235 + $200.
+After a writer bounce, the record that won the race is matched on any non-dismissed
+status — its "filed" flag may be a second behind the sheet (2026-09-16).
 Rideshare is excluded: a ride's base and tipped receipts describe one trip,
 so no number pulled from them proves anything either way. The model sees the
 same numbers in its queue context and is told to treat a matching number as a
@@ -454,6 +460,23 @@ do NOT use it in production (unlabeled emails would re-file; labeled-done
 ones would simply vanish from the queue).
 
 ## Change log
+
+- **2026-09-16** — **Two duplicate-gate gaps found by the parallel-run audit.**
+  Comparing every envelope both bookkeepers wrote 09-11 → 09-16: (1) CoreLogic
+  09-15 arrived as a $435 Stripe receipt and, forwarded with Paul's two-invoice
+  note, as $235 + $200 — the transaction-number check is keyed on vendor|amount, so
+  the numbers never met and both filed ($870 on the sheet; Paul deleted the $435
+  row by hand, and its queue record still says filed at AR69). Now a same-number,
+  different-amount record from another email holds the item (`TXN-AMOUNT-MISMATCH-HOLD`).
+  (2) Netlify 09-14: both copies carried SFWGOE-00008, yet the original went to
+  Pending — the writer bounced it about a second before the winning copy had
+  persisted its `filed` status, and `findCompetitor` only accepted filed/approved
+  records; it now accepts any non-dismissed record. The mismatch check is the exported
+  `txnAmountMismatch` with `tests/receipts-txn-mismatch.test.js`; deployed to the alias
+  the same day and smoke-tested with a dry run of the CoreLogic forward. Also noted, not changed: the
+  poller's `label:receipts OR label:travel` clause is why originals Paul never sent
+  to receipts@ get ingested (they are only in this system's store, never the new
+  one's), which is the source of most original+Fwd twins.
 
 - **2026-09-10** — **The model's verdict is the action: "supersedes" + number
   check after a bounce.** First live day of the director read produced two

@@ -20,8 +20,10 @@ as calendar events with metadata; there is no separate database.
 - Deploy: `netlify deploy --prod` from the repo root (`/Users/paulbjork/Desktop/Claude/Recast-site`).
   The root `package.json` holds the functions' deps + the JSX build step (see `ADMIN.md`
   → Build / deploy, including where the `netlify` binary actually lives on this Mac).
-- Tests: `node tests/parser.test.js` (12/12 green; parser-only) and
-  `node tests/call-completed.test.js` (9/9 green; Telnyx Ed25519 verify + row assembly).
+- Tests: `node tests/parser.test.js` (12/12 green; parser-only),
+  `node tests/call-completed.test.js` (9/9 green; Telnyx Ed25519 verify + row assembly),
+  and `node --test tests/receipts-txn-mismatch.test.js` (3/3; the receipts ingest's
+  split-forward seatbelt, see `RECEIPTS.md`).
 - Business hours: Mon-Fri 09:00-18:00 Central, 60-min slots. Weekday-only is hard-coded
   in `nextBusinessDayCentral` and the out-of-hours rejection logic.
 
