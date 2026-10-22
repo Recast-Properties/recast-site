@@ -100,7 +100,9 @@ project (Admin SDK is already on).
 2. **+ New listing** — fill in the fields, drag in photos, hit **Save**. It's
    live on the site immediately. No deploy, no spreadsheet.
 3. **Click any listing** to edit it — change text, add/remove/reorder photos
-   (the first photo is the cover), then **Save**.
+   (the first photo is the cover), then **Save**. The pill beside the title
+   opens that listing's own page: **View live page ↗** when it's live,
+   **Preview ↗** (the `?preview=1` link) while it isn't.
 4. **Live checkbox** (right end of every row) — untick it and the property
    disappears from the public site everywhere (cards, its own page, sitemap)
    but stays here, dimmed. Tick it to put it back. Saves on click.
@@ -280,6 +282,11 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-22** — **Editor header pill.** Beside the "Edit listing" title, a
+  right-aligned pill opens that listing's page in a new tab — `/homes/<id>`
+  when live, `/homes/<id>?preview=1` (labelled Preview ↗) while hidden. Set in
+  `openEditor()` from the saved row; hidden on a new, unsaved listing.
 
 - **2026-10-21** — **Preview link for not-yet-live listings.** Every row of the
   listings admin has a **Preview ↗** link (after the Live checkbox) to

@@ -179,6 +179,7 @@
     <div class="page-head">
       <button id="backBtn" class="btn sm">‹ Back</button>
       <h1 class="page-title" id="editTitle" style="margin:0">Edit listing</h1>
+      <a id="editLink" class="btn sm site-link hidden" href="#" target="_blank" rel="noopener" style="margin-left:auto">View live page ↗</a>
     </div>
     <div class="card">
       <div class="row">
@@ -376,6 +377,13 @@
     $("app").classList.add("hidden"); $("editor").classList.remove("hidden");
     $("editTitle").textContent = row ? "Edit listing" : "New listing";
     $("deleteBtn").classList.toggle("hidden", !row);
+    // Pill beside the title: this listing's live page, or its preview link while it isn't live.
+    const link = $("editLink"); link.classList.toggle("hidden", !row);
+    if (row) {
+      const hid = String(row.hidden || "").trim() === "1";
+      link.href = "/homes/" + encodeURIComponent(row.id || "") + (hid ? "?preview=1" : "");
+      link.textContent = hid ? "Preview ↗" : "View live page ↗";
+    }
     const g = (k) => (row && row[k] != null ? row[k] : "");
     $("f_id").value = g("id"); $("f_id").readOnly = !!row;
     $("f_status").value = (g("status") || "available").toLowerCase();
