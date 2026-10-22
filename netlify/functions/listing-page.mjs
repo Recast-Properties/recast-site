@@ -26,11 +26,18 @@ function idFromReq(req) {
 
 export default async (req) => {
   const id = idFromReq(req);
+  // ?preview=1 is the admin's "Preview ↗" link: it renders a not-yet-live
+  // listing so it can be shared before it goes live. No password; noindex +
+  // no-store; a banner on top while the listing is hidden.
+  // ponytail: anyone who knows the id and adds ?preview=1 can see a hidden
+  // listing — the photos were already public at /photos/<id>/n.jpg. Add a
+  // per-listing random key if that ever matters.
+  const preview = new URL(req.url).searchParams.has("preview");
   let html;
   try { html = await template(); }
   catch (e) { return new Response("Listing template unavailable", { status: 500 }); }
 
-  const listings = await readListings();
+  const listings = await readListings({ includeHidden: preview });
   const l = listings.find((x) => x.id === id);
 
   if (!l) {
@@ -49,12 +56,20 @@ export default async (req) => {
     .replace(/<div id="root">\s*<\/div>/i, `<div id="root">${listingContentHtml(l)}</div>`)
     .replace(/(<script src="data\.js)/i, `${inject}$1`);
 
+  if (preview) {
+    html = html.replace(/<\/head>/i, `<meta name="robots" content="noindex">\n</head>`);
+    if (l.hidden) html = html.replace(/<div id="root">/i, (m) =>
+      `<div style="position:sticky;top:0;z-index:9999;background:#fdf0d9;color:#9a6a12;font:700 13px/1.4 system-ui,sans-serif;text-align:center;padding:8px 12px">Preview — this listing is not on the public site yet.</div>\n${m}`);
+  }
+
   return new Response(html, {
     status: 200,
     headers: {
       "content-type": "text/html; charset=utf-8",
       // Fresh enough that admin edits show quickly; cached at the edge otherwise.
-      "cache-control": "public, max-age=120, stale-while-revalidate=86400",
+      // A preview is never cached and never indexed.
+      "cache-control": preview ? "no-store" : "public, max-age=120, stale-while-revalidate=86400",
+      ...(preview ? { "x-robots-tag": "noindex" } : {}),
     },
   });
 };

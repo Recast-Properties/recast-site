@@ -104,10 +104,17 @@ project (Admin SDK is already on).
 4. **Live checkbox** (right end of every row) — untick it and the property
    disappears from the public site everywhere (cards, its own page, sitemap)
    but stays here, dimmed. Tick it to put it back. Saves on click.
-5. **View live site ↗** (pill beside the "Listings" heading) opens the public
+5. **Preview ↗** (right end of every row, after Live) opens the listing's own
+   page at `/homes/<id>?preview=1`. It works **whether or not the listing is
+   live** — so untick Live, build the listing, and send that link to Dennis to
+   check it before it goes public. Copy the address from the tab it opens.
+   Not password-protected: anyone with the link can open it. While the listing
+   isn't live a yellow "Preview" banner sits across the top, and search
+   engines are told not to index the page.
+6. **View live site ↗** (pill beside the "Listings" heading) opens the public
    `/homes/` page in a new tab to check what visitors see.
-6. **Delete** removes the listing and all its photos.
-7. **3D walkthrough** — paste the Matterport share link into the "3D walkthrough
+7. **Delete** removes the listing and all its photos.
+8. **3D walkthrough** — paste the Matterport share link into the "3D walkthrough
    URL" field and Save. The listing page gets a 3D walkthrough button; clear the
    field to remove it.
 
@@ -165,6 +172,8 @@ photos, hidden`
   JSON-LD and the CSV feed — while the admin still shows it, dimmed. Absent on
   rows saved before 2026-09-03, which reads as visible. `status` is a different
   axis: a `sold` listing still shows (with its SOLD badge) unless it is hidden.
+  The one way to see a hidden listing is the **preview link**,
+  `/homes/<id>?preview=1` (the admin's Preview ↗) — see `listing-page.mjs`.
 
 ### Functions (`netlify/functions/`)
 All admin functions require the header **`x-admin-token: <ADMIN_PASSWORD>`** and
@@ -179,7 +188,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `listings.mjs` | **public** | Read-only feed the website loads — returns the listings as **CSV**. |
 | `photo.mjs` | **public** | Serves `/photos/<folder>/<n>.jpg` from the `listing-photos` Blob store (long CDN cache w/ `stale-while-revalidate`; `HEAD` is a cheap metadata-only existence check). |
 | `photos-list.mjs` | **public** | `?folder=<id>` → `{ count }` for a listing's photos, in one Blob `list`. The gallery uses it instead of probing `1.jpg, 2.jpg, …` one at a time. |
-| `listing-page.mjs` | **public** | Server-renders a listing at **`/homes/<id>`** — real content + `<title>`/meta/OG + `RealEstateListing` JSON-LD baked into the HTML, and injects `window.__LISTING__` so React renders instantly. Reads `homes/detail.html` as its template (`included_files`). |
+| `listing-page.mjs` | **public** | Server-renders a listing at **`/homes/<id>`** — real content + `<title>`/meta/OG + `RealEstateListing` JSON-LD baked into the HTML, and injects `window.__LISTING__` so React renders instantly. Reads `homes/detail.html` as its template (`included_files`). With **`?preview=1`** it also renders a *hidden* listing (`readListings({ includeHidden: true })`): `noindex` + `x-robots-tag`, `cache-control: no-store`, and a "Preview" banner above the page while the listing is hidden. No password — anyone with the link can open it. |
 | `homes-index.mjs` | **public** | Server-renders **`/homes/`** — meta + `ItemList` JSON-LD + a linked list of every listing; injects `window.__LISTINGS__`. Template: `homes/index.html`. |
 | `sitemap.mjs` | **public** | **`/sitemap.xml`** generated from Blobs, so every current listing URL is included automatically. |
 | `admin-migrate-photos.mjs` | auth | One-time import of the original static `photos/` folders into Blobs (already run). |
@@ -271,6 +280,20 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-21** — **Preview link for not-yet-live listings.** Every row of the
+  listings admin has a **Preview ↗** link (after the Live checkbox) to
+  `/homes/<id>?preview=1`. `listing-page.mjs` reads that flag and calls
+  `readListings({ includeHidden: true })` (new option in
+  `netlify/lib/listings.mjs`, whose normalized shape gained a `hidden`
+  boolean), so a hidden listing renders instead of 404ing. The preview
+  response is `noindex` (meta + `x-robots-tag`), `cache-control: no-store`,
+  and carries a yellow "Preview — this listing is not on the public site yet"
+  banner while the listing is hidden; a live listing's preview link is just
+  its page. Deliberately not password-protected (Paul's call — it's for
+  sending to Dennis): anyone who knows the id and adds `?preview=1` can open a
+  hidden listing, as they already could its photos. Every other public surface
+  (grid, CSV feed, sitemap, JSON-LD) still filters hidden rows.
 
 - **2026-09-08** — **3D walkthrough (Matterport) per listing** (deployed, commit
   `117a70e`). New optional

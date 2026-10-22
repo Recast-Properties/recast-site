@@ -4,7 +4,22 @@
     {
       "name": "netlify",
       "runtimeExecutable": "netlify",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
+      "port": 8888
+    },
+    {
+      "name": "netlify-local",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "ADMIN_PASSWORD=localtest",
+        "/Users/paulbjork/.npm/_npx/b3ca12a867cd0704/node_modules/.bin/netlify",
+        "dev",
+        "--offline",
+        "--port",
+        "8888"
+      ],
       "port": 8888
     }
   ]

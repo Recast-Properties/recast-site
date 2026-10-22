@@ -87,6 +87,15 @@
   .listing .live input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--terracotta-500, #d9743f); }
   .listing.off .thumb, .listing.off .meta, .listing.off .pill { opacity: .45; }
   .listing.off .live { color: var(--terracotta-500, #d9743f); }
+  /* "Preview ↗": the listing page at /homes/<id>?preview=1 — works whether or not it's live. */
+  .listing .prev { flex-shrink: 0; margin-left: 12px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--ink-600, #53575f); text-decoration: none; white-space: nowrap; }
+  .listing .prev:hover { color: var(--terracotta-500, #d9743f); }
+  /* Phones: grip + thumb + address on line one; status, Live and Preview wrap to a second line. */
+  @media (max-width: 620px) {
+    .listing { flex-wrap: wrap; }
+    .listing .meta { flex-basis: 140px; }
+  }
 
   /* photos */
   .dropzone { border: 2px dashed var(--ink-300, #c0c3cb); border-radius: 12px; padding: 22px; text-align: center;
@@ -176,7 +185,7 @@
         <div class="field"><label>Listing ID (also the photo folder)</label><input id="f_id" placeholder="e.g. 280sparkling"><div class="hint">Lowercase, no spaces. Can't be changed after first save.</div></div>
         <div class="field"><label>Status</label><select id="f_status"><option value="available">Available</option><option value="pending">Pending</option><option value="sold">Sold</option></select>
           <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer"><input id="f_live" type="checkbox" style="width:16px;height:16px;margin:0"> Show on the live site</label>
-          <div class="hint">Unchecked = hidden everywhere public (cards, its page, sitemap) but still here in the admin.</div></div>
+          <div class="hint">Unchecked = hidden everywhere public (cards, its page, sitemap) but still here in the admin — and still viewable at its <b>Preview ↗</b> link on the list, which you can send to anyone.</div></div>
       </div>
       <div class="field"><label>Street address</label><input id="f_address" placeholder="280 Sparkling Springs Dr"></div>
       <div class="row three">
@@ -311,10 +320,12 @@
         '<div class="sub">' + esc(row.city || "") + (row.price ? " · $" + esc(row.price) : "") +
         (row.beds ? " · " + esc(row.beds) + "bd" : "") + (row.baths ? "/" + esc(row.baths) + "ba" : "") + '</div></div>' +
         '<span class="pill ' + status + '">' + esc(status) + '</span>' +
-        '<label class="live" title="Show this listing on the public site"><input type="checkbox"' + (hidden ? "" : " checked") + '> Live</label>';
+        '<label class="live" title="Show this listing on the public site"><input type="checkbox"' + (hidden ? "" : " checked") + '> Live</label>' +
+        '<a class="prev" href="/homes/' + encodeURIComponent(row.id || "") + '?preview=1" target="_blank" rel="noopener" title="Open the preview link — works even when not live. Copy the address to send it to someone.">Preview ↗</a>';
       div.onclick = () => openEditor(row);
       const live = div.querySelector(".live");
       live.onclick = (e) => e.stopPropagation(); // the label is inside the clickable row
+      div.querySelector(".prev").onclick = (e) => e.stopPropagation();
       live.querySelector("input").onchange = async (e) => {
         const box = e.target; const nowHidden = !box.checked;
         box.disabled = true;

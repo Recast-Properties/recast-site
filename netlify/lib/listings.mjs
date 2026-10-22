@@ -25,10 +25,12 @@ const KEY = "listings.json";
 // JSON-LD all agree without each caller remembering to filter.
 export const isHidden = (o) => String((o && o.hidden) || "").trim() === "1";
 
-export async function readListings() {
+// { includeHidden: true } exists for ONE caller: the admin's unlinked preview
+// link (listing-page.mjs, ?preview=1). Every public surface keeps the default.
+export async function readListings({ includeHidden = false } = {}) {
   try {
     const raw = await getStore({ name: STORE, consistency: "strong" }).get(KEY, { type: "json" });
-    if (Array.isArray(raw)) return raw.filter((o) => !isHidden(o)).map(normalizeListing);
+    if (Array.isArray(raw)) return raw.filter((o) => includeHidden || !isHidden(o)).map(normalizeListing);
   } catch (_) { /* fall through */ }
   return [];
 }
@@ -42,6 +44,7 @@ export function normalizeListing(o) {
   const external = /https?:\/\/|\|/.test(photos);
   return {
     id: String(o.id || "").trim(),
+    hidden: isHidden(o), // only ever true on the preview page
     status: String(o.status || "available").toLowerCase(),
     price: num(o.price),
     address: o.address || "", city: o.city || "", state: o.state || "TX", zip: o.zip || "",
