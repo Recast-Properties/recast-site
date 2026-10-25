@@ -43,7 +43,7 @@ Meals, Travel, Office, Gas/Truck/Trailer, Subscriptions, Website, Business.
 ## How it works (architecture)
 
 ```
-receipt → receipts@ or travel@ ──(Gmail: travel@ POP-imported into paul@)──►
+receipt → receipts@ or travel@ (both aliases on paul@) ──►
                                    receipts-poller.gs   (Apps Script, 15-min trigger)
                                         │  • >3 MB photo → shrink via Drive rendition
                                         │  • each attachment → receipts-upload.mjs
@@ -253,16 +253,16 @@ into the editor mangles em dashes; if the token has expired
 | `RECEIPTS_SHEET_TOKEN` | ingest, data, summary | Shared secret == the `WEBHOOK_SECRET` script property in the Apps Scripts. |
 | `RECEIPTS_SHEET_URL` | ingest, data | The `receipts-sheet.gs` web-app `/exec` URL. |
 
-**travel@**: its own Workspace mailbox, pulled into paul@ via **Gmail POP
-import** (paul@ → Settings → Accounts and import → "Check mail from other
-accounts" → add travel@, server `pop.gmail.com:995` SSL; travel@ needs POP
-enabled and, with 2-step verification, an app password). POP import brings in
-the **existing** travel@ history as well as new mail, and preserves the
-original `To: travel@` header — which is how the poller detects the travel
-channel. Recommended fetch options: "Leave a copy on the server" (travel@
-keeps its archive) and "Label incoming messages: travel". Note Gmail decides
-the fetch cadence (can be up to ~an hour). Travel receipts get a soft hint
-toward the Travel category — not forced.
+**travel@**: since 2026-10-25 a **Workspace alias on paul@** (made with
+`/admin/email/`, so paul@ also has a "travel" label and a `to:travel@` →
+label, skip-inbox filter). Mail keeps its original `To: travel@` header —
+which is how the poller detects the travel channel. Travel receipts get a
+soft hint toward the Travel category — not forced. History: until 2026-10-25
+travel@ was its own paid Workspace mailbox, pulled into paul@ by a Gmail POP
+import; that import had copied its whole history (back to the mailbox's
+2026-02-23 start) into paul@, so the mailbox was renamed travel-old@, the
+alias moved to paul@, the mailbox deleted (via Squarespace, which bills the
+Workspace seats) and the POP entry removed.
 
 **The sheet:** id `1isEbfNKPO32Wpf08EtLkNHX85c0rTIl8tpH9bUdgQbs`, tab `RECAST
 BIZ`. Each category is a 5-column block (Vendor | Date | Description | Link |
