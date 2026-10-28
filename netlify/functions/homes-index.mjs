@@ -18,7 +18,7 @@ const TITLE = "Homes for Sale in Ellis County & Southern DFW | Recast Properties
 function headTags(listings) {
   const canon = `${SITE}/homes/`;
   const n = listings.length;
-  const desc = `Browse ${n} move-in ready and renovated ${n === 1 ? "home" : "homes"} for sale across Ellis County and the southern Dallas–Fort Worth metro. New properties from Recast Properties are added as they come available.`;
+  const desc = `Browse ${n} move-in ready and renovated ${n === 1 ? "home" : "homes"} for sale across Ellis County and the southern Dallas–Fort Worth metro. New properties from Recast Properties are added as they become available.`;
   const jsonld = {
     "@context": "https://schema.org",
     "@type": "ItemList",

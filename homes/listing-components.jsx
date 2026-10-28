@@ -182,7 +182,7 @@ function NotifyModal() {
         {state === "done" ? (
           <div style={{ padding: "28px 24px 26px" }}>
             <h3 className="rc-h4" style={{ margin: "0 0 8px" }}>You're on the list.</h3>
-            <p style={{ margin: "0 0 22px", color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out as soon as new homes come available.</p>
+            <p style={{ margin: "0 0 22px", color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out as soon as new homes become available.</p>
             <button className="btn btn-primary" onClick={close}>Done</button>
           </div>
         ) : (
