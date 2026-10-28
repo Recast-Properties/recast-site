@@ -60,8 +60,18 @@ img { display: block; max-width: 100%; }
   .cards-4 { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
+/* Listings header: hamburger + its panel exist only below 760px, the width where
+   .main-nav and .header-phone hide (rule below). */
+.menu-toggle, .mobile-menu { display: none; }
+
 /* ---- Responsive (mobile) ---- */
 @media (max-width: 760px) {
+  .menu-toggle { display: inline-flex !important; }
+  .mobile-menu { display: block !important; }
+  .bar-line { display: block; }
+  /* tighter so "New homes added regularly." stays on one line on a 360px phone */
+  .notify-bar { padding: 9px 16px !important; gap: 8px !important; }
+  .listing-hero { padding-top: 24px !important; }
   .wrap { padding: 0 18px; }
   .hero-grid, .split, .footer-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
   .cards-3, .cards-2, .cards-4 { grid-template-columns: 1fr !important; }

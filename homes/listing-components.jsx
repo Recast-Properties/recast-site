@@ -51,13 +51,19 @@ function ListingHeader({ p }) {
   const listingPhone = String((p && p.agentPhone) || "").trim();
   const phone = listingPhone || "214.906.4992";
   const tel = phone.replace(/[^0-9]/g, "");
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  React.useEffect(() => { if (menuOpen && window.lucide) window.lucide.createIcons(); }, [menuOpen]);
+  const menuRow = { display: "flex", alignItems: "center", gap: 12, padding: "15px 0", fontSize: 16, fontWeight: 600,
+    color: "var(--ink-900)", borderTop: "1px solid var(--color-border)" };
   return (
     <React.Fragment>
     {/* Get Notified bar. Dark text on the brand orange: white on it is too faint to read. */}
     <div style={{ background: "var(--color-brand)", color: "var(--ink-900)" }}>
-      <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
-        padding: "9px 20px", fontSize: "clamp(13px, 3.4vw, 14.5px)", fontWeight: 600, lineHeight: 1.35 }}>
-        <span style={{ fontWeight: 700 }}>New homes added regularly. Be the first to know.</span>
+      <div className="wrap notify-bar" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+        padding: "9px 20px", lineHeight: 1.35 }}>
+        <span style={{ fontWeight: 700, fontSize: "clamp(14px, 4vw, 16.5px)" }}>
+          <span className="bar-line">New homes added regularly.</span> <span className="bar-line">Be the first to know.</span>
+        </span>
         <a href="#get-notified" onClick={openNotify} style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
           background: "var(--ink-900)", color: "#fff", fontWeight: 700, fontSize: 13.5, padding: "6px 14px", borderRadius: 999, whiteSpace: "nowrap" }}>
           <LIcon name="bell" className="ic" style={{ width: 14, height: 14, color: "#fff" }} />Get notified
@@ -84,8 +90,28 @@ function ListingHeader({ p }) {
               <LIcon name="phone" className="ic" style={{ width: 16, height: 16, color: "#fff" }} />{phone}
             </span>
           </a>
+          {/* Phones: the menu and call pill above are hidden (kit.css), so they move in here.
+              Both icons stay mounted (lucide swaps them for SVGs); only their wrappers toggle. */}
+          <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen}
+            aria-controls="mobile-menu" aria-label={menuOpen ? "Close menu" : "Open menu"}
+            style={{ alignItems: "center", border: "none", background: "transparent", padding: 8, margin: -8, cursor: "pointer", color: "var(--ink-900)" }}>
+            <span style={{ display: menuOpen ? "none" : "inline-flex" }}><LIcon name="menu" className="ic" style={{ width: 26, height: 26 }} /></span>
+            <span style={{ display: menuOpen ? "inline-flex" : "none" }}><LIcon name="x" className="ic" style={{ width: 26, height: 26 }} /></span>
+          </button>
         </div>
       </div>
+      {menuOpen && (
+        <nav id="mobile-menu" className="mobile-menu">
+          <div className="wrap" style={{ paddingBottom: 6 }}>
+            <a href="#get-notified" onClick={e => { setMenuOpen(false); openNotify(e); }} style={menuRow}>
+              <LIcon name="bell" className="ic" style={{ width: 18, height: 18, color: "var(--color-brand-press)" }} />Get Notified</a>
+            <a href="/sell/" style={menuRow}>
+              <LIcon name="house" className="ic" style={{ width: 18, height: 18, color: "var(--color-brand-press)" }} />Sell Your House</a>
+            <a href={"tel:" + tel} style={menuRow}>
+              <LIcon name="phone" className="ic" style={{ width: 18, height: 18, color: "var(--color-brand-press)" }} />Call for a showing: {phone}</a>
+          </div>
+        </nav>
+      )}
     </header>
     <NotifyModal />
     </React.Fragment>

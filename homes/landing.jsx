@@ -64,7 +64,7 @@ function FilterBar({ count, sort, setSort }) {
 
 function ListingHero() {
   return (
-    <section style={{ padding: "54px 0 36px" }}>
+    <section className="listing-hero" style={{ padding: "54px 0 36px" }}>
       <div className="wrap">
         <p className="eyebrow" style={{ marginBottom: 12 }}>Homes for sale</p>
         <h1 className="rc-h1" style={{ fontSize: 46, margin: "0 0 14px", letterSpacing: "-0.02em" }}>Available properties</h1>

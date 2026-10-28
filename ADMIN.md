@@ -301,7 +301,10 @@ public on the live site, so nothing secret is exposed; the password only gates
   `/privacy.html`, not `/`, because Netlify only captures form posts sent to
   a static file and `/` is rewritten to a function) and **Sell
   Your House** → `/sell/`; the seller page's menu has **Homes for Sale** →
-  `/homes/`. Both menus hide on phones, like before. Because the grid template now
+  `/homes/`. Below 760px the listings menu and call pill fold into a
+  **hamburger** (Get Notified, Sell Your House, Call for a showing; rules in
+  `kit.css`, same breakpoint as the hide); the seller page's menu still just
+  hides on phones. Because the grid template now
   renders at two URLs, `homes/index.html` and the moved seller page use
   absolute paths throughout; the grid's canonical stays `/homes/`.
 
