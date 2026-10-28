@@ -107,7 +107,7 @@ function ListingCTA() {
           <div>
             <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>New homes added regularly</h2>
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
-              Be the first to know. Tell us what you're looking for and we'll reach out as soon as a home that fits comes available.
+              Be the first to know. Sign up to receive emails and we'll reach out as soon as homes come available.
             </p>
           </div>
           <a href="#get-notified" onClick={openNotify} className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
