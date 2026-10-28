@@ -55,13 +55,14 @@ function ListingHeader({ p }) {
     <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
       <div className="wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <a href="index.html" style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <a href="/" style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <img src="../assets/recast-mark-orange-transparent.png" alt="Recast Properties" style={{ height: 30 }} />
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, color: "var(--ink-900)", letterSpacing: "-0.01em" }}>Recast Properties</span>
         </a>
         <nav className="main-nav" style={{ display: "flex", alignItems: "center", gap: 30 }}>
         </nav>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <a href="/sell/" className="btn btn-secondary header-sell" style={{ padding: "9px 16px", whiteSpace: "nowrap" }}>Sell your home</a>
           <a href={"tel:" + tel} className="header-phone" style={{ display: "inline-flex", alignItems: "center", gap: 13, textDecoration: "none" }}>
             <span className="header-phone-label" style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink-900)" }}>Call for a showing</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--color-brand)", color: "#fff",
@@ -89,8 +90,8 @@ function ListingFooter() {
           </div>
           <div>
             <h5 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, margin: "0 0 16px" }}>Explore</h5>
-            <a href="index.html" style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>Available homes</a>
-            <a href="../index.html" style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>Sell your house</a>
+            <a href="/homes/" style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>Available homes</a>
+            <a href="/sell/" style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>Sell your house</a>
           </div>
           <div>
             <h5 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, margin: "0 0 16px" }}>Get in touch</h5>
@@ -104,8 +105,8 @@ function ListingFooter() {
           justifyContent: "space-between", alignItems: "center", color: "var(--ink-400)", fontSize: 13 }}>
           <span>© 2026 Recast Properties LLC. All rights reserved.</span>
           <span style={{ display: "flex", gap: 22 }}>
-            <a href="../privacy.html" style={{ color: "var(--ink-400)" }}>Privacy Policy</a>
-            <a href="../terms.html" style={{ color: "var(--ink-400)" }}>Terms &amp; Conditions</a>
+            <a href="/privacy.html" style={{ color: "var(--ink-400)" }}>Privacy Policy</a>
+            <a href="/terms.html" style={{ color: "var(--ink-400)" }}>Terms &amp; Conditions</a>
           </span>
         </div>
       </div>

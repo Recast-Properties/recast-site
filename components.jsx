@@ -6,8 +6,8 @@ function Icon({ name, className, style }) {
 
 function Logo({ variant = "horizontal", height = 34 }) {
   const src = variant === "white"
-    ? "assets/recast-logo-horizontal-white.png"
-    : "assets/recast-logo-horizontal-black.png";
+    ? "/assets/recast-logo-horizontal-white.png"
+    : "/assets/recast-logo-horizontal-black.png";
   return <img src={src} alt="Recast Properties" style={{ height }} />;
 }
 
@@ -53,7 +53,7 @@ function Header({ onOffer }) {
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
       <div className="wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <a href="#top" style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <img src="assets/recast-mark-orange-transparent.png" alt="Recast Properties" style={{ height: 30 }} />
+          <img src="/assets/recast-mark-orange-transparent.png" alt="Recast Properties" style={{ height: 30 }} />
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, color: "var(--ink-900)", letterSpacing: "-0.01em" }}>Recast Properties</span>
         </a>
         <nav className="main-nav" style={{ display: "flex", alignItems: "center", gap: 28 }}>
@@ -90,7 +90,7 @@ function Footer({ onOffer }) {
             {[["How it works", "#how"], ["Why Recast", "#why"], ["FAQ", "#faq"]].map(([l, href]) => (
               <a key={l} href={href} style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>{l}</a>
             ))}
-            <a href="homes/index.html" style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>Homes for sale</a>
+            <a href="/homes/" style={{ display: "block", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>Homes for sale</a>
           </div>
           <div>
             <h5 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, margin: "0 0 16px" }}>Get in touch</h5>
@@ -105,8 +105,8 @@ function Footer({ onOffer }) {
           justifyContent: "space-between", alignItems: "center", color: "var(--ink-400)", fontSize: 13 }}>
           <span>© 2026 Recast Properties LLC. All rights reserved.</span>
           <span style={{ display: "flex", gap: 22 }}>
-            <a href="privacy.html" style={{ color: "var(--ink-400)" }}>Privacy Policy</a>
-            <a href="terms.html" style={{ color: "var(--ink-400)" }}>Terms &amp; Conditions</a>
+            <a href="/privacy.html" style={{ color: "var(--ink-400)" }}>Privacy Policy</a>
+            <a href="/terms.html" style={{ color: "var(--ink-400)" }}>Terms &amp; Conditions</a>
           </span>
         </div>
       </div>

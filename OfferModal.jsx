@@ -105,7 +105,7 @@ function OfferModal({ open, onClose }) {
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid var(--color-divider)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="assets/recast-mark-orange-transparent.png" alt="" style={{ height: 26 }} />
+            <img src="/assets/recast-mark-orange-transparent.png" alt="" style={{ height: 26 }} />
             <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Get your cash offer</span>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-500)" }}>

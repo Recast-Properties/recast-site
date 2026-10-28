@@ -226,7 +226,7 @@ On a **listing detail page** they drive two things, both in `homes/`:
 
 If a listing leaves them blank, the call button falls back to the site-wide
 default in `homes/data.js` (`window.RECAST_AGENT`), and the header falls back to
-its own default line (`214.906.4992`). The **landing page** (`homes/index.html`)
+its own default line (`214.906.4992`). The **landing page** (`homes/index.html`, served at both `/` and `/homes/`)
 has no single listing, so its header always shows that default. The `tel:` link
 is derived by stripping non-digits from the phone. Bump the `?v=` query string on
 the changed `.jsx` in `homes/*.html` when editing these, so browsers don't serve
@@ -282,6 +282,16 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-28** — **Listings grid is the homepage.** `/` now serves the
+  `/homes/` grid (forced 200 rewrite to `homes-index` in `netlify.toml`); the
+  seller ("we buy houses") page moved from `index.html` to `sell/index.html`
+  at **`/sell/`**, and `/index.html` 301s to `/`. Every `/homes/...` URL is
+  unchanged — **sign QR codes point there, so never move or redirect
+  `/homes/`**. The listings header gained a **Sell your home** button →
+  `/sell/` (on the grid and every listing page). Because the grid template now
+  renders at two URLs, `homes/index.html` and the moved seller page use
+  absolute paths throughout; the grid's canonical stays `/homes/`.
 
 - **2026-10-22** — **Editor header pill.** Beside the "Edit listing" title, a
   right-aligned pill opens that listing's page in a new tab — `/homes/<id>`

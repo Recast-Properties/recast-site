@@ -8,6 +8,7 @@ export default async () => {
   const urls = [
     `${SITE}/`,
     `${SITE}/homes/`,
+    `${SITE}/sell/`,
     ...listings.map((l) => canonicalFor(l)),
     `${SITE}/privacy.html`,
     `${SITE}/terms.html`,

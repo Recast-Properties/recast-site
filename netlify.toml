@@ -48,6 +48,20 @@
   status = 301
   force = true
 
+# The listings grid is also the site's homepage (since 2026-10-28). The seller
+# ("we buy houses") page moved to /sell/. /homes/ stays as-is: sign QR codes
+# point there. homes/index.html uses absolute paths so it renders at either URL.
+[[redirects]]
+  from = "/"
+  to = "/.netlify/functions/homes-index"
+  status = 200
+  force = true
+[[redirects]]
+  from = "/index.html"
+  to = "/"
+  status = 301
+  force = true
+
 # Grid + sitemap are rendered from Blobs (force=true to beat the static files).
 [[redirects]]
   from = "/homes/"
