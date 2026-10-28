@@ -97,7 +97,7 @@ function ListingGrid({ properties }) {
   );
 }
 
-/* CTA: don't see one you like → we also buy */
+/* CTA: new homes added regularly → Get Notified sign-up */
 function ListingCTA() {
   return (
     <section style={{ padding: "0 0 72px" }}>
@@ -105,9 +105,9 @@ function ListingCTA() {
         <div className="cta-band" style={{ background: "var(--paper-deep)", borderRadius: "var(--radius-xl)", padding: "44px 48px",
           display: "flex", justifyContent: "space-between", alignItems: "center", gap: 28 }}>
           <div>
-            <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>Don't see the right fit yet?</h2>
+            <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>New homes added regularly</h2>
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
-              New homes are added regularly. Tell us what you're looking for and we'll reach out when something matches.
+              Be the first to know. Tell us what you're looking for and we'll reach out as soon as a home that fits comes available.
             </p>
           </div>
           <a href="#get-notified" onClick={openNotify} className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
