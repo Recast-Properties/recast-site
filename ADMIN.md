@@ -179,9 +179,12 @@ each copy lands in paul@'s Sent folder. Shared code: `netlify/lib/blast.mjs`.
   Unsubscribe.
   **Preview** renders it on the page; **Send me a test** mails it to paul@
   only, subject prefixed `[TEST]`.
-- **`MAILING_ADDRESS`** (constant in `blast.mjs`) is the footer's postal
-  address, required in marketing email (CAN-SPAM). While it is blank, real
-  sends are refused server-side and the page says so; tests still work.
+- **Postal address** (`MAILING_ADDRESS` in `blast.mjs`) comes from the Netlify
+  env var **`BLAST_MAILING_ADDRESS`**, which Paul sets himself (he chose not to
+  put it in chat or the repo); a change needs a redeploy. Footer: "Recast
+  Properties LLC · <address>". CAN-SPAM requires a postal address (street,
+  USPS P.O. box, or a private mailbox) in marketing email, so while it is blank
+  real sends are refused server-side and the page says so; tests still work.
 - **Sending** runs in `admin-blast-send-background.mjs` (a background function:
   up to 15 min, survives closing the page), about one email a second, saving
   progress (`next`) after every email; the page polls and shows "Sending… 20 of
@@ -414,7 +417,7 @@ public on the live site, so nothing secret is exposed; the password only gates
   every admin page + hub card), `admin-blast.mjs`,
   `admin-blast-send-background.mjs`, the public `/unsubscribe` page, and
   `netlify/lib/blast.mjs`. Sends via the existing Nylas grant from info@.
-  Real sends wait on `MAILING_ADDRESS`.
+  Real sends wait on the `BLAST_MAILING_ADDRESS` env var.
 
 - **2026-10-28** — **Admin menu trimmed:** the Receipts link (nav on every admin
   page + hub card) and the "Auction Sheets — coming soon" hub card were

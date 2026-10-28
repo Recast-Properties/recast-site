@@ -8,9 +8,11 @@ import { readListings, esc, fmtPrice, canonicalFor, SITE } from "./listings.mjs"
 export const blastsStore = () => getStore({ name: "crm-blasts", consistency: "strong" });
 export const TEST_TO = "paul@recast-properties.com";
 const FROM = { name: "Recast Properties", email: "info@recast-properties.com" };
-// Every marketing email must carry a postal address (CAN-SPAM). Real sends are
-// refused while this is blank (the footer then shows just the company name).
-export const MAILING_ADDRESS = "";
+// Every marketing email must carry a postal address (CAN-SPAM). Set by Paul in
+// Netlify (env BLAST_MAILING_ADDRESS, takes effect on the next deploy), so it
+// never sits in this repo. Real sends are refused while it is blank (the
+// footer then shows just the company name).
+export const MAILING_ADDRESS = (process.env.BLAST_MAILING_ADDRESS || "").trim();
 
 // Who gets a blast: has an email, isn't unsubscribed, didn't choose text-only.
 export const recipientsOf = (contacts) => contacts.filter((c) => c.email && !c.unsubscribed && c.prefers !== "text");
