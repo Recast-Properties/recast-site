@@ -165,10 +165,17 @@ each copy lands in paul@'s Sent folder. Shared code: `netlify/lib/blast.mjs`.
 
 - **Who gets it:** contacts with an email who are not Unsubscribed and did not
   choose text only (`recipientsOf`). The list is snapshotted when Send is hit.
-- **The email:** the typed message (escaped; blank line = paragraph; links
-  clickable) + a photo card per chosen **live** listing (cover photo via the
-  Image CDN as JPG, price, beds/baths/sqft, address, View home ->
-  `/homes/<id>`) + a footer with the postal address and an Unsubscribe link.
+- **The email** wears the site's look (colors from `colors_and_type.css`,
+  Poppins/Mulish where the mail app loads web fonts): the orange "Be the first
+  to know" bar, the Recast mark, the typed message in a white card (escaped;
+  blank line = paragraph; links clickable), then per chosen **live** listing a
+  cut-down listing page: address + town, a large photo and two smaller ones
+  (Image CDN, cropped, JPG), "See all N photos", asking price + status pill,
+  tagline, the facts grid, **About this home** (the full description),
+  Highlights chips, a **View the full listing** button, and "Call for a
+  showing" (the listing's agent, else Dennis — `DEFAULT_AGENT` mirrors
+  `window.RECAST_AGENT` in `homes/data.js`). Footer: postal address +
+  Unsubscribe.
   **Preview** renders it on the page; **Send me a test** mails it to paul@
   only, subject prefixed `[TEST]`.
 - **`MAILING_ADDRESS`** (constant in `blast.mjs`) is the footer's postal
@@ -397,6 +404,10 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-28** — **Email Blast design pass.** Each listing in a blast is now
+  a cut-down version of its listing page, description included (see "Email
+  Blast").
 
 - **2026-10-28** — **Email Blast.** New `/admin/blast/` page (menu item on
   every admin page + hub card), `admin-blast.mjs`,
