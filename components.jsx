@@ -52,7 +52,7 @@ function Header({ onOffer }) {
     <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
       <div className="wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <a href="#top" style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <a href="/" style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <img src="/assets/recast-mark-orange-transparent.png" alt="Recast Properties" style={{ height: 30 }} />
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, color: "var(--ink-900)", letterSpacing: "-0.01em" }}>Recast Properties</span>
         </a>
