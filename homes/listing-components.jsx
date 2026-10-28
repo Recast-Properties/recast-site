@@ -53,6 +53,17 @@ function ListingHeader({ p }) {
   const tel = phone.replace(/[^0-9]/g, "");
   return (
     <React.Fragment>
+    {/* Get Notified bar. Dark text on the brand orange: white on it is too faint to read. */}
+    <div style={{ background: "var(--color-brand)", color: "var(--ink-900)" }}>
+      <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+        padding: "9px 20px", fontSize: "clamp(13px, 3.4vw, 14.5px)", fontWeight: 600, lineHeight: 1.35 }}>
+        <span>New homes added regularly. Be the first to know.</span>
+        <a href="#get-notified" onClick={openNotify} style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
+          background: "var(--ink-900)", color: "#fff", fontWeight: 700, fontSize: 13.5, padding: "6px 14px", borderRadius: 999, whiteSpace: "nowrap" }}>
+          <LIcon name="bell" className="ic" style={{ width: 14, height: 14, color: "#fff" }} />Get notified
+        </a>
+      </div>
+    </div>
     <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
       <div className="wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between" }}>

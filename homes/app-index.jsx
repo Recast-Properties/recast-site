@@ -8,7 +8,6 @@ function App({ properties }) {
       <main>
         <ListingHero />
         <ListingGrid properties={properties} />
-        <ListingCTA />
       </main>
       <ListingFooter />
     </React.Fragment>
