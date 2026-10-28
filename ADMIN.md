@@ -288,8 +288,10 @@ public on the live site, so nothing secret is exposed; the password only gates
   seller ("we buy houses") page moved from `index.html` to `sell/index.html`
   at **`/sell/`**, and `/index.html` 301s to `/`. Every `/homes/...` URL is
   unchanged — **sign QR codes point there, so never move or redirect
-  `/homes/`**. The listings header gained a **Sell your home** button →
-  `/sell/` (on the grid and every listing page). Because the grid template now
+  `/homes/`**. The listings header menu (grid and every listing page) has
+  **Get Notified** (mailto info@, same as the grid's CTA button) and **Sell
+  Your House** → `/sell/`; the seller page's menu has **Homes for Sale** →
+  `/homes/`. Both menus hide on phones, like before. Because the grid template now
   renders at two URLs, `homes/index.html` and the moved seller page use
   absolute paths throughout; the grid's canonical stays `/homes/`.
 

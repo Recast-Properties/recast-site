@@ -59,10 +59,12 @@ function ListingHeader({ p }) {
           <img src="../assets/recast-mark-orange-transparent.png" alt="Recast Properties" style={{ height: 30 }} />
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, color: "var(--ink-900)", letterSpacing: "-0.01em" }}>Recast Properties</span>
         </a>
-        <nav className="main-nav" style={{ display: "flex", alignItems: "center", gap: 30 }}>
+        <nav className="main-nav" style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          {[["Get Notified", "mailto:info@recast-properties.com"], ["Sell Your House", "/sell/"]].map(([l, href]) => (
+            <a key={l} href={href} className="nav-link" style={{ fontSize: 15, fontWeight: 600, color: "var(--color-fg-muted)" }}>{l}</a>
+          ))}
         </nav>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="/sell/" className="btn btn-secondary header-sell" style={{ padding: "9px 16px", whiteSpace: "nowrap" }}>Sell your home</a>
           <a href={"tel:" + tel} className="header-phone" style={{ display: "inline-flex", alignItems: "center", gap: 13, textDecoration: "none" }}>
             <span className="header-phone-label" style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink-900)" }}>Call for a showing</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--color-brand)", color: "#fff",
