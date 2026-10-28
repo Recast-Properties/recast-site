@@ -97,22 +97,25 @@ function ListingGrid({ properties }) {
   );
 }
 
-/* CTA: new homes added regularly → Get Notified sign-up */
+/* CTA: new homes added regularly, with the Get Notified sign-up form right in it
+   (#get-notified is what the orange bar / header links scroll to). */
 function ListingCTA() {
   return (
     <section style={{ padding: "0 0 72px" }}>
       <div className="wrap">
-        <div className="cta-band" style={{ background: "var(--paper-deep)", borderRadius: "var(--radius-xl)", padding: "44px 48px",
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 28 }}>
-          <div>
+        {/* Wraps instead of using .cta-band's phone stacking: the form drops below the
+            text whenever both can't fit side by side. */}
+        <div className="notify-band" style={{ background: "var(--paper-deep)", borderRadius: "var(--radius-xl)", padding: "44px 48px",
+          display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "28px 48px" }}>
+          <div style={{ flex: "1 1 300px", paddingTop: 8 }}>
             <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>New homes added regularly</h2>
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
               Be the first to know. Sign up to receive emails and we'll reach out as soon as homes become available.
             </p>
           </div>
-          <a href="#get-notified" onClick={openNotify} className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
-            <LIcon name="bell" className="ic" />Get notified
-          </a>
+          <div id="get-notified" className="card" style={{ flex: "1 1 360px", maxWidth: 480, padding: 0 }}>
+            <NotifyForm />
+          </div>
         </div>
       </div>
     </section>

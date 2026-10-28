@@ -57,7 +57,7 @@ function ListingHeader({ p }) {
     color: "var(--ink-900)", borderTop: "1px solid var(--color-border)" };
   return (
     <React.Fragment>
-    <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
+    <header className="listing-header" style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
       {/* Get Notified bar, inside the sticky header so it stays pinned with the nav. Dark text on the brand orange: white on it is too faint to read. */}
       <div style={{ background: "var(--color-brand)", color: "var(--ink-900)" }}>
@@ -103,7 +103,8 @@ function ListingHeader({ p }) {
       {menuOpen && (
         <nav id="mobile-menu" className="mobile-menu">
           <div className="wrap" style={{ paddingBottom: 6 }}>
-            <a href="#get-notified" onClick={e => { setMenuOpen(false); openNotify(e); }} style={menuRow}>
+            {/* scroll after the menu has closed, so the header height used for the landing spot is the closed one */}
+            <a href="#get-notified" onClick={e => { e.preventDefault(); setMenuOpen(false); setTimeout(openNotify, 0); }} style={menuRow}>
               <LIcon name="bell" className="ic" style={{ width: 18, height: 18, color: "var(--color-brand-press)" }} />Get Notified</a>
             <a href="/sell/" style={menuRow}>
               <LIcon name="house" className="ic" style={{ width: 18, height: 18, color: "var(--color-brand-press)" }} />Sell Your House</a>
@@ -121,11 +122,20 @@ function ListingHeader({ p }) {
 /* ------------------------------- Get Notified ------------------------------- */
 /* Buyer sign-up. Posts to the Netlify form "get-notified" (its hidden copy is in
    homes/index.html, which is how Netlify detects it); Netlify emails every
-   submission to paul@. Opened by openNotify() from the header link and the
-   grid's CTA button. */
+   submission to paul@. The homepage shows the form inline (#get-notified, in the
+   grid's bottom box); every Get Notified link (orange bar, header, phone menu)
+   goes through openNotify(): scroll to that inline form when the page has it,
+   otherwise (listing pages) open the pop-up. */
 function openNotify(e) {
   if (e) e.preventDefault();
-  if (window.recastOpenNotify) window.recastOpenNotify();
+  const inline = document.getElementById("get-notified");
+  if (inline) {
+    // window.scrollTo, not scrollIntoView: smooth scrollIntoView did nothing in a
+    // phone-sized Chrome. Lands the form just below the pinned header.
+    const header = document.querySelector("header");
+    const top = inline.getBoundingClientRect().top + window.scrollY - (header ? header.offsetHeight : 0) - 16;
+    window.scrollTo({ top, behavior: "smooth" });
+  } else if (window.recastOpenNotify) window.recastOpenNotify();
 }
 
 // The exact words a visitor agrees to by ticking the text box. Sent as the
@@ -134,17 +144,14 @@ const SMS_CONSENT = "Yes, text me about new properties at this number. Recast Pr
   "for new-listing alerts, nothing else. Message frequency varies. Msg & data rates may apply. " +
   "Reply STOP to opt out at any time.";
 
-function NotifyModal() {
-  const [open, setOpen] = React.useState(false);
+/* The form itself. In the pop-up it gets the intro line, focuses Name, and shows a
+   Done button after sending (onClose); inline it does none of those (autofocus
+   there would jump the page to the bottom on load). */
+function NotifyForm({ onClose }) {
+  const inModal = !!onClose;
   const [state, setState] = React.useState("idle"); // idle | sending | done | error
   const [via, setVia] = React.useState("email");    // email | text | both
   const [err, setErr] = React.useState("");
-  React.useEffect(() => {
-    window.recastOpenNotify = () => { setOpen(true); setState("idle"); setVia("email"); setErr(""); };
-  }, []);
-  React.useEffect(() => { if (open && window.lucide) window.lucide.createIcons(); });
-  if (!open) return null;
-  const close = () => setOpen(false);
 
   async function submit(e) {
     e.preventDefault();
@@ -165,6 +172,71 @@ function NotifyModal() {
     } catch (_) { setState("error"); }
   }
 
+  if (state === "done") return (
+    <div role="status" style={{ padding: "28px 24px 26px" }}>
+      <h3 className="rc-h4" style={{ margin: "0 0 8px" }}>You're on the list.</h3>
+      <p style={{ margin: inModal ? "0 0 22px" : 0, color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out as soon as new homes become available.</p>
+      {inModal && <button className="btn btn-primary" onClick={onClose}>Done</button>}
+    </div>
+  );
+
+  return (
+    <form onSubmit={submit} style={{ padding: "22px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+      {inModal && <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your information, and we'll notify you as soon as new homes become available.</p>}
+      <input type="hidden" name="form-name" value="get-notified" />
+      <input type="hidden" name="page" value={location.pathname} />
+      <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
+      <label className="field"><span>Name</span>
+        <input name="name" required maxLength={100} autoComplete="name" autoFocus={inModal} placeholder="Jane Smith" /></label>
+      <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+        <legend style={{ fontSize: 13, fontWeight: 700, color: "var(--color-fg)", marginBottom: 7, padding: 0 }}>How should we reach you?</legend>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
+            <label key={v} style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+              padding: "10px 0", borderRadius: "var(--radius-md)", cursor: "pointer", fontWeight: 700, fontSize: 14.5,
+              background: via === v ? "var(--terracotta-50)" : "var(--white)",
+              boxShadow: "inset 0 0 0 1.5px " + (via === v ? "var(--terracotta-500)" : "var(--ink-200)") }}>
+              <input type="radio" name="contact-pref" value={v} checked={via === v} onChange={() => setVia(v)}
+                style={{ accentColor: "var(--terracotta-500)", margin: 0 }} />{l}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {via !== "text" && (
+        <label className="field"><span>Email</span>
+          <input name="email" type="email" required maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
+      )}
+      {via !== "email" && (
+        <React.Fragment>
+          <label className="field"><span>Mobile phone</span>
+            <input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="214.555.0123" /></label>
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.5, color: "var(--color-fg-muted)", cursor: "pointer" }}>
+            <input type="checkbox" name="sms-consent" value={SMS_CONSENT} required
+              style={{ accentColor: "var(--terracotta-500)", width: 18, height: 18, marginTop: 1, flexShrink: 0 }} />
+            <span>{SMS_CONSENT} See our <a href="/privacy.html" target="_blank" style={{ color: "var(--color-brand-press)", fontWeight: 600 }}>Privacy Policy</a> and <a href="/terms.html" target="_blank" style={{ color: "var(--color-brand-press)", fontWeight: 600 }}>Terms</a>.</span>
+          </label>
+        </React.Fragment>
+      )}
+      {err && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>{err}</p>}
+      {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>
+        That didn't go through. Please try again, or call 214.906.4992.</p>}
+      <button type="submit" className="btn btn-primary btn-block" disabled={state === "sending"}>
+        {state === "sending" ? "Sending..." : "Notify me"}</button>
+    </form>
+  );
+}
+
+/* Pop-up wrapper, used on pages without the inline form (listing pages). Each
+   opening remounts the form (key) so it starts fresh. */
+function NotifyModal() {
+  const [opened, setOpened] = React.useState(0); // 0 = closed; else a fresh key per opening
+  React.useEffect(() => {
+    window.recastOpenNotify = () => setOpened(n => Math.abs(n) + 1);
+  }, []);
+  React.useEffect(() => { if (opened > 0 && window.lucide) window.lucide.createIcons(); });
+  if (opened <= 0) return null;
+  const close = () => setOpened(n => -Math.abs(n)); // negative = closed, keeps the count for the next key
+
   return (
     <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(24,25,28,0.55)",
       backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -179,56 +251,7 @@ function NotifyModal() {
             <LIcon name="x" className="ic" style={{ width: 20, height: 20 }} />
           </button>
         </div>
-        {state === "done" ? (
-          <div style={{ padding: "28px 24px 26px" }}>
-            <h3 className="rc-h4" style={{ margin: "0 0 8px" }}>You're on the list.</h3>
-            <p style={{ margin: "0 0 22px", color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out as soon as new homes become available.</p>
-            <button className="btn btn-primary" onClick={close}>Done</button>
-          </div>
-        ) : (
-          <form onSubmit={submit} style={{ padding: "22px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-            <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your information, and we'll notify you as soon as new homes become available.</p>
-            <input type="hidden" name="form-name" value="get-notified" />
-            <input type="hidden" name="page" value={location.pathname} />
-            <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
-            <label className="field"><span>Name</span>
-              <input name="name" required maxLength={100} autoComplete="name" autoFocus placeholder="Jane Smith" /></label>
-            <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
-              <legend style={{ fontSize: 13, fontWeight: 700, color: "var(--color-fg)", marginBottom: 7, padding: 0 }}>How should we reach you?</legend>
-              <div style={{ display: "flex", gap: 8 }}>
-                {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
-                  <label key={v} style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    padding: "10px 0", borderRadius: "var(--radius-md)", cursor: "pointer", fontWeight: 700, fontSize: 14.5,
-                    background: via === v ? "var(--terracotta-50)" : "var(--white)",
-                    boxShadow: "inset 0 0 0 1.5px " + (via === v ? "var(--terracotta-500)" : "var(--ink-200)") }}>
-                    <input type="radio" name="contact-pref" value={v} checked={via === v} onChange={() => setVia(v)}
-                      style={{ accentColor: "var(--terracotta-500)", margin: 0 }} />{l}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            {via !== "text" && (
-              <label className="field"><span>Email</span>
-                <input name="email" type="email" required maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
-            )}
-            {via !== "email" && (
-              <React.Fragment>
-                <label className="field"><span>Mobile phone</span>
-                  <input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="214.555.0123" /></label>
-                <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.5, color: "var(--color-fg-muted)", cursor: "pointer" }}>
-                  <input type="checkbox" name="sms-consent" value={SMS_CONSENT} required
-                    style={{ accentColor: "var(--terracotta-500)", width: 18, height: 18, marginTop: 1, flexShrink: 0 }} />
-                  <span>{SMS_CONSENT} See our <a href="/privacy.html" target="_blank" style={{ color: "var(--color-brand-press)", fontWeight: 600 }}>Privacy Policy</a> and <a href="/terms.html" target="_blank" style={{ color: "var(--color-brand-press)", fontWeight: 600 }}>Terms</a>.</span>
-                </label>
-              </React.Fragment>
-            )}
-            {err && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>{err}</p>}
-            {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>
-              That didn't go through. Please try again, or call 214.906.4992.</p>}
-            <button type="submit" className="btn btn-primary btn-block" disabled={state === "sending"}>
-              {state === "sending" ? "Sending..." : "Notify me"}</button>
-          </form>
-        )}
+        <NotifyForm key={opened} onClose={close} />
       </div>
     </div>
   );
@@ -270,4 +293,4 @@ function ListingFooter() {
   );
 }
 
-Object.assign(window, { LIcon, fmtPrice, STATUS, StatusBadge, ListingPhoto, ListingHeader, ListingFooter, openNotify });
+Object.assign(window, { LIcon, fmtPrice, STATUS, StatusBadge, ListingPhoto, ListingHeader, ListingFooter, openNotify, NotifyForm });

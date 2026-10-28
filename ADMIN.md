@@ -293,18 +293,20 @@ public on the live site, so nothing secret is exposed; the password only gates
   that shows the email and/or mobile fields; a required, unticked text-consent
   checkbox whose exact wording (`SMS_CONSENT` in `listing-components.jsx`) is
   sent as its value so each sign-up records what was agreed to; plus the page
-  they were on; it and the orange "New homes added regularly" bar above the header
-  (on the grid and every listing page) and the grid's bottom "New homes added
-  regularly" CTA box post to the
+  they were on; the form sits inline in the grid's bottom "New homes added regularly" box
+  (`#get-notified`); on the homepage every Get Notified link (orange bar above
+  the header, header menu, phone menu) scrolls to it, and on listing pages the
+  same links open it as a pop-up (`openNotify()` in `listing-components.jsx`).
+  It posts to the
   **Netlify form `get-notified`**, whose hidden detection copy lives in
   `homes/index.html`; a Netlify email notification sends each sign-up to
   paul@ with subject "NEW BUYER SIGN-UP (Get Notified)". The form posts to
   `/privacy.html`, not `/`, because Netlify only captures form posts sent to
   a static file and `/` is rewritten to a function) and **Sell
   Your House** → `/sell/`; the seller page's menu has **Homes for Sale** →
-  `/homes/`. Below 760px the listings menu and call pill fold into a
+  `/homes/`. Below 900px the listings menu and call pill fold into a
   **hamburger** (Get Notified, Sell Your House, Call for a showing; rules in
-  `kit.css`, same breakpoint as the hide); the seller page's menu still just
+  `kit.css`, `.listing-header` rule); the seller page's menu still just
   hides on phones. Because the grid template now
   renders at two URLs, `homes/index.html` and the moved seller page use
   absolute paths throughout; the grid's canonical stays `/homes/`.
