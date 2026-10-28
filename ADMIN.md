@@ -294,7 +294,8 @@ public on the live site, so nothing secret is exposed; the password only gates
   checkbox whose exact wording (`SMS_CONSENT` in `listing-components.jsx`) is
   sent as its value so each sign-up records what was agreed to; plus the page
   they were on; it and the orange "New homes added regularly" bar above the header
-  (on the grid and every listing page; replaced the grid's bottom CTA box) post to the
+  (on the grid and every listing page) and the grid's bottom "New homes added
+  regularly" CTA box post to the
   **Netlify form `get-notified`**, whose hidden detection copy lives in
   `homes/index.html`; a Netlify email notification sends each sign-up to
   paul@ with subject "NEW BUYER SIGN-UP (Get Notified)". The form posts to
