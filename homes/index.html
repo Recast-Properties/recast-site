@@ -4,6 +4,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- The server puts a plain copy of the listings in #root (.ssr-copy) for crawlers.
+     Hide it from browsers that run scripts so it doesn't flash before React draws
+     the page; shown again after 4s in case the page scripts fail to load. -->
+<script>document.documentElement.classList.add("js");setTimeout(function(){document.documentElement.classList.remove("js")},4000)</script>
+<style>.js .ssr-copy { display: none; }</style>
 <title>Available Properties — Recast Properties</title>
 <link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/assets/favicon-512.png">

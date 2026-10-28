@@ -70,7 +70,7 @@ export default async () => {
   html = html
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(TITLE)}</title>`)
     .replace(/<\/head>/i, `${headTags(listings)}\n</head>`)
-    .replace(/<div id="root">\s*<\/div>/i, `<div id="root">${contentHtml(listings)}</div>`)
+    .replace(/<div id="root">\s*<\/div>/i, `<div id="root"><div class="ssr-copy">${contentHtml(listings)}</div></div>`)
     .replace(/(<script src="[^"]*data\.js)/i, `${inject}$1`);
 
   return new Response(html, {

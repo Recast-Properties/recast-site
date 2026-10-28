@@ -421,7 +421,10 @@ public on the live site, so nothing secret is exposed; the password only gates
   `netlify/lib/listings.mjs`) with full content + meta + OG + JSON-LD in the raw
   HTML — previously the listing content was invisible to non-JS crawlers. Moved to
   clean **`/homes/<id>`** URLs (old `detail.html?id=X` 301s over); dynamic
-  `sitemap.xml` lists every listing. React still hydrates the interactive UI.
+  `sitemap.xml` lists every listing. React still hydrates the interactive UI. The crawler copy sits in a `.ssr-copy`
+  wrapper that `homes/index.html` and `homes/detail.html` hide (`html.js`) from
+  browsers that run scripts, so it doesn't flash before React draws; it is
+  shown again after 4s if the page scripts never load.
 - **2026-07-28** — **Listings image performance.** Grid heroes + detail-gallery
   photos now serve through **Netlify Image CDN** (resized, WebP) instead of full
   1600px JPEGs; `photo.mjs` cache went from `max-age=60` to

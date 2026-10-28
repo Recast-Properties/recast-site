@@ -53,7 +53,7 @@ export default async (req) => {
   html = html
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(metaTitle(l))}</title>`)
     .replace(/<\/head>/i, `${listingHeadTags(l)}\n</head>`)
-    .replace(/<div id="root">\s*<\/div>/i, `<div id="root">${listingContentHtml(l)}</div>`)
+    .replace(/<div id="root">\s*<\/div>/i, `<div id="root"><div class="ssr-copy">${listingContentHtml(l)}</div></div>`)
     .replace(/(<script src="data\.js)/i, `${inject}$1`);
 
   if (preview) {
