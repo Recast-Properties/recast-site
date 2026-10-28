@@ -68,7 +68,7 @@ function ListingHero() {
       <div className="wrap">
         <p className="eyebrow" style={{ marginBottom: 12 }}>Homes for sale</p>
         <h1 className="rc-h1" style={{ fontSize: 46, margin: "0 0 14px", letterSpacing: "-0.02em" }}>Available properties</h1>
-        <p className="rc-lead" style={{ maxWidth: 560, margin: 0 }}>
+        <p className="rc-lead" style={{ maxWidth: 640, margin: 0, textWrap: "pretty" /* no lone last word */ }}>
           Move-in ready and renovated homes across Ellis County and the southern DFW metro.
           New properties are added as they become available.
         </p>
