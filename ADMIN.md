@@ -60,8 +60,6 @@ on a device and it stays signed in until **Sign out**):
 | `/admin/listings/` | Listings admin (was at `/admin` before 2026-08-11). |
 | `/admin/email/` | **Email setup** — create a property email (alias + label + filter) on paul@ or properties@. Replaces the two Apps Script "Email Setup" dialogs. |
 | `/admin/contacts/` | **Contacts** (the CRM list for email/text blasts) — see below. |
-| receipts alias URL | Receipts queue (still on its own Netlify alias deploy — see `RECEIPTS.md`; the hub links out). |
-| — | Auction Sheets: placeholder card, not built. |
 
 Every admin page is `noindex, nofollow` and served `cache-control: no-store`
 (`netlify.toml`).
@@ -360,6 +358,11 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-28** — **Admin menu trimmed:** the Receipts link (nav on every admin
+  page + hub card) and the "Auction Sheets — coming soon" hub card were
+  removed (Paul's call). The receipts queue itself still runs at its own
+  alias URL (`RECEIPTS.md`); only the links are gone.
 
 - **2026-10-28** — **Contacts (CRM).** New `/admin/contacts/` page (list,
   search, add, edit, delete, Download CSV; hub card + nav link on every admin
