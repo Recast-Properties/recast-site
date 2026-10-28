@@ -108,6 +108,9 @@ function ListingCTA() {
         <div className="notify-band" style={{ background: "var(--paper-deep)", borderRadius: "var(--radius-xl)", padding: "44px 48px",
           display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "28px 48px" }}>
           <div style={{ flex: "1 1 300px", paddingTop: 8 }}>
+            <p className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+              <LIcon name="bell" className="ic" style={{ width: 15, height: 15 }} />Get Notified
+            </p>
             <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>New homes added regularly</h2>
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
               Be the first to know. Sign up to receive emails and we'll reach out as soon as homes become available.
