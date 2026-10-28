@@ -106,8 +106,8 @@ function ListingCTA() {
         {/* Wraps instead of using .cta-band's phone stacking: the form drops below the
             text whenever both can't fit side by side. */}
         <div className="notify-band" style={{ background: "var(--paper-deep)", borderRadius: "var(--radius-xl)", padding: "44px 48px",
-          display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "28px 48px" }}>
-          <div style={{ flex: "1 1 300px", paddingTop: 8 }}>
+          display: "flex", flexWrap: "wrap", alignItems: "stretch", gap: "28px 48px" }}>
+          <div style={{ flex: "1 1 300px", paddingTop: 8, display: "flex", flexDirection: "column" }}>
             <p className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
               <LIcon name="bell" className="ic" style={{ width: 15, height: 15 }} />Get Notified
             </p>
@@ -115,8 +115,11 @@ function ListingCTA() {
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
               Be the first to know. Sign up to receive emails and we'll reach out as soon as homes become available.
             </p>
+            {/* Fills the space under the text: grows to the form's height on desktop, 200px tall when stacked. */}
+            <img src="/assets/why-recast-home.webp" alt="A brick and stone home in the Dallas–Fort Worth area" loading="lazy"
+              style={{ flex: "1 1 0", minHeight: 200, width: "100%", marginTop: 24, objectFit: "cover", borderRadius: "var(--radius-lg)", display: "block" }} />
           </div>
-          <div id="get-notified" className="card" style={{ flex: "1 1 360px", maxWidth: 480, padding: 0 }}>
+          <div id="get-notified" className="card" style={{ flex: "1 1 360px", maxWidth: 480, padding: 0, alignSelf: "flex-start" }}>
             <NotifyForm />
           </div>
         </div>
