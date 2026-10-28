@@ -19,7 +19,7 @@ const unsubUrl = (contactId) => `${SITE}/unsubscribe?id=${encodeURIComponent(con
 
 // ---- The email: the site's look (colors_and_type.css), in email-safe inline styles ----
 const C = { paper: "#FBF8F4", ink: "#18191C", body: "#3A3D44", muted: "#53575F", subtle: "#71757E",
-  line: "#E1E4E9", brand: "#EA9B60", brandDeep: "#DC8244", tint: "#FDF6EF", tintLine: "#F6D9BF" };
+  line: "#E1E4E9", brandDeep: "#DC8244", tint: "#FDF6EF", tintLine: "#F6D9BF" };
 // Poppins/Mulish load where the mail app allows web fonts (Apple Mail, iOS); others fall back.
 const HEAD = "font-family:Poppins,'Segoe UI',Arial,Helvetica,sans-serif";
 const BODY = "font-family:Mulish,'Segoe UI',Arial,Helvetica,sans-serif";
@@ -103,8 +103,7 @@ export async function buildEmail({ message, listingIds = [] }) {
 <div style="display:none;max-height:0;overflow:hidden">${preheader}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.paper}"><tr><td align="center" style="padding:0 12px 32px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
-<tr><td style="background:${C.brand};border-radius:0 0 12px 12px;padding:10px 16px;text-align:center;${BODY};font-size:13.5px;font-weight:800;color:${C.ink}">Be the first to know. New homes added regularly.</td></tr>
-<tr><td style="padding:22px 4px 18px"><a href="${SITE}/" style="text-decoration:none"><img src="${SITE}/assets/recast-mark-orange-transparent.png" alt="" width="28" height="28" style="vertical-align:middle;border:0">
+<tr><td style="padding:28px 4px 18px"><a href="${SITE}/" style="text-decoration:none"><img src="${SITE}/assets/recast-mark-orange-transparent.png" alt="" width="28" height="28" style="vertical-align:middle;border:0">
 <span style="${HEAD};font-size:19px;font-weight:700;color:${C.ink};vertical-align:middle;margin-left:6px">Recast Properties</span></a></td></tr>
 ${msg ? `<tr><td style="background:#ffffff;border:1px solid ${C.line};border-radius:16px;padding:22px 20px 8px;${BODY};font-size:16px;line-height:1.6;color:${C.ink}">${msg}</td></tr>
 <tr><td style="height:20px;line-height:20px;font-size:0">&nbsp;</td></tr>` : ""}
