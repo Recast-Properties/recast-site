@@ -166,7 +166,8 @@ each copy lands in paul@'s Sent folder. Shared code: `netlify/lib/blast.mjs`.
 - **Who gets it:** contacts with an email who are not Unsubscribed and did not
   choose text only (`recipientsOf`). The list is snapshotted when Send is hit.
 - **The email** wears the site's look (colors from `colors_and_type.css`,
-  Poppins/Mulish where the mail app loads web fonts): the Recast mark, the
+  Poppins/Mulish where the mail app loads web fonts) in a 640px column (an
+  `[if mso]` table holds Outlook for Windows to it): the Recast mark, the
   typed message in a white card (escaped;
   blank line = paragraph; links clickable), then per chosen **live** listing a
   cut-down listing page: address + town, a large photo and two smaller ones

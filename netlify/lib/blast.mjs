@@ -66,12 +66,12 @@ function listingSection(l, count) {
   const agent = l.agentPhone ? { name: l.agentName, phone: l.agentPhone } : DEFAULT_AGENT;
   const h3 = (t) => `<h3 style="${HEAD};font-size:18px;font-weight:600;color:${C.ink};margin:26px 0 8px">${t}</h3>`;
 
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid ${C.line};border-radius:16px;border-collapse:separate;margin:0 0 20px"><tr><td style="padding:22px 20px 24px">
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid ${C.line};border-radius:16px;border-collapse:separate;margin:0 0 20px"><tr><td style="padding:22px 16px 24px">
 <h2 style="${HEAD};font-size:24px;line-height:1.2;font-weight:600;margin:0"><a href="${url}" style="color:${C.ink};text-decoration:none">${esc(l.address)}</a></h2>
 <div style="${BODY};font-size:14px;color:${C.muted};margin:4px 0 16px">${esc([l.city, [l.state, l.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "))}</div>
-${count ? photo(0, 1120, 746, 12) : ""}
+${count ? photo(0, 1212, 808, 12) : ""}
 ${count >= 3 ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px"><tr>
-<td width="50%" style="padding-right:4px">${photo(1, 556, 370, 10)}</td><td width="50%" style="padding-left:4px">${photo(2, 556, 370, 10)}</td></tr></table>` : ""}
+<td width="50%" style="padding-right:4px">${photo(1, 598, 398, 10)}</td><td width="50%" style="padding-left:4px">${photo(2, 598, 398, 10)}</td></tr></table>` : ""}
 ${count > 3 ? `<div style="${BODY};font-size:13.5px;font-weight:700;margin-top:8px"><a href="${url}" style="color:${C.brandDeep};text-decoration:none">See all ${count} photos →</a></div>` : ""}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px"><tr>
 <td valign="bottom"><div style="${BODY};font-size:12.5px;color:${C.subtle}">Asking price</div>
@@ -102,17 +102,20 @@ export async function buildEmail({ message, listingIds = [] }) {
 <body style="margin:0;padding:0;background:${C.paper}">
 <div style="display:none;max-height:0;overflow:hidden">${preheader}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.paper}"><tr><td align="center" style="padding:0 12px 32px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+<!--[if mso]><table role="presentation" width="640" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px">
 <tr><td style="padding:28px 4px 18px"><a href="${SITE}/" style="text-decoration:none"><img src="${SITE}/assets/recast-mark-orange-transparent.png" alt="" width="28" height="28" style="vertical-align:middle;border:0">
 <span style="${HEAD};font-size:19px;font-weight:700;color:${C.ink};vertical-align:middle;margin-left:6px">Recast Properties</span></a></td></tr>
-${msg ? `<tr><td style="background:#ffffff;border:1px solid ${C.line};border-radius:16px;padding:22px 20px 8px;${BODY};font-size:16px;line-height:1.6;color:${C.ink}">${msg}</td></tr>
+${msg ? `<tr><td style="background:#ffffff;border:1px solid ${C.line};border-radius:16px;padding:22px 16px 8px;${BODY};font-size:16px;line-height:1.6;color:${C.ink}">${msg}</td></tr>
 <tr><td style="height:20px;line-height:20px;font-size:0">&nbsp;</td></tr>` : ""}
 ${picked.map((l, i) => `<tr><td>${listingSection(l, counts[i])}</td></tr>`).join("")}
 <tr><td style="padding:12px 8px 0;text-align:center;${BODY};font-size:12px;line-height:1.6;color:${C.subtle}">
 Recast Properties · ${esc(MAILING_ADDRESS || "[mailing address]")}<br>
 You're getting this because you asked to hear about homes from Recast Properties.<br>
 <a href="{{UNSUB}}" style="color:${C.subtle}">Unsubscribe</a> · <a href="${SITE}/" style="color:${C.subtle}">recast-properties.com</a></td></tr>
-</table></td></tr></table></body></html>`;
+</table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr></table></body></html>`;
 }
 
 // One email to one person (copied from analyst-bridge.mjs sendEmail, plus the
