@@ -409,6 +409,12 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
+- **2026-10-28** — **Contacts + Email Blast verified live.** A real homepage Get
+  Notified sign-up landed in Contacts (Paul's test). The first real blast
+  ("Email Blast Test", 2 listings) went to both contacts on the list with no
+  failures (its `crm-blasts` record: done, 2 of 2). `BLAST_MAILING_ADDRESS` is
+  set in Netlify, so sending to the list is on.
+
 - **2026-10-28** — **Email Blast design pass.** Each listing in a blast is now
   a cut-down version of its listing page, description included (see "Email
   Blast").
