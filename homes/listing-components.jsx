@@ -94,9 +94,8 @@ function openNotify(e) {
 function NotifyModal() {
   const [open, setOpen] = React.useState(false);
   const [state, setState] = React.useState("idle"); // idle | sending | done | error
-  const [err, setErr] = React.useState("");
   React.useEffect(() => {
-    window.recastOpenNotify = () => { setOpen(true); setState("idle"); setErr(""); };
+    window.recastOpenNotify = () => { setOpen(true); setState("idle"); };
   }, []);
   React.useEffect(() => { if (open && window.lucide) window.lucide.createIcons(); });
   if (!open) return null;
@@ -105,11 +104,7 @@ function NotifyModal() {
   async function submit(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
-    if (!String(fd.get("phone")).trim() && !String(fd.get("email")).trim()) {
-      setErr("Please leave a phone number or an email so we can reach you.");
-      return;
-    }
-    setErr(""); setState("sending");
+    setState("sending");
     try {
       // Post to a plain static page: "/" is rewritten to a function, and Netlify
       // only captures form posts sent to a static file.
@@ -149,14 +144,11 @@ function NotifyModal() {
             <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
             <label className="field"><span>Name</span>
               <input name="name" required maxLength={100} autoComplete="name" autoFocus placeholder="Jane Smith" /></label>
-            <label className="field"><span>Phone</span>
-              <input name="phone" type="tel" maxLength={30} autoComplete="tel" placeholder="214.555.0123" /></label>
             <label className="field"><span>Email</span>
-              <input name="email" type="email" maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
+              <input name="email" type="email" required maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
             <label className="field"><span>What are you looking for? (optional)</span>
               <textarea name="looking-for" rows={3} maxLength={1000} placeholder="Area, bedrooms, price range, move-in timing..." /></label>
-            {err && <p role="alert" style={{ margin: 0, color: "var(--error-700, #b42318)", fontSize: 14 }}>{err}</p>}
-            {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700, #b42318)", fontSize: 14 }}>
+            {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>
               That didn't go through. Please try again, or call 214.906.4992.</p>}
             <button type="submit" className="btn btn-primary btn-block" disabled={state === "sending"}>
               {state === "sending" ? "Sending..." : "Notify me"}</button>

@@ -289,7 +289,13 @@ public on the live site, so nothing secret is exposed; the password only gates
   at **`/sell/`**, and `/index.html` 301s to `/`. Every `/homes/...` URL is
   unchanged — **sign QR codes point there, so never move or redirect
   `/homes/`**. The listings header menu (grid and every listing page) has
-  **Get Notified** (mailto info@, same as the grid's CTA button) and **Sell
+  **Get Notified** (opens a sign-up form: name, email, what they're looking
+  for, plus the page they were on; it and the grid's CTA button post to the
+  **Netlify form `get-notified`**, whose hidden detection copy lives in
+  `homes/index.html`; a Netlify email notification sends each sign-up to
+  paul@ with subject "NEW BUYER SIGN-UP (Get Notified)". The form posts to
+  `/privacy.html`, not `/`, because Netlify only captures form posts sent to
+  a static file and `/` is rewritten to a function) and **Sell
   Your House** → `/sell/`; the seller page's menu has **Homes for Sale** →
   `/homes/`. Both menus hide on phones, like before. Because the grid template now
   renders at two URLs, `homes/index.html` and the moved seller page use
