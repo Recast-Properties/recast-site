@@ -91,11 +91,19 @@ function openNotify(e) {
   if (window.recastOpenNotify) window.recastOpenNotify();
 }
 
+// The exact words a visitor agrees to by ticking the text box. Sent as the
+// checkbox's value, so every sign-up records what was agreed to.
+const SMS_CONSENT = "Yes, text me about new properties at this number. Recast Properties will only use it " +
+  "for new-listing alerts, nothing else. Message frequency varies. Msg & data rates may apply. " +
+  "Reply STOP to opt out at any time.";
+
 function NotifyModal() {
   const [open, setOpen] = React.useState(false);
   const [state, setState] = React.useState("idle"); // idle | sending | done | error
+  const [via, setVia] = React.useState("email");    // email | text | both
+  const [err, setErr] = React.useState("");
   React.useEffect(() => {
-    window.recastOpenNotify = () => { setOpen(true); setState("idle"); };
+    window.recastOpenNotify = () => { setOpen(true); setState("idle"); setVia("email"); setErr(""); };
   }, []);
   React.useEffect(() => { if (open && window.lucide) window.lucide.createIcons(); });
   if (!open) return null;
@@ -104,7 +112,11 @@ function NotifyModal() {
   async function submit(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
-    setState("sending");
+    if (fd.has("phone") && String(fd.get("phone")).replace(/\D/g, "").length < 10) {
+      setErr("Please enter a 10-digit mobile number.");
+      return;
+    }
+    setErr(""); setState("sending");
     try {
       // Post to a plain static page: "/" is rewritten to a function, and Netlify
       // only captures form posts sent to a static file.
@@ -144,10 +156,38 @@ function NotifyModal() {
             <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
             <label className="field"><span>Name</span>
               <input name="name" required maxLength={100} autoComplete="name" autoFocus placeholder="Jane Smith" /></label>
-            <label className="field"><span>Email</span>
-              <input name="email" type="email" required maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
+            <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+              <legend style={{ fontSize: 13, fontWeight: 700, color: "var(--color-fg)", marginBottom: 7, padding: 0 }}>How should we reach you?</legend>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["email", "Email"], ["text", "Text"], ["both", "Both"]].map(([v, l]) => (
+                  <label key={v} style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                    padding: "10px 0", borderRadius: "var(--radius-md)", cursor: "pointer", fontWeight: 700, fontSize: 14.5,
+                    background: via === v ? "var(--terracotta-50)" : "var(--white)",
+                    boxShadow: "inset 0 0 0 1.5px " + (via === v ? "var(--terracotta-500)" : "var(--ink-200)") }}>
+                    <input type="radio" name="contact-pref" value={v} checked={via === v} onChange={() => setVia(v)}
+                      style={{ accentColor: "var(--terracotta-500)", margin: 0 }} />{l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {via !== "text" && (
+              <label className="field"><span>Email</span>
+                <input name="email" type="email" required maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
+            )}
+            {via !== "email" && (
+              <React.Fragment>
+                <label className="field"><span>Mobile phone</span>
+                  <input name="phone" type="tel" required maxLength={30} autoComplete="tel" placeholder="214.555.0123" /></label>
+                <label style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.5, color: "var(--color-fg-muted)", cursor: "pointer" }}>
+                  <input type="checkbox" name="sms-consent" value={SMS_CONSENT} required
+                    style={{ accentColor: "var(--terracotta-500)", width: 18, height: 18, marginTop: 1, flexShrink: 0 }} />
+                  <span>{SMS_CONSENT} See our <a href="/privacy.html" target="_blank" style={{ color: "var(--color-brand-press)", fontWeight: 600 }}>Privacy Policy</a> and <a href="/terms.html" target="_blank" style={{ color: "var(--color-brand-press)", fontWeight: 600 }}>Terms</a>.</span>
+                </label>
+              </React.Fragment>
+            )}
             <label className="field"><span>What are you looking for? (optional)</span>
               <textarea name="looking-for" rows={3} maxLength={1000} placeholder="Area, bedrooms, price range, move-in timing..." /></label>
+            {err && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>{err}</p>}
             {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>
               That didn't go through. Please try again, or call 214.906.4992.</p>}
             <button type="submit" className="btn btn-primary btn-block" disabled={state === "sending"}>
