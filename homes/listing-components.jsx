@@ -86,7 +86,7 @@ function ListingHeader({ p }) {
           <a href={"tel:" + tel} className="header-phone" style={{ display: "inline-flex", alignItems: "center", gap: 13, textDecoration: "none" }}>
             <span className="header-phone-label" style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink-900)" }}>Call for a showing</span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--color-brand)", color: "#fff",
-              fontWeight: 700, fontSize: 15, padding: "9px 16px", borderRadius: 999, boxShadow: "0 3px 10px rgba(234,155,96,0.32)" }}>
+              fontWeight: 700, fontSize: 15, padding: "9px 16px", borderRadius: 999 }}>
               <LIcon name="phone" className="ic" style={{ width: 16, height: 16, color: "#fff" }} />{phone}
             </span>
           </a>

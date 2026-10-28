@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 32", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 33", "color:#EA9B60;font-weight:700");
 
 /* Resolve the agent to show for a listing: prefer the per-property name/phone set
    in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
@@ -20,7 +20,7 @@ function AgentPill({ compact, p }) {
   return (
     <a href={"tel:" + a.tel} className="agent-pill" style={{ display: "inline-flex", alignItems: "center", gap: 14,
       background: "var(--terracotta-500)", color: "#fff", borderRadius: 14, padding: compact ? "10px 18px" : "13px 22px",
-      boxShadow: "var(--shadow-brand)", textDecoration: "none",
+      textDecoration: "none",
       transition: "background var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out)" }}>
       <span style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.18)",
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -306,7 +306,7 @@ function PropertyDetail({ p }) {
       <div className="wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
         {/* Same look as the orange "Call for a showing" phone pill in the header. */}
         <a href="/homes/" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--color-brand)", color: "#fff",
-          fontWeight: 700, fontSize: 15, padding: "9px 16px", borderRadius: 999, boxShadow: "0 3px 10px rgba(234,155,96,0.32)" }}>
+          fontWeight: 700, fontSize: 15, padding: "9px 16px", borderRadius: 999 }}>
           <LIcon name="arrow-left" className="ic" style={{ width: 16, height: 16, color: "#fff", strokeWidth: 3 }} />All properties
         </a>
       </div>
