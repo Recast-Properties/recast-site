@@ -66,7 +66,7 @@ function ListingHero() {
   return (
     <section className="listing-hero" style={{ padding: "54px 0 36px" }}>
       <div className="wrap">
-        <p className="eyebrow" style={{ marginBottom: 12 }}>Homes for sale</p>
+        <p className="eyebrow eyebrow-strong" style={{ marginBottom: 12 }}>Homes for sale</p>
         <h1 className="rc-h1" style={{ fontSize: 46, margin: "0 0 14px", letterSpacing: "-0.02em" }}>Available properties</h1>
         <p className="rc-lead" style={{ maxWidth: 640, margin: 0, textWrap: "pretty" /* no lone last word */ }}>
           Move-in ready and renovated homes across Ellis County and the southern DFW metro.
@@ -108,7 +108,7 @@ function ListingCTA() {
         <div className="notify-band" style={{ background: "var(--paper-deep)", borderRadius: "var(--radius-xl)", padding: "44px 48px",
           display: "flex", flexWrap: "wrap", alignItems: "stretch", gap: "28px 48px" }}>
           <div style={{ flex: "1 1 300px", paddingTop: 8, display: "flex", flexDirection: "column" }}>
-            <p className="eyebrow" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+            <p className="eyebrow eyebrow-strong" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
               <LIcon name="bell" className="ic" style={{ width: 15, height: 15 }} />Get Notified
             </p>
             <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>New homes added regularly</h2>
