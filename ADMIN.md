@@ -60,6 +60,7 @@ on a device and it stays signed in until **Sign out**):
 | `/admin/listings/` | Listings admin (was at `/admin` before 2026-08-11). |
 | `/admin/email/` | **Email setup** — create a property email (alias + label + filter) on paul@ or properties@. Replaces the two Apps Script "Email Setup" dialogs. |
 | `/admin/contacts/` | **Contacts** (the CRM list for email/text blasts) — see below. |
+| `/admin/blast/` | **Email Blast** — write an email (optional listing photo cards), preview, test to paul@, send to the contacts list — see below. |
 
 Every admin page is `noindex, nofollow` and served `cache-control: no-store`
 (`netlify.toml`).
@@ -155,6 +156,40 @@ sends anything — **Download CSV** is the hand-off to whatever tool does.
   one pre-launch `get-notified` submission ("John DOe", a test) was not
   imported.
 
+### Email Blast (`/admin/blast/` + `admin-blast.mjs`)
+
+Sends one email per contact through the **Nylas** grant on paul@ (the same
+`NYLAS_API_KEY` / `NYLAS_GRANT_ID` analyst-bridge uses — no new account), from
+**"Recast Properties" <info@recast-properties.com>**; replies reach paul@, and
+each copy lands in paul@'s Sent folder. Shared code: `netlify/lib/blast.mjs`.
+
+- **Who gets it:** contacts with an email who are not Unsubscribed and did not
+  choose text only (`recipientsOf`). The list is snapshotted when Send is hit.
+- **The email:** the typed message (escaped; blank line = paragraph; links
+  clickable) + a photo card per chosen **live** listing (cover photo via the
+  Image CDN as JPG, price, beds/baths/sqft, address, View home ->
+  `/homes/<id>`) + a footer with the postal address and an Unsubscribe link.
+  **Preview** renders it on the page; **Send me a test** mails it to paul@
+  only, subject prefixed `[TEST]`.
+- **`MAILING_ADDRESS`** (constant in `blast.mjs`) is the footer's postal
+  address, required in marketing email (CAN-SPAM). While it is blank, real
+  sends are refused server-side and the page says so; tests still work.
+- **Sending** runs in `admin-blast-send-background.mjs` (a background function:
+  up to 15 min, survives closing the page), about one email a second, saving
+  progress (`next`) after every email; the page polls and shows "Sending… 20 of
+  37". A second Send is refused while one is running. No save for 3 minutes =
+  **Stopped**, with a **Resume** button that continues from `next` (never
+  re-sends). Each Nylas call has a 30s cap and one retry on 429/5xx (not after a
+  timeout, which may have sent). Failures are listed per address.
+- **Unsubscribe:** `/unsubscribe?id=<contact id>` (`unsubscribe.mjs`, public).
+  Opening it only shows a button, because mail scanners open links; the button,
+  or Gmail's own one-click Unsubscribe (`List-Unsubscribe` +
+  `List-Unsubscribe-Post` headers), ticks the contact's Unsubscribed box.
+- Records: Blobs store **`crm-blasts`**, one key per blast (subject, message,
+  listingIds, recipients, next, failed, status).
+- Not built: personalization ("Hi {name}"), open/click tracking, scheduling,
+  text campaigns.
+
 ---
 
 ## In plain terms (how to use the listings admin)
@@ -219,6 +254,7 @@ the single source of truth.
 - **`crm-contacts`** store — **one key per contact** (key = its id, value =
   the contact JSON), not one array, so a sign-up and an admin edit landing
   together can't overwrite each other. Shared code: `netlify/lib/contacts.mjs`.
+- **`crm-blasts`** store — one key per email blast (see "Email Blast").
 
 ### Listing fields
 `id, status, price, address, city, state, zip, beds, baths, sqft, lot, year,
@@ -266,6 +302,9 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `email-setup.mjs` | auth | Property-email creator/remover (see "Email setup" above): `list` / `create` / `remove`, alias model for paul@ and Google-Group model for properties@, via a Google service account with domain-wide delegation. `info@` protected. |
 | `admin-contacts.mjs` | auth | CRM contacts: `list` / `save` (no id = add, refused if the email or mobile is already in the list) / `delete`. |
 | `submission-created.mjs` | Netlify event | Runs after each verified form submission; turns `get-notified` sign-ups into contacts (see "Contacts" above). |
+| `admin-blast.mjs` | auth | Email blast: `info` / `preview` / `test` (paul@ only) / `send` (starts the background sender) / `resume`. |
+| `admin-blast-send-background.mjs` | auth (background) | Sends one blast, saving progress after each email. |
+| `unsubscribe.mjs` | **public** | `/unsubscribe?id=…` — confirm button; POST (or Gmail one-click) unsubscribes. |
 
 Shared server code lives in **`netlify/lib/listings.mjs`** (not a function — imported by
 the three above): reads the Blob, normalizes to the same shape `sheet-loader.js`
@@ -358,6 +397,12 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-28** — **Email Blast.** New `/admin/blast/` page (menu item on
+  every admin page + hub card), `admin-blast.mjs`,
+  `admin-blast-send-background.mjs`, the public `/unsubscribe` page, and
+  `netlify/lib/blast.mjs`. Sends via the existing Nylas grant from info@.
+  Real sends wait on `MAILING_ADDRESS`.
 
 - **2026-10-28** — **Admin menu trimmed:** the Receipts link (nav on every admin
   page + hub card) and the "Auction Sheets — coming soon" hub card were

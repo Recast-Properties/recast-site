@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Email Blast</title>
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/kit.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c);
+    font-family: var(--font-sans, system-ui, sans-serif); }
+  a { color: var(--terracotta-600, #c2643a); }
+  .hidden { display: none !important; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
+  .sp { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand img { height: 28px; display: block; }
+  .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
+    color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
+  .tools { display: flex; gap: 4px; margin-left: 6px; }
+  .tools a { text-decoration: none; font-weight: 700; font-size: 13.5px; color: var(--ink-600, #53575f);
+    padding: 6px 10px; border-radius: 8px; }
+  .tools a:hover { background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c); }
+  .tools a.on { background: var(--ink-100, #eff1f4); color: var(--ink-900, #18191c); }
+  @media (max-width: 620px) { .tools { display: none; } }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 22px 20px 80px; }
+  .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
+    margin: 2px 0 16px; color: var(--ink-900, #18191c); }
+  h2.sec { font-family: var(--font-display, sans-serif); font-size: 17px; margin: 28px 0 10px; }
+  .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
+    padding: 9px 15px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--ink-50, #f6f7f9); }
+  .btn.primary { background: var(--terracotta-500, #d9743f); border-color: var(--terracotta-500, #d9743f); color: #fff; }
+  .btn.primary:hover { background: var(--terracotta-600, #c2643a); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  input, textarea { font-family: var(--font-sans, sans-serif); font-size: 14px; width: 100%;
+    border: 1px solid var(--ink-300, #c0c3cb); border-radius: 9px; padding: 9px 11px; background: #fff; color: var(--ink-900); }
+  textarea { resize: vertical; line-height: 1.5; }
+  label { display: block; font-weight: 700; font-size: 12.5px; margin: 0 0 5px; color: var(--ink-700, #3a3d44); }
+  .field { margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; padding: 18px; }
+  .muted { color: var(--ink-600, #53575f); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--ink-500, #71757e); margin-top: 4px; }
+  .banner { border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin: 0 0 16px; }
+  .banner.err { background: #fbeceb; color: #b3261e; border: 1px solid #e5b4b1; }
+  .banner.okay { background: #e3f5e9; color: #1c7a3f; border: 1px solid #b5dfc3; }
+  .banner.warn { background: #fdf0d9; color: #8a5a0b; border: 1px solid #f0d49c; }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .login .card { text-align: center; }
+  .login img { height: 34px; margin-bottom: 14px; }
+
+  /* blast */
+  .who { font-size: 14px; margin: 0 0 16px; }
+  .picks label { display: flex; gap: 9px; align-items: center; font-weight: 600; font-size: 13.5px;
+    padding: 7px 0; margin: 0; border-top: 1px solid var(--ink-100, #eff1f4); cursor: pointer; }
+  .picks label:first-child { border-top: 0; }
+  .picks input { width: auto; margin: 0; accent-color: var(--terracotta-500, #d9743f); }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #pv { display: block; width: 100%; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 10px; margin-top: 16px; }
+  .hist { list-style: none; margin: 0; padding: 0; }
+  .hist li { padding: 12px 0; border-top: 1px solid var(--ink-100, #eff1f4); font-size: 13.5px; }
+  .hist li:first-child { border-top: 0; padding-top: 0; }
+  .hist .subj { font-weight: 700; font-size: 14.5px; }
+  .hist .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 3px; color: var(--ink-600, #53575f); }
+  .hist .bad { color: #b3261e; }
+  .hist details { margin-top: 6px; }
+  .hist details li { border: 0; padding: 2px 0; font-size: 12.5px; color: #b3261e; word-break: break-word; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <div class="card">
+    <img src="/assets/recast-logo-horizontal-black.png" alt="Recast">
+    <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Recast Admin</h1>
+    <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
+    <div class="field"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <button id="loginBtn" class="btn primary" style="width:100%">Sign in</button>
+    <p id="loginErr" class="hint hidden" style="color:#b3261e"></p>
+  </div>
+</div>
+
+<!-- EMAIL BLAST -->
+<div id="app" class="hidden">
+  <div class="bar">
+    <a class="brand" href="/homes/" target="_blank" rel="noopener" title="View live site">
+      <img src="/assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
+    <nav class="tools">
+      <a href="/admin/">Hub</a>
+      <a href="/admin/listings/">Listings</a>
+      <a href="/admin/email/">Email</a>
+      <a href="/admin/contacts/">Contacts</a>
+      <a href="/admin/blast/" class="on">Email Blast</a>
+    </nav>
+    <span class="sp"></span>
+    <button id="logoutBtn" class="btn sm">Sign out</button>
+  </div>
+  <div class="wrap">
+    <h1 class="page-title">Email Blast</h1>
+    <p id="addrWarn" class="banner warn hidden">Sending to your list is off until your business mailing address is
+      added to the email footer (the law requires one in every marketing email). Test emails work now.</p>
+    <div class="card">
+      <p id="who" class="who">Loading…</p>
+      <div class="field"><label for="subject">Subject</label><input id="subject" maxlength="200"></div>
+      <div class="field"><label for="message">Message</label><textarea id="message" rows="9"></textarea>
+        <div class="hint">A blank line starts a new paragraph. Links you paste become clickable.</div></div>
+      <div class="field"><label>Listings to include</label><div id="listings" class="picks"></div>
+        <div class="hint">Each one appears under your message as a photo card with a View home button.</div></div>
+      <p id="err" class="banner err hidden" role="alert"></p>
+      <p id="ok" class="banner okay hidden" role="status"></p>
+      <div class="actions">
+        <button id="previewBtn" class="btn">Preview</button>
+        <button id="testBtn" class="btn">Send me a test</button>
+        <span class="sp"></span>
+        <button id="sendBtn" class="btn primary">Send</button>
+      </div>
+      <iframe id="pv" class="hidden" title="Email preview" sandbox="allow-same-origin"></iframe>
+    </div>
+    <h2 class="sec">Sent</h2>
+    <div class="card"><ul id="hist" class="hist"></ul></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const FN = "/.netlify/functions/";
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
+  let info = null, pollTimer = null;
+
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const when = (s) => new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const people = (n) => n + (n === 1 ? " person" : " people");
+
+  async function tryLogin(pw) {
+    const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    return res.ok;
+  }
+  function signOut() {
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  async function api(body) {
+    const res = await fetch(FN + "admin-blast", { method: "POST",
+      headers: { "x-admin-token": token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (res.status === 401) { signOut(); throw new Error("Signed out."); }
+    const j = await res.json().catch(() => ({ ok: false, error: "Server error (HTTP " + res.status + ")." }));
+    if (!j.ok) throw new Error(j.error || "Something went wrong.");
+    return j;
+  }
+  function say(kind, msg) {
+    $("err").classList.add("hidden"); $("ok").classList.add("hidden");
+    if (msg) { $(kind).textContent = msg; $(kind).classList.remove("hidden"); }
+  }
+
+  async function load(first) {
+    try { info = await api({ action: "info" }); }
+    catch (e) { say("err", "Couldn't load: " + e.message); return; }
+    $("addrWarn").classList.toggle("hidden", info.addressSet);
+    $("who").innerHTML = "Goes to <b>" + people(info.recipients) + "</b>: every contact with an email who isn't unsubscribed and didn't choose text only.";
+    $("sendBtn").textContent = "Send to " + people(info.recipients);
+    $("sendBtn").disabled = !info.addressSet || !info.recipients;
+    if (first) $("listings").innerHTML = info.listings.map((l) =>
+      '<label><input type="checkbox" value="' + esc(l.id) + '">' + esc(l.label) + "</label>").join("")
+      || '<span class="muted">No live listings.</span>';
+    $("hist").innerHTML = info.blasts.map((b) => {
+      const sent = b.done - b.failed.length;
+      const state = b.status === "sending" ? "Sending… " + b.done + " of " + b.total
+        : b.status === "stopped" ? '<span class="bad">Stopped at ' + b.done + " of " + b.total + "</span>"
+        : "Sent to " + people(sent);
+      return '<li><div class="subj">' + esc(b.subject) + '</div><div class="row"><span>' + when(b.createdAt) + "</span><span>" + state + "</span>" +
+        (b.status === "stopped" ? '<button class="btn sm" data-resume="' + esc(b.id) + '">Resume</button>' : "") + "</div>" +
+        (b.failed.length ? "<details><summary class=\"bad\">" + b.failed.length + " failed</summary><ul>" +
+          b.failed.map((f) => "<li>" + esc(f.email) + ": " + esc(f.error) + "</li>").join("") + "</ul></details>" : "") + "</li>";
+    }).join("") || '<li class="muted">Nothing sent yet.</li>';
+    clearTimeout(pollTimer);
+    if (info.blasts.some((b) => b.status === "sending")) pollTimer = setTimeout(() => load(false), 3000);
+  }
+
+  function draft() {
+    return { subject: $("subject").value, message: $("message").value,
+      listingIds: [...$("listings").querySelectorAll("input:checked")].map((i) => i.value) };
+  }
+  function busy(on) { $("previewBtn").disabled = on; $("testBtn").disabled = on; $("sendBtn").disabled = on || !info || !info.addressSet || !info.recipients; }
+
+  $("previewBtn").onclick = async () => {
+    busy(true); say("ok", "");
+    try {
+      const pv = $("pv");
+      pv.onload = () => { pv.style.height = pv.contentDocument.documentElement.scrollHeight + 2 + "px"; }; // +2 = its border
+      pv.srcdoc = (await api(Object.assign({ action: "preview" }, draft()))).html;
+      pv.classList.remove("hidden");
+    } catch (e) { say("err", e.message); }
+    finally { busy(false); }
+  };
+  $("testBtn").onclick = async () => {
+    busy(true); say("ok", "");
+    try { await api(Object.assign({ action: "test" }, draft())); say("ok", "Test sent to " + info.testTo + ". Check your inbox."); }
+    catch (e) { say("err", e.message); }
+    finally { busy(false); }
+  };
+  $("sendBtn").onclick = async () => {
+    const d = draft();
+    if (!confirm('Send "' + d.subject.trim() + '" to ' + people(info.recipients) + "? This can't be undone.")) return;
+    busy(true); say("ok", "");
+    try {
+      await api(Object.assign({ action: "send" }, d));
+      $("subject").value = ""; $("message").value = "";
+      $("listings").querySelectorAll("input:checked").forEach((i) => { i.checked = false; });
+      say("ok", "Sending now. You can leave this page; it keeps going.");
+      await load(false);
+    } catch (e) { say("err", e.message); }
+    finally { busy(false); }
+  };
+  $("hist").onclick = async (e) => {
+    const id = e.target.dataset && e.target.dataset.resume;
+    if (!id) return;
+    e.target.disabled = true;
+    try { await api({ action: "resume", id }); await load(false); }
+    catch (err) { say("err", err.message); e.target.disabled = false; }
+  };
+
+  async function showApp() {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    await load(true);
+  }
+  $("loginBtn").onclick = async () => {
+    const pw = $("pw").value.trim();
+    if (!pw) return;
+    $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
+    try {
+      if (await tryLogin(pw)) {
+        token = pw; localStorage.setItem("recast_admin_token", pw);
+        $("pw").value = ""; // clear so Chrome stops re-prompting to save it
+        await showApp();
+      } else {
+        $("loginErr").textContent = "Wrong password."; $("loginErr").classList.remove("hidden");
+      }
+    } catch (e) {
+      $("loginErr").textContent = String(e.message || e); $("loginErr").classList.remove("hidden");
+    } finally { $("loginBtn").disabled = false; }
+  };
+  $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = signOut;
+
+  (async function boot() {
+    if (token && (await tryLogin(token))) await showApp();
+  })();
+})();
+</script>
+</body>
+</html>
