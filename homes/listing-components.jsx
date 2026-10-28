@@ -52,6 +52,7 @@ function ListingHeader({ p }) {
   const phone = listingPhone || "214.906.4992";
   const tel = phone.replace(/[^0-9]/g, "");
   return (
+    <React.Fragment>
     <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
       <div className="wrap" style={{ height: 74, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -60,8 +61,8 @@ function ListingHeader({ p }) {
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, color: "var(--ink-900)", letterSpacing: "-0.01em" }}>Recast Properties</span>
         </a>
         <nav className="main-nav" style={{ display: "flex", alignItems: "center", gap: 28 }}>
-          {[["Get Notified", "mailto:info@recast-properties.com"], ["Sell Your House", "/sell/"]].map(([l, href]) => (
-            <a key={l} href={href} className="nav-link" style={{ fontSize: 15, fontWeight: 600, color: "var(--color-fg-muted)" }}>{l}</a>
+          {[["Get Notified", "#get-notified"], ["Sell Your House", "/sell/"]].map(([l, href]) => (
+            <a key={l} href={href} onClick={href === "#get-notified" ? openNotify : undefined} className="nav-link" style={{ fontSize: 15, fontWeight: 600, color: "var(--color-fg-muted)" }}>{l}</a>
           ))}
         </nav>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -75,6 +76,94 @@ function ListingHeader({ p }) {
         </div>
       </div>
     </header>
+    <NotifyModal />
+    </React.Fragment>
+  );
+}
+
+/* ------------------------------- Get Notified ------------------------------- */
+/* Buyer sign-up. Posts to the Netlify form "get-notified" (its hidden copy is in
+   homes/index.html, which is how Netlify detects it); Netlify emails every
+   submission to paul@. Opened by openNotify() from the header link and the
+   grid's CTA button. */
+function openNotify(e) {
+  if (e) e.preventDefault();
+  if (window.recastOpenNotify) window.recastOpenNotify();
+}
+
+function NotifyModal() {
+  const [open, setOpen] = React.useState(false);
+  const [state, setState] = React.useState("idle"); // idle | sending | done | error
+  const [err, setErr] = React.useState("");
+  React.useEffect(() => {
+    window.recastOpenNotify = () => { setOpen(true); setState("idle"); setErr(""); };
+  }, []);
+  React.useEffect(() => { if (open && window.lucide) window.lucide.createIcons(); });
+  if (!open) return null;
+  const close = () => setOpen(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    if (!String(fd.get("phone")).trim() && !String(fd.get("email")).trim()) {
+      setErr("Please leave a phone number or an email so we can reach you.");
+      return;
+    }
+    setErr(""); setState("sending");
+    try {
+      // Post to a plain static page: "/" is rewritten to a function, and Netlify
+      // only captures form posts sent to a static file.
+      const r = await fetch("/privacy.html", { method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(fd).toString() });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      setState("done");
+    } catch (_) { setState("error"); }
+  }
+
+  return (
+    <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(24,25,28,0.55)",
+      backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="notify-title" onClick={e => e.stopPropagation()} className="card"
+        style={{ width: 480, maxWidth: "100%", maxHeight: "100%", overflowY: "auto", padding: 0, boxShadow: "var(--shadow-lg)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px", borderBottom: "1px solid var(--color-divider)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img src="/assets/recast-mark-orange-transparent.png" alt="" style={{ height: 26 }} />
+            <span id="notify-title" style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Get notified about new homes</span>
+          </div>
+          <button onClick={close} aria-label="Close" style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-500)" }}>
+            <LIcon name="x" className="ic" style={{ width: 20, height: 20 }} />
+          </button>
+        </div>
+        {state === "done" ? (
+          <div style={{ padding: "28px 24px 26px" }}>
+            <h3 className="rc-h4" style={{ margin: "0 0 8px" }}>You're on the list.</h3>
+            <p style={{ margin: "0 0 22px", color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out when a home comes up that fits what you're looking for.</p>
+            <button className="btn btn-primary" onClick={close}>Done</button>
+          </div>
+        ) : (
+          <form onSubmit={submit} style={{ padding: "22px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your info and we'll let you know when one matches.</p>
+            <input type="hidden" name="form-name" value="get-notified" />
+            <input type="hidden" name="page" value={location.pathname} />
+            <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
+            <label className="field"><span>Name</span>
+              <input name="name" required maxLength={100} autoComplete="name" autoFocus placeholder="Jane Smith" /></label>
+            <label className="field"><span>Phone</span>
+              <input name="phone" type="tel" maxLength={30} autoComplete="tel" placeholder="214.555.0123" /></label>
+            <label className="field"><span>Email</span>
+              <input name="email" type="email" maxLength={150} autoComplete="email" placeholder="you@email.com" /></label>
+            <label className="field"><span>What are you looking for? (optional)</span>
+              <textarea name="looking-for" rows={3} maxLength={1000} placeholder="Area, bedrooms, price range, move-in timing..." /></label>
+            {err && <p role="alert" style={{ margin: 0, color: "var(--error-700, #b42318)", fontSize: 14 }}>{err}</p>}
+            {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700, #b42318)", fontSize: 14 }}>
+              That didn't go through. Please try again, or call 214.906.4992.</p>}
+            <button type="submit" className="btn btn-primary btn-block" disabled={state === "sending"}>
+              {state === "sending" ? "Sending..." : "Notify me"}</button>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -116,4 +205,4 @@ function ListingFooter() {
   );
 }
 
-Object.assign(window, { LIcon, fmtPrice, STATUS, StatusBadge, ListingPhoto, ListingHeader, ListingFooter });
+Object.assign(window, { LIcon, fmtPrice, STATUS, StatusBadge, ListingPhoto, ListingHeader, ListingFooter, openNotify });

@@ -110,7 +110,7 @@ function ListingCTA() {
               New homes are added regularly. Tell us what you're looking for and we'll reach out when something matches.
             </p>
           </div>
-          <a href="mailto:info@recast-properties.com" className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
+          <a href="#get-notified" onClick={openNotify} className="btn btn-primary btn-lg" style={{ whiteSpace: "nowrap" }}>
             <LIcon name="bell" className="ic" />Get notified
           </a>
         </div>

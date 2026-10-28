@@ -28,11 +28,22 @@
 </head>
 <body>
 <div id="root"></div>
+
+<!-- Netlify Forms detection (hidden). The Get Notified modal posts to this form
+     name; Netlify emails each submission to paul@. Field names must match. -->
+<form name="get-notified" data-netlify="true" netlify-honeypot="bot-field" hidden>
+  <input type="text" name="name" />
+  <input type="tel" name="phone" />
+  <input type="email" name="email" />
+  <textarea name="looking-for"></textarea>
+  <input type="text" name="page" />
+  <input type="text" name="bot-field" />
+</form>
 <script src="/homes/data.js?v=6"></script>
 <script src="/homes/sheet-loader.js?v=9"></script>
 <!-- Precompiled from *.jsx by `npm run build` (no in-browser Babel). -->
-<script src="/homes/listing-components.js?v=16"></script>
-<script src="/homes/landing.js?v=8"></script>
+<script src="/homes/listing-components.js?v=17"></script>
+<script src="/homes/landing.js?v=9"></script>
 <script src="/homes/app-index.js?v=8"></script>
 </body>
 </html>
