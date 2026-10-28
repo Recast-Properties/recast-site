@@ -9,6 +9,43 @@ nothing else.
 
 ---
 
+## The public site (layout and rules)
+
+| URL | Page | Source |
+|---|---|---|
+| `/` | **Homepage = the listings grid** (forced rewrite to `homes-index`) | `homes/index.html` + `homes/landing.jsx` |
+| `/homes/` | The same grid; its canonical URL | same |
+| `/homes/<id>` | One listing (server-rendered) | `homes/detail.html` + `homes/detail.jsx` |
+| `/sell/` | Seller page ("we buy houses", cash-offer form) | `sell/index.html` + `components.jsx`, `OfferModal.jsx`, `app-home.jsx` |
+| `/index.html` | 301 to `/` (the seller page lived here before) | `netlify.toml` |
+
+- **Never move or redirect `/homes/` or `/homes/<id>`.** QR codes on yard signs
+  point there.
+- **Shared listings chrome** lives in `homes/listing-components.jsx`: the orange
+  "New homes added regularly" bar and the nav, pinned together inside the sticky
+  header; the menu (Get Notified, Sell Your House) and call pill, which fold
+  into a hamburger below 900px (`.listing-header` rule in `kit.css`); the
+  footer; and the Get Notified sign-up.
+- **Get Notified sign-up** (`NotifyForm`): name, Email / Text / Both, email
+  and/or mobile, and a required, unticked text-consent box whose exact wording
+  (`SMS_CONSENT`) is sent as its value, so every sign-up records what was agreed
+  to. It posts to the **Netlify form `get-notified`** (hidden detection copy in
+  `homes/index.html`; field names must match), and a Netlify email notification
+  sends each one to paul@ as "NEW BUYER SIGN-UP (Get Notified)". It posts to
+  `/privacy.html`, not `/`: Netlify only captures form posts sent to a static
+  file, and `/` is rewritten to a function. On the homepage the form sits inline
+  in the bottom box (`#get-notified`) and every Get Notified link scrolls there;
+  on listing pages the same links open it as a pop-up (`openNotify()`).
+- **Open:** the site's Terms and Privacy pages describe texts only for seller
+  inquiries and appointments. Before texting listing alerts from the business
+  number, they need a line covering new-listing alerts.
+- **Paths are absolute** (`/assets/...`, `/homes/...`) in `homes/index.html` and
+  the seller page, because the grid template renders at both `/` and `/homes/`.
+- **Bump the `?v=`** on any changed `.js`/`.css` in the page that loads it, or
+  browsers keep the cached copy.
+
+---
+
 ## The admin hub (since 2026-08-11)
 
 **`/admin` is the landing page for all internal tools.** One password
@@ -191,7 +228,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `photo.mjs` | **public** | Serves `/photos/<folder>/<n>.jpg` from the `listing-photos` Blob store (long CDN cache w/ `stale-while-revalidate`; `HEAD` is a cheap metadata-only existence check). |
 | `photos-list.mjs` | **public** | `?folder=<id>` → `{ count }` for a listing's photos, in one Blob `list`. The gallery uses it instead of probing `1.jpg, 2.jpg, …` one at a time. |
 | `listing-page.mjs` | **public** | Server-renders a listing at **`/homes/<id>`** — real content + `<title>`/meta/OG + `RealEstateListing` JSON-LD baked into the HTML, and injects `window.__LISTING__` so React renders instantly. Reads `homes/detail.html` as its template (`included_files`). With **`?preview=1`** it also renders a *hidden* listing (`readListings({ includeHidden: true })`): `noindex` + `x-robots-tag`, `cache-control: no-store`, and a "Preview" banner above the page while the listing is hidden. No password — anyone with the link can open it. |
-| `homes-index.mjs` | **public** | Server-renders **`/homes/`** — meta + `ItemList` JSON-LD + a linked list of every listing; injects `window.__LISTINGS__`. Template: `homes/index.html`. |
+| `homes-index.mjs` | **public** | Server-renders the grid at **`/`** (the homepage) and **`/homes/`** — meta + `ItemList` JSON-LD + a linked list of every listing; injects `window.__LISTINGS__`. Template: `homes/index.html`. |
 | `sitemap.mjs` | **public** | **`/sitemap.xml`** generated from Blobs, so every current listing URL is included automatically. |
 | `admin-migrate-photos.mjs` | auth | One-time import of the original static `photos/` folders into Blobs (already run). |
 | `email-setup.mjs` | auth | Property-email creator/remover (see "Email setup" above): `list` / `create` / `remove`, alias model for paul@ and Google-Group model for properties@, via a Google service account with domain-wide delegation. `info@` protected. |
@@ -209,6 +246,11 @@ functions (the `/homes/<id>` rule is **not** forced, so real static files —
 through). Old `/homes/detail.html?id=X` links **301** to the clean `/homes/<id>`.
 React still boots on top for the interactive UI (it consumes the injected
 `window.__LISTING__` / `window.__LISTINGS__`, so there's no re-fetch).
+The `/` rewrite serves the same grid render. The crawler copy sits in a
+`.ssr-copy` wrapper that `homes/index.html` and `homes/detail.html` hide
+(`html.js`, set by a tiny head script) from browsers that run scripts, so it
+doesn't flash as a plain list before React draws; it is shown again after 4s if
+the page scripts never load. Crawlers still get it in the raw HTML.
 
 ### How the public site reads listings
 `homes/data.js` sets `RECAST_SHEET_CSV_URL = "/.netlify/functions/listings"`.
@@ -275,7 +317,7 @@ public on the live site, so nothing secret is exposed; the password only gates
   logged in as paul@, linked to site `1452cbfc-…`). `npx netlify-cli` without a
   version tries to download the newest release and stops for confirmation, so
   either call that binary directly or `npm i -g netlify-cli` once.
-- **Repo:** local-only `.git` on `main`, no remote. "Push" is not a step here.
+- **Repo:** `main`, pushed to GitHub (`Recast-Properties/recast-site`). Commit and push with every change.
 - **Local dev:** `netlify dev` (Blobs is emulated locally). Note: Blobs-dependent
   behavior is most reliably verified against a deploy preview / prod.
 
@@ -283,33 +325,26 @@ public on the live site, so nothing secret is exposed; the password only gates
 
 ## Change log
 
-- **2026-10-28** — **Listings grid is the homepage.** `/` now serves the
-  `/homes/` grid (forced 200 rewrite to `homes-index` in `netlify.toml`); the
-  seller ("we buy houses") page moved from `index.html` to `sell/index.html`
-  at **`/sell/`**, and `/index.html` 301s to `/`. Every `/homes/...` URL is
-  unchanged — **sign QR codes point there, so never move or redirect
-  `/homes/`**. The listings header menu (grid and every listing page) has
-  **Get Notified** (opens a sign-up form: name; a choice of Email / Text / Both
-  that shows the email and/or mobile fields; a required, unticked text-consent
-  checkbox whose exact wording (`SMS_CONSENT` in `listing-components.jsx`) is
-  sent as its value so each sign-up records what was agreed to; plus the page
-  they were on; the form sits inline in the grid's bottom "New homes added regularly" box
-  (`#get-notified`); on the homepage every Get Notified link (orange bar above
-  the header, header menu, phone menu) scrolls to it, and on listing pages the
-  same links open it as a pop-up (`openNotify()` in `listing-components.jsx`).
-  It posts to the
-  **Netlify form `get-notified`**, whose hidden detection copy lives in
-  `homes/index.html`; a Netlify email notification sends each sign-up to
-  paul@ with subject "NEW BUYER SIGN-UP (Get Notified)". The form posts to
-  `/privacy.html`, not `/`, because Netlify only captures form posts sent to
-  a static file and `/` is rewritten to a function) and **Sell
-  Your House** → `/sell/`; the seller page's menu has **Homes for Sale** →
-  `/homes/`. Below 900px the listings menu and call pill fold into a
-  **hamburger** (Get Notified, Sell Your House, Call for a showing; rules in
-  `kit.css`, `.listing-header` rule); the seller page's menu still just
-  hides on phones. Because the grid template now
-  renders at two URLs, `homes/index.html` and the moved seller page use
-  absolute paths throughout; the grid's canonical stays `/homes/`.
+- **2026-10-28** — **Listings grid became the homepage** (layout above, "The
+  public site").
+  - `/` serves the grid; the seller page moved from `index.html` to `/sell/`;
+    `/index.html` 301s to `/`. `/homes/` URLs unchanged for the sign QR codes.
+  - Listings header: Get Notified + Sell Your House menu; seller page menu gained
+    Homes for Sale. Seller page logo now links to `/` (it scrolled to its own top).
+  - Orange "New homes added regularly. Be the first to know." bar, pinned with
+    the nav. The listing page's sticky price card moved down to clear the taller
+    header (`top: 141`).
+  - Get Notified went from a mailto to the `get-notified` Netlify form: first a
+    pop-up, then inline in the homepage's bottom box with a home photo beside it
+    on desktop (hidden on phones).
+  - Phones: hamburger menu (later raised to below 900px, because the header
+    wrapped at tablet width), two-line orange bar, tighter hero spacing.
+  - Crawler copy no longer flashes before the page draws (`.ssr-copy`, hidden
+    when scripts run; shown again after 4s if they fail).
+  - Styling: no glow on any orange button; All properties became a small orange
+    pill; bolder "Homes for sale" / "Get Notified" labels (`.eyebrow-strong`);
+    phone number removed from every footer's "Get in touch"; "become available"
+    wording; the hero intro widened so its last word never sits alone.
 
 - **2026-10-22** — **Editor header pill.** Beside the "Edit listing" title, a
   right-aligned pill opens that listing's page in a new tab — `/homes/<id>`
@@ -423,10 +458,7 @@ public on the live site, so nothing secret is exposed; the password only gates
   `netlify/lib/listings.mjs`) with full content + meta + OG + JSON-LD in the raw
   HTML — previously the listing content was invisible to non-JS crawlers. Moved to
   clean **`/homes/<id>`** URLs (old `detail.html?id=X` 301s over); dynamic
-  `sitemap.xml` lists every listing. React still hydrates the interactive UI. The crawler copy sits in a `.ssr-copy`
-  wrapper that `homes/index.html` and `homes/detail.html` hide (`html.js`) from
-  browsers that run scripts, so it doesn't flash before React draws; it is
-  shown again after 4s if the page scripts never load.
+  `sitemap.xml` lists every listing. React still hydrates the interactive UI.
 - **2026-07-28** — **Listings image performance.** Grid heroes + detail-gallery
   photos now serve through **Netlify Image CDN** (resized, WebP) instead of full
   1600px JPEGs; `photo.mjs` cache went from `max-age=60` to

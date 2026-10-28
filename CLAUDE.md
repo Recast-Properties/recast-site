@@ -1,7 +1,8 @@
 # Recast Scheduler — Project Context
 
 > **Scope:** this file covers the **scheduler / booking backend** (Telnyx voice +
-> website intake → Nylas calendar). The public **listings** pages and the
+> website intake → Nylas calendar). The website intake form (`OfferModal.jsx`) lives
+> on the seller page at **`/sell/`**; the homepage is the listings grid. The public **listings** pages and the
 > **`/admin`** tool that manages them are a separate system documented in
 > [`ADMIN.md`](ADMIN.md). The **receipts** auto-itemizer (email → Claude → queue →
 > expense sheet) is documented in [`RECEIPTS.md`](RECEIPTS.md). All three share this
