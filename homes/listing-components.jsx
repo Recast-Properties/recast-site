@@ -150,7 +150,7 @@ function NotifyModal() {
           </div>
         ) : (
           <form onSubmit={submit} style={{ padding: "22px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-            <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your info and we'll let you know as soon as one comes available.</p>
+            <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your information, and we'll notify you as soon as new homes become available.</p>
             <input type="hidden" name="form-name" value="get-notified" />
             <input type="hidden" name="page" value={location.pathname} />
             <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
