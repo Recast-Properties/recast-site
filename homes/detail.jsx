@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 33", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 34", "color:#EA9B60;font-weight:700");
 
 /* Resolve the agent to show for a listing: prefer the per-property name/phone set
    in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
@@ -304,10 +304,10 @@ function PropertyDetail({ p }) {
   return (
     <main>
       <div className="wrap" style={{ paddingTop: 24, paddingBottom: 8 }}>
-        {/* Same look as the orange "Call for a showing" phone pill in the header. */}
-        <a href="/homes/" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--color-brand)", color: "#fff",
-          fontWeight: 700, fontSize: 15, padding: "9px 16px", borderRadius: 999 }}>
-          <LIcon name="arrow-left" className="ic" style={{ width: 16, height: 16, color: "#fff", strokeWidth: 3 }} />All properties
+        {/* Orange like the header phone pill, sized like the "Get notified" pill in the orange bar. */}
+        <a href="/homes/" style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--color-brand)", color: "#fff",
+          fontWeight: 700, fontSize: 13.5, lineHeight: 1.35, padding: "6px 14px", borderRadius: 999 }}>
+          <LIcon name="arrow-left" className="ic" style={{ width: 14, height: 14, color: "#fff", strokeWidth: 3 }} />All properties
         </a>
       </div>
       <div className="wrap" style={{ paddingBottom: 8 }}>
