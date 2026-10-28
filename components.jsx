@@ -47,7 +47,7 @@ function PhotoPlaceholder({ id, note = "Drop a photo", style, markStyle }) {
 /* ---------------------------------- Header ---------------------------------- */
 function Header({ onOffer }) {
   const [open, setOpen] = React.useState(false);
-  const links = [["How it works", "#how"], ["Why Recast", "#why"], ["FAQ", "#faq"]];
+  const links = [["How it works", "#how"], ["Why Recast", "#why"], ["FAQ", "#faq"], ["Homes for Sale", "/homes/"]];
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(251,248,244,0.86)",
       backdropFilter: "blur(10px)", borderBottom: "1px solid var(--color-border)" }}>
