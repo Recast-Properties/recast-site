@@ -79,6 +79,7 @@ img { display: block; max-width: 100%; }
   .notify-bar { padding: 9px 16px !important; gap: 8px !important; }
   .listing-hero { padding-top: 24px !important; }
   .notify-band { padding: 28px 18px !important; }
+  .notify-photo { display: none !important; }
   .wrap { padding: 0 18px; }
   .hero-grid, .split, .footer-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
   .cards-3, .cards-2, .cards-4 { grid-template-columns: 1fr !important; }

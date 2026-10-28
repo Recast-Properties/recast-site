@@ -115,8 +115,9 @@ function ListingCTA() {
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
               Be the first to know. Sign up to receive emails and we'll reach out as soon as homes become available.
             </p>
-            {/* Fills the space under the text: grows to the form's height on desktop, 200px tall when stacked. */}
-            <img src="/assets/why-recast-home.webp" alt="A brick and stone home in the Dallas–Fort Worth area" loading="lazy"
+            {/* Fills the space under the text: grows to the form's height on desktop, 200px tall when
+                stacked; hidden on phones (.notify-photo in kit.css). */}
+            <img className="notify-photo" src="/assets/why-recast-home.webp" alt="A brick and stone home in the Dallas–Fort Worth area" loading="lazy"
               style={{ flex: "1 1 0", minHeight: 200, width: "100%", marginTop: 24, objectFit: "cover", borderRadius: "var(--radius-lg)", display: "block" }} />
           </div>
           <div id="get-notified" className="card" style={{ flex: "1 1 360px", maxWidth: 480, padding: 0, alignSelf: "flex-start" }}>
