@@ -145,12 +145,12 @@ function NotifyModal() {
         {state === "done" ? (
           <div style={{ padding: "28px 24px 26px" }}>
             <h3 className="rc-h4" style={{ margin: "0 0 8px" }}>You're on the list.</h3>
-            <p style={{ margin: "0 0 22px", color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out when a home comes up that fits what you're looking for.</p>
+            <p style={{ margin: "0 0 22px", color: "var(--color-fg-muted)", fontSize: 15 }}>We'll reach out as soon as new homes come available.</p>
             <button className="btn btn-primary" onClick={close}>Done</button>
           </div>
         ) : (
           <form onSubmit={submit} style={{ padding: "22px 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-            <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your info and we'll let you know when one matches.</p>
+            <p style={{ margin: 0, color: "var(--color-fg-muted)", fontSize: 14.5 }}>New homes are added regularly. Leave your info and we'll let you know as soon as one comes available.</p>
             <input type="hidden" name="form-name" value="get-notified" />
             <input type="hidden" name="page" value={location.pathname} />
             <p hidden><label>Leave this empty <input name="bot-field" tabIndex={-1} autoComplete="off" /></label></p>
@@ -185,8 +185,6 @@ function NotifyModal() {
                 </label>
               </React.Fragment>
             )}
-            <label className="field"><span>What are you looking for? (optional)</span>
-              <textarea name="looking-for" rows={3} maxLength={1000} placeholder="Area, bedrooms, price range, move-in timing..." /></label>
             {err && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>{err}</p>}
             {state === "error" && <p role="alert" style={{ margin: 0, color: "var(--error-700)", fontSize: 14 }}>
               That didn't go through. Please try again, or call 214.906.4992.</p>}

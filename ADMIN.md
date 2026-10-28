@@ -292,8 +292,8 @@ public on the live site, so nothing secret is exposed; the password only gates
   **Get Notified** (opens a sign-up form: name; a choice of Email / Text / Both
   that shows the email and/or mobile fields; a required, unticked text-consent
   checkbox whose exact wording (`SMS_CONSENT` in `listing-components.jsx`) is
-  sent as its value so each sign-up records what was agreed to; what they're
-  looking for; plus the page they were on; it and the grid's CTA button post to the
+  sent as its value so each sign-up records what was agreed to; plus the page
+  they were on; it and the grid's CTA button post to the
   **Netlify form `get-notified`**, whose hidden detection copy lives in
   `homes/index.html`; a Netlify email notification sends each sign-up to
   paul@ with subject "NEW BUYER SIGN-UP (Get Notified)". The form posts to
