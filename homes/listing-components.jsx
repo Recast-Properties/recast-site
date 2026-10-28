@@ -57,7 +57,7 @@ function ListingHeader({ p }) {
     <div style={{ background: "var(--color-brand)", color: "var(--ink-900)" }}>
       <div className="wrap" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
         padding: "9px 20px", fontSize: "clamp(13px, 3.4vw, 14.5px)", fontWeight: 600, lineHeight: 1.35 }}>
-        <span>New homes added regularly. Be the first to know.</span>
+        <span style={{ fontWeight: 700 }}>New homes added regularly. Be the first to know.</span>
         <a href="#get-notified" onClick={openNotify} style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
           background: "var(--ink-900)", color: "#fff", fontWeight: 700, fontSize: 13.5, padding: "6px 14px", borderRadius: 999, whiteSpace: "nowrap" }}>
           <LIcon name="bell" className="ic" style={{ width: 14, height: 14, color: "#fff" }} />Get notified
