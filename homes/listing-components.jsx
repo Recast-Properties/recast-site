@@ -253,8 +253,6 @@ function ListingFooter() {
           </div>
           <div>
             <h5 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, margin: "0 0 16px" }}>Get in touch</h5>
-            <a href="tel:2149064992" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
-              <LIcon name="phone" className="ic" style={{ width: 15, height: 15 }} />214.906.4992</a>
             <a href="mailto:info@recast-properties.com" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
               <LIcon name="mail" className="ic" style={{ width: 15, height: 15 }} />info@recast-properties.com</a>
           </div>

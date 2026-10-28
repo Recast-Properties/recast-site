@@ -94,8 +94,6 @@ function Footer({ onOffer }) {
           </div>
           <div>
             <h5 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 15, margin: "0 0 16px" }}>Get in touch</h5>
-            <a href="tel:4695487253" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
-              <Icon name="phone" className="ic" style={{ width: 15, height: 15 }} />469.548.7253</a>
             <a href="mailto:info@recast-properties.com" style={{ display: "flex", gap: 9, alignItems: "center", color: "var(--ink-300)", fontSize: 14, padding: "6px 0" }}>
               <Icon name="mail" className="ic" style={{ width: 15, height: 15 }} />info@recast-properties.com</a>
             <div style={{ marginTop: 14 }}><Button kind="primary" onClick={onOffer}>Get My Offer</Button></div>
