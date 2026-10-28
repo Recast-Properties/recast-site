@@ -64,7 +64,7 @@ function ListingHeader({ p }) {
         <div className="wrap notify-bar" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
           padding: "9px 20px", lineHeight: 1.35 }}>
           <span style={{ fontWeight: 700, fontSize: "clamp(14px, 4vw, 16.5px)" }}>
-            <span className="bar-line">New homes added regularly.</span> <span className="bar-line">Be the first to know.</span>
+            <span className="bar-line">Be the first to know.</span> <span className="bar-line">New homes added regularly.</span>
           </span>
           <a href="#get-notified" onClick={openNotify} style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
             background: "var(--ink-900)", color: "#fff", fontWeight: 700, fontSize: 13.5, padding: "6px 14px", borderRadius: 999, whiteSpace: "nowrap" }}>

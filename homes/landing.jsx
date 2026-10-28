@@ -111,9 +111,9 @@ function ListingCTA() {
             <p className="eyebrow eyebrow-strong" style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
               <LIcon name="bell" className="ic" style={{ width: 15, height: 15 }} />Get Notified
             </p>
-            <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>New homes added regularly</h2>
+            <h2 className="rc-h3" style={{ margin: "0 0 8px" }}>Be the first to know.</h2>
             <p style={{ margin: 0, fontSize: 16, color: "var(--color-fg-muted)", maxWidth: 480 }}>
-              Be the first to know. Sign up to receive emails and we'll reach out as soon as homes become available.
+              New homes are added regularly. Sign up to receive emails or texts as soon as homes become available.
             </p>
             {/* Fills the space under the text: grows to the form's height on desktop, 200px tall when
                 stacked; hidden on phones (.notify-photo in kit.css). */}

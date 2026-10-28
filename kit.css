@@ -80,7 +80,7 @@ img { display: block; max-width: 100%; }
   .menu-toggle { display: inline-flex !important; }
   .mobile-menu { display: block !important; }
   .bar-line { display: block; }
-  /* tighter so "New homes added regularly." stays on one line on a 360px phone */
+  /* tighter so "New homes added regularly." stays on one line on a 360px phone (the longer of the two bar lines) */
   .notify-bar { padding: 9px 16px !important; gap: 8px !important; }
   .listing-hero { padding-top: 24px !important; }
   .notify-band { padding: 28px 18px !important; }

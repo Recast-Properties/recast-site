@@ -22,7 +22,7 @@ nothing else.
 - **Never move or redirect `/homes/` or `/homes/<id>`.** QR codes on yard signs
   point there.
 - **Shared listings chrome** lives in `homes/listing-components.jsx`: the orange
-  "New homes added regularly" bar and the nav, pinned together inside the sticky
+  "Be the first to know. New homes added regularly." bar and the nav, pinned together inside the sticky
   header; the menu (Get Notified, Sell Your House) and call pill, which fold
   into a hamburger below 900px (`.listing-header` rule in `kit.css`); the
   footer; and the Get Notified sign-up.
