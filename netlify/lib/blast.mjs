@@ -9,7 +9,7 @@ export const blastsStore = () => getStore({ name: "crm-blasts", consistency: "st
 export const TEST_TO = "paul@recast-properties.com";
 const FROM = { name: "Recast Properties", email: "info@recast-properties.com" };
 // Every marketing email must carry a postal address (CAN-SPAM). Real sends are
-// refused while this is blank; test sends show a placeholder.
+// refused while this is blank (the footer then shows just the company name).
 export const MAILING_ADDRESS = "";
 
 // Who gets a blast: has an email, isn't unsubscribed, didn't choose text-only.
@@ -110,7 +110,7 @@ ${msg ? `<tr><td style="background:#ffffff;border:1px solid ${C.line};border-rad
 <tr><td style="height:20px;line-height:20px;font-size:0">&nbsp;</td></tr>` : ""}
 ${picked.map((l, i) => `<tr><td>${listingSection(l, counts[i])}</td></tr>`).join("")}
 <tr><td style="padding:12px 8px 0;text-align:center;${BODY};font-size:12px;line-height:1.6;color:${C.subtle}">
-Recast Properties · ${esc(MAILING_ADDRESS || "[mailing address]")}<br>
+Recast Properties LLC${MAILING_ADDRESS ? " · " + esc(MAILING_ADDRESS) : ""}<br>
 You're getting this because you asked to hear about homes from Recast Properties.<br>
 <a href="{{UNSUB}}" style="color:${C.subtle}">Unsubscribe</a> · <a href="${SITE}/" style="color:${C.subtle}">recast-properties.com</a></td></tr>
 </table>
