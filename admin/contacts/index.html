@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Contacts</title>
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/kit.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c);
+    font-family: var(--font-sans, system-ui, sans-serif); }
+  a { color: var(--terracotta-600, #c2643a); }
+  .hidden { display: none !important; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
+  .sp { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand img { height: 28px; display: block; }
+  .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
+    color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
+  .tools { display: flex; gap: 4px; margin-left: 6px; }
+  .tools a { text-decoration: none; font-weight: 700; font-size: 13.5px; color: var(--ink-600, #53575f);
+    padding: 6px 10px; border-radius: 8px; }
+  .tools a:hover { background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c); }
+  .tools a.on { background: var(--ink-100, #eff1f4); color: var(--ink-900, #18191c); }
+  @media (max-width: 620px) { .tools { display: none; } }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 22px 20px 80px; }
+  .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
+    margin: 0; color: var(--ink-900, #18191c); }
+  .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
+    padding: 9px 15px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--ink-50, #f6f7f9); }
+  .btn.primary { background: var(--terracotta-500, #d9743f); border-color: var(--terracotta-500, #d9743f); color: #fff; }
+  .btn.primary:hover { background: var(--terracotta-600, #c2643a); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  .btn.danger { color: #b3261e; border-color: #e5b4b1; }
+  .btn.danger:hover { background: #fbeceb; }
+  input, select, textarea { font-family: var(--font-sans, sans-serif); font-size: 14px; width: 100%;
+    border: 1px solid var(--ink-300, #c0c3cb); border-radius: 9px; padding: 9px 11px; background: #fff; color: var(--ink-900); }
+  textarea { resize: vertical; }
+  label { display: block; font-weight: 700; font-size: 12.5px; margin: 0 0 5px; color: var(--ink-700, #3a3d44); }
+  .field { margin-bottom: 16px; }
+  .card { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; padding: 18px; }
+  .muted { color: var(--ink-600, #53575f); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--ink-500, #71757e); margin-top: 4px; }
+  .banner { border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin: 0 0 16px; }
+  .banner.err { background: #fbeceb; color: #b3261e; border: 1px solid #e5b4b1; }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .login .card { text-align: center; }
+  .login img { height: 34px; margin-bottom: 14px; }
+
+  /* contacts list */
+  .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
+  #q { margin-bottom: 12px; }
+  .tablewrap { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-500, #71757e); padding: 10px 12px; white-space: nowrap; }
+  td { padding: 10px 12px; border-top: 1px solid var(--ink-100, #eff1f4); white-space: nowrap; }
+  tbody tr[data-id] { cursor: pointer; }
+  tbody tr[data-id]:hover { background: var(--ink-50, #f6f7f9); }
+  tr.off td { color: var(--ink-400, #9a9ea6); }
+  .link { all: unset; font-weight: 700; cursor: pointer; }
+  .link:focus-visible { outline: 2px solid var(--terracotta-500, #d9743f); outline-offset: 2px; border-radius: 3px; }
+  .tag { font-size: 11px; font-weight: 700; color: var(--ink-600, #53575f); background: var(--ink-100, #eff1f4);
+    border-radius: 6px; padding: 2px 7px; margin-left: 6px; }
+  .empty { text-align: center; padding: 28px 12px; white-space: normal; }
+
+  /* editor */
+  dialog { border: 0; border-radius: 14px; padding: 0; width: min(520px, calc(100vw - 32px));
+    box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog form { padding: 20px; }
+  dialog h2 { font-family: var(--font-display, sans-serif); font-size: 18px; margin: 0 0 16px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+  label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 13.5px; margin-bottom: 16px; }
+  label.check input { width: auto; margin: 0; accent-color: var(--terracotta-500, #d9743f); }
+  .actions { display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <div class="card">
+    <img src="/assets/recast-logo-horizontal-black.png" alt="Recast">
+    <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Recast Admin</h1>
+    <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
+    <div class="field"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <button id="loginBtn" class="btn primary" style="width:100%">Sign in</button>
+    <p id="loginErr" class="hint hidden" style="color:#b3261e"></p>
+  </div>
+</div>
+
+<!-- CONTACTS -->
+<div id="app" class="hidden">
+  <div class="bar">
+    <a class="brand" href="/homes/" target="_blank" rel="noopener" title="View live site">
+      <img src="/assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
+    <nav class="tools">
+      <a href="/admin/">Hub</a>
+      <a href="/admin/listings/">Listings</a>
+      <a href="/admin/email/">Email</a>
+      <a href="/admin/contacts/" class="on">Contacts</a>
+      <a href="https://receipts--incomparable-raindrop-8f3d22.netlify.app/receipts/" target="_blank" rel="noopener">Receipts</a>
+    </nav>
+    <span class="sp"></span>
+    <button id="logoutBtn" class="btn sm">Sign out</button>
+  </div>
+  <div class="wrap">
+    <div class="head">
+      <h1 class="page-title">Contacts <span id="count" class="muted"></span></h1>
+      <span class="sp"></span>
+      <button id="csvBtn" class="btn sm">Download CSV</button>
+      <button id="addBtn" class="btn primary sm">+ Add contact</button>
+    </div>
+    <input id="q" type="search" placeholder="Search name, email, mobile, notes" aria-label="Search contacts">
+    <p id="err" class="banner err hidden"></p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Name</th><th>Email</th><th>Mobile</th><th>Prefers</th><th>Texts OK</th><th>Source</th><th>Added</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="7" class="muted empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="hint" style="margin-top:10px">Get Notified sign-ups from the homepage are added automatically. <b>Texts OK</b> = they gave
+      permission to be texted; only text those. The CSV leaves out unsubscribed contacts.</p>
+  </div>
+</div>
+
+<dialog id="ed">
+  <form id="edForm">
+    <h2 id="edTitle">Add contact</h2>
+    <div class="field"><label for="f-name">Name</label><input id="f-name" name="name" maxlength="100" autocomplete="off"></div>
+    <div class="row2">
+      <div class="field"><label for="f-email">Email</label><input id="f-email" name="email" type="email" maxlength="150" autocomplete="off"></div>
+      <div class="field"><label for="f-phone">Mobile</label><input id="f-phone" name="phone" type="tel" maxlength="30" autocomplete="off"></div>
+    </div>
+    <div class="field"><label for="f-prefers">Prefers</label>
+      <select id="f-prefers" name="prefers"><option value="">—</option><option value="email">Email</option><option value="text">Text</option><option value="both">Both</option></select></div>
+    <div class="field"><label for="f-consent">Text permission</label>
+      <textarea id="f-consent" name="smsConsent" rows="3" maxlength="500"></textarea>
+      <div class="hint">What they agreed to and how, e.g. "Said yes to texts about new listings on a call". Leave blank if they haven't agreed: then they must not be texted.</div></div>
+    <label class="check"><input type="checkbox" name="unsubscribed"> Unsubscribed: leave out of every email and text</label>
+    <div class="field"><label for="f-notes">Notes</label><textarea id="f-notes" name="notes" rows="3" maxlength="5000"></textarea></div>
+    <p id="edMeta" class="hint" style="margin:-4px 0 14px"></p>
+    <p id="edErr" class="banner err hidden"></p>
+    <div class="actions">
+      <button type="button" id="delBtn" class="btn danger">Delete</button>
+      <span class="sp"></span>
+      <button type="button" id="cancelBtn" class="btn">Cancel</button>
+      <button type="submit" id="saveBtn" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const FN = "/.netlify/functions/";
+  const FIELDS = ["name", "email", "phone", "prefers", "smsConsent", "notes"];
+  const PREF = { email: "Email", text: "Text", both: "Both" };
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
+  let rows = [], editing = null;
+
+  // Names and notes come from a public form: always escape before innerHTML.
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtDate = (s) => s ? new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+
+  async function tryLogin(pw) {
+    const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    return res.ok;
+  }
+  function signOut() {
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  async function api(body) {
+    const res = await fetch(FN + "admin-contacts", { method: "POST",
+      headers: { "x-admin-token": token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (res.status === 401) { signOut(); throw new Error("Signed out."); }
+    const j = await res.json().catch(() => ({ ok: false, error: "Server error (HTTP " + res.status + ")." }));
+    if (!j.ok) throw new Error(j.error || "Something went wrong.");
+    return j;
+  }
+  function showErr(el, msg) { el.textContent = msg; el.classList.toggle("hidden", !msg); }
+
+  async function load() {
+    try { rows = (await api({ action: "list" })).rows; showErr($("err"), ""); }
+    catch (e) { showErr($("err"), "Couldn't load contacts: " + e.message); }
+    render();
+  }
+
+  function render() {
+    const q = $("q").value.trim().toLowerCase();
+    const shown = rows.filter((r) => !q || [r.name, r.email, r.phone, r.notes].join(" ").toLowerCase().includes(q));
+    $("count").textContent = rows.length ? "(" + rows.length + ")" : "";
+    $("rows").innerHTML = shown.map((r) =>
+      '<tr data-id="' + esc(r.id) + '"' + (r.unsubscribed ? ' class="off"' : "") + ">" +
+      '<td><button type="button" class="link">' + (esc(r.name) || "(no name)") + "</button>" +
+        (r.unsubscribed ? '<span class="tag">Unsubscribed</span>' : "") + "</td>" +
+      "<td>" + esc(r.email) + "</td><td>" + esc(r.phone) + "</td><td>" + (PREF[r.prefers] || "") + "</td>" +
+      "<td>" + (r.smsConsent ? "Yes" : "") + "</td><td>" + esc(r.source) + "</td><td>" + fmtDate(r.createdAt) + "</td></tr>"
+    ).join("") || '<tr><td colspan="7" class="muted empty">' + (rows.length ? "No matches." : "No contacts yet.") + "</td></tr>";
+  }
+
+  function openEditor(r) {
+    editing = r || null;
+    const f = $("edForm");
+    FIELDS.forEach((k) => { f.elements[k].value = (r && r[k]) || ""; });
+    f.elements.unsubscribed.checked = !!(r && r.unsubscribed);
+    $("edTitle").textContent = r ? "Edit contact" : "Add contact";
+    $("delBtn").classList.toggle("hidden", !r);
+    $("edMeta").textContent = r ? [r.source, "added " + fmtDate(r.createdAt),
+      r.smsConsentAt && "text permission recorded " + fmtDate(r.smsConsentAt)].filter(Boolean).join(" · ") : "";
+    showErr($("edErr"), "");
+    $("ed").showModal();
+  }
+  function busy(on) { ["saveBtn", "delBtn", "cancelBtn"].forEach((id) => { $(id).disabled = on; }); }
+
+  $("edForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, contact = { id: editing && editing.id };
+    FIELDS.forEach((k) => { contact[k] = f.elements[k].value; });
+    contact.unsubscribed = f.elements.unsubscribed.checked;
+    busy(true);
+    try { await api({ action: "save", contact }); $("ed").close(); await load(); }
+    catch (err) { showErr($("edErr"), err.message); }
+    finally { busy(false); }
+  };
+  $("delBtn").onclick = async () => {
+    if (!confirm("Delete " + (editing.name || editing.email || editing.phone) + "? This can't be undone.")) return;
+    busy(true);
+    try { await api({ action: "delete", id: editing.id }); $("ed").close(); await load(); }
+    catch (err) { showErr($("edErr"), err.message); }
+    finally { busy(false); }
+  };
+  $("cancelBtn").onclick = () => $("ed").close();
+  $("addBtn").onclick = () => openEditor(null);
+  $("rows").onclick = (e) => {
+    const tr = e.target.closest("tr[data-id]");
+    if (tr) openEditor(rows.find((r) => r.id === tr.dataset.id));
+  };
+  $("q").oninput = render;
+
+  // Subscribed contacts only. A cell starting with = + - @ gets a leading ' so a
+  // spreadsheet never runs a form-submitted value as a formula.
+  $("csvBtn").onclick = () => {
+    const cols = ["name", "email", "phone", "prefers", "smsConsent", "smsConsentAt", "source", "createdAt", "notes"];
+    const cell = (v) => {
+      v = String(v == null ? "" : v);
+      if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+      return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    const lines = [cols.join(",")].concat(rows.filter((r) => !r.unsubscribed).map((r) => cols.map((k) => cell(r[k])).join(",")));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\r\n")], { type: "text/csv" }));
+    a.download = "recast-contacts-" + new Date().toISOString().slice(0, 10) + ".csv";
+    a.click();
+  };
+
+  async function showApp() {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    await load();
+  }
+  $("loginBtn").onclick = async () => {
+    const pw = $("pw").value.trim();
+    if (!pw) return;
+    $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
+    try {
+      if (await tryLogin(pw)) {
+        token = pw; localStorage.setItem("recast_admin_token", pw);
+        $("pw").value = ""; // clear so Chrome stops re-prompting to save it
+        await showApp();
+      } else {
+        $("loginErr").textContent = "Wrong password."; $("loginErr").classList.remove("hidden");
+      }
+    } catch (e) {
+      $("loginErr").textContent = String(e.message || e); $("loginErr").classList.remove("hidden");
+    } finally { $("loginBtn").disabled = false; }
+  };
+  $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = signOut;
+
+  (async function boot() {
+    if (token && (await tryLogin(token))) await showApp();
+  })();
+})();
+</script>
+</body>
+</html>

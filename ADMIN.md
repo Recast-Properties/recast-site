@@ -35,7 +35,8 @@ nothing else.
   `/privacy.html`, not `/`: Netlify only captures form posts sent to a static
   file, and `/` is rewritten to a function. On the homepage the form sits inline
   in the bottom box (`#get-notified`) and every Get Notified link scrolls there;
-  on listing pages the same links open it as a pop-up (`openNotify()`).
+  on listing pages the same links open it as a pop-up (`openNotify()`). Each
+  sign-up also becomes a **CRM contact** (see "Contacts" below).
 - **Open:** the site's Terms and Privacy pages describe texts only for seller
   inquiries and appointments. Before texting listing alerts from the business
   number, they need a line covering new-listing alerts.
@@ -58,6 +59,7 @@ on a device and it stays signed in until **Sign out**):
 | `/admin/` | The hub — cards + nav to everything below. |
 | `/admin/listings/` | Listings admin (was at `/admin` before 2026-08-11). |
 | `/admin/email/` | **Email setup** — create a property email (alias + label + filter) on paul@ or properties@. Replaces the two Apps Script "Email Setup" dialogs. |
+| `/admin/contacts/` | **Contacts** (the CRM list for email/text blasts) — see below. |
 | receipts alias URL | Receipts queue (still on its own Netlify alias deploy — see `RECEIPTS.md`; the hub links out). |
 | — | Auction Sheets: placeholder card, not built. |
 
@@ -126,6 +128,35 @@ project (Admin SDK is already on).
 `GOOGLE_SA_KEY` (its PEM private key; `\n`-escaped is fine),
 `GOOGLE_ADMIN_USER` (`paul@recast-properties.com`).
 
+### Contacts — the CRM (`/admin/contacts/` + `admin-contacts.mjs`)
+
+The list that email blasts and text campaigns are sent from. Nothing here
+sends anything — **Download CSV** is the hand-off to whatever tool does.
+
+- **Get Notified sign-ups arrive on their own:** `submission-created.mjs` is a
+  Netlify event function (named after the event) that runs after each
+  *verified* form submission — past the honeypot and spam filter, signed by
+  Netlify — and ignores every form but `get-notified`. The paul@ email
+  notification is unaffected.
+- **One person, one contact:** same email (case-insensitive) or same mobile
+  (last 10 digits) = same person. A repeat sign-up updates that contact
+  (blank fields never erase; **Unsubscribed stays ticked**). Adding by hand
+  someone already in the list is refused with "Already in the list as …".
+- **Text permission (`smsConsent`)** is what the person agreed to: the form's
+  exact `SMS_CONSENT` wording, or for a hand-added contact how they agreed.
+  Blank = must not be texted. `smsConsentAt` is stamped by the server when the
+  wording is new and cleared with it. The list's **Texts OK** column = has it.
+- **Unsubscribed** contacts stay in the list (dimmed) so they are never
+  re-added as fresh; the CSV leaves them out. CSV cells starting with
+  `= + - @` get a leading `'` so a spreadsheet can't run them as formulas.
+- Fields: `id, name, email, phone, prefers (email|text|both), source
+  (Get Notified | Added by hand — never edited), smsConsent, smsConsentAt,
+  unsubscribed ("1"|""), notes, createdAt, updatedAt`. Email is stored
+  lowercase; a 10-digit US mobile as `214-555-0123`.
+- Not wired: the `/sell/` seller form (its leads go to the scheduler), and the
+  one pre-launch `get-notified` submission ("John DOe", a test) was not
+  imported.
+
 ---
 
 ## In plain terms (how to use the listings admin)
@@ -187,6 +218,9 @@ the single source of truth.
   `104ashburne/1.jpg`), always numbered contiguously `1..n`. Photos being
   uploaded are briefly staged under `<folder>/.stg/<uuid>.jpg` and cleared once
   the order is committed.
+- **`crm-contacts`** store — **one key per contact** (key = its id, value =
+  the contact JSON), not one array, so a sign-up and an admin edit landing
+  together can't overwrite each other. Shared code: `netlify/lib/contacts.mjs`.
 
 ### Listing fields
 `id, status, price, address, city, state, zip, beds, baths, sqft, lot, year,
@@ -232,6 +266,8 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `sitemap.mjs` | **public** | **`/sitemap.xml`** generated from Blobs, so every current listing URL is included automatically. |
 | `admin-migrate-photos.mjs` | auth | One-time import of the original static `photos/` folders into Blobs (already run). |
 | `email-setup.mjs` | auth | Property-email creator/remover (see "Email setup" above): `list` / `create` / `remove`, alias model for paul@ and Google-Group model for properties@, via a Google service account with domain-wide delegation. `info@` protected. |
+| `admin-contacts.mjs` | auth | CRM contacts: `list` / `save` (no id = add, refused if the email or mobile is already in the list) / `delete`. |
+| `submission-created.mjs` | Netlify event | Runs after each verified form submission; turns `get-notified` sign-ups into contacts (see "Contacts" above). |
 
 Shared server code lives in **`netlify/lib/listings.mjs`** (not a function — imported by
 the three above): reads the Blob, normalizes to the same shape `sheet-loader.js`
@@ -324,6 +360,12 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-28** — **Contacts (CRM).** New `/admin/contacts/` page (list,
+  search, add, edit, delete, Download CSV; hub card + nav link on every admin
+  page), `admin-contacts.mjs`, and `submission-created.mjs`, which files each
+  Get Notified sign-up as a contact. Blobs store `crm-contacts`, shared code in
+  `netlify/lib/contacts.mjs`. Sending blasts/texts is not built.
 
 - **2026-10-28** — **Listings grid became the homepage** (layout above, "The
   public site").
