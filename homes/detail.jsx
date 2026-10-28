@@ -1,7 +1,7 @@
 /* ============ Recast Listings Kit — property detail page ============ */
 /* BUILD MARKER — bump this every time detail.jsx changes so we can confirm
    the live server is serving the current file (check the browser console). */
-console.log("%cRecast detail.jsx — BUILD 30", "color:#EA9B60;font-weight:700");
+console.log("%cRecast detail.jsx — BUILD 31", "color:#EA9B60;font-weight:700");
 
 /* Resolve the agent to show for a listing: prefer the per-property name/phone set
    in the admin, and fall back to the site-wide default (window.RECAST_AGENT). */
@@ -280,7 +280,7 @@ function FactGrid({ p }) {
 
 function InquiryCard({ p }) {
   return (
-    <div className="card inquiry-card" style={{ padding: 26, position: "sticky", top: 92 }}>
+    <div className="card inquiry-card" style={{ padding: 26, position: "sticky", top: 141 /* sticky header 123px (orange bar + nav) + 18 */ }}>
       <div style={{ fontSize: 13.5, color: "var(--color-fg-subtle)", fontWeight: 600 }}>Asking price</div>
       <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 34, letterSpacing: "-0.02em", margin: "2px 0 4px" }}>{fmtPrice(p.price)}</div>
       <div style={{ marginBottom: 20 }}><StatusBadge status={p.status} /></div>
