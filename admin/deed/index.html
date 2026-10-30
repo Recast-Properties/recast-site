@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Recast — Deed Maker</title>
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/kit.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c);
+    font-family: var(--font-sans, system-ui, sans-serif); }
+  a { color: var(--terracotta-600, #c2643a); }
+  .hidden { display: none !important; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: #fff; border-bottom: 1px solid var(--ink-200, #e1e4e9); position: sticky; top: 0; z-index: 5; }
+  .bar .sp { flex: 1; }
+  .brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand img { height: 28px; display: block; }
+  .brand span { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 19px;
+    color: var(--ink-900, #18191c); letter-spacing: -0.01em; }
+  .tools { display: flex; gap: 4px; margin-left: 6px; }
+  .tools a { text-decoration: none; font-weight: 700; font-size: 13.5px; color: var(--ink-600, #53575f);
+    padding: 6px 10px; border-radius: 8px; }
+  .tools a:hover { background: var(--ink-50, #f6f7f9); color: var(--ink-900, #18191c); }
+  .tools a.on { background: var(--ink-100, #eff1f4); color: var(--ink-900, #18191c); }
+  @media (max-width: 620px) { .tools { display: none; } }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 20px 80px; }
+  .page-title { font-family: var(--font-display, sans-serif); font-weight: 700; font-size: 22px;
+    margin: 2px 0 16px; color: var(--ink-900, #18191c); }
+  .btn { font-family: var(--font-sans, sans-serif); font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1px solid var(--ink-300, #c0c3cb); background: #fff; color: var(--ink-900); border-radius: 10px;
+    padding: 9px 15px; transition: background .12s, border-color .12s; }
+  .btn:hover { background: var(--ink-50, #f6f7f9); }
+  .btn.primary { background: var(--terracotta-500, #d9743f); border-color: var(--terracotta-500, #d9743f); color: #fff; }
+  .btn.primary:hover { background: var(--terracotta-600, #c2643a); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  input, select, textarea { font-family: var(--font-sans, sans-serif); font-size: 14px; width: 100%;
+    border: 1px solid var(--ink-300, #c0c3cb); border-radius: 9px; padding: 9px 11px; background: #fff; color: var(--ink-900); }
+  textarea { resize: vertical; line-height: 1.4; }
+  label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 5px; }
+  .field { margin-bottom: 14px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 10px; }
+  .card { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; padding: 18px; }
+  .card h2 { font-family: var(--font-display, sans-serif); font-size: 15px; margin: 0 0 12px; }
+  .card + .card { margin-top: 14px; }
+  .muted { color: var(--ink-600, #53575f); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--ink-500, #71757e); margin-top: 4px; }
+
+  /* login */
+  .login { max-width: 360px; margin: 12vh auto 0; }
+  .login .card { text-align: center; }
+  .login img { height: 34px; margin-bottom: 14px; }
+
+  /* form + preview */
+  .layout { display: grid; grid-template-columns: 400px 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  .actions { display: flex; gap: 10px; margin-top: 14px; }
+  .preview { position: sticky; top: 80px; overflow-x: auto; }
+  .paper { background: #fff; width: 8.5in; min-height: 11in; padding: .75in; margin: 0 auto;
+    box-shadow: 0 2px 14px rgba(0,0,0,.12); }
+
+  /* the deed itself (screen preview and print) */
+  .deed { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.25; color: #000; }
+  .deed h1 { text-align: center; font-size: 13pt; font-weight: 700; margin: 0 0 14pt; letter-spacing: .03em; }
+  .deed p { margin: 0 0 8pt; text-align: justify; }
+  .deed .indent { text-indent: .5in; }
+  .deed .caps { text-transform: uppercase; }
+  .deed .venue { display: grid; grid-template-columns: 2.6in .3in 1fr; font-weight: 700; margin-bottom: 12pt; }
+  .deed .legal { white-space: pre-wrap; margin: 4pt 0 10pt; text-align: left; }
+  .deed .sig { margin: 6pt 0 0 3.1in; }
+  .deed .signing { break-inside: avoid; }
+  .deed .sig .line { border-top: 1px solid #000; padding-top: 3pt; }
+  .deed .ack-title { text-align: center; margin: 14pt 0 8pt; }
+  .deed .venue.ack { font-weight: 400; }
+  .deed .notary { margin: 28pt 0 0 3.1in; border-top: 1px solid #000; padding-top: 3pt; }
+  .deed .blank { display: inline-block; min-width: .45in; border-bottom: 1px solid #000; }
+  .deed .missing { background: #fde7a8; }
+
+  @page { size: letter; margin: .75in; }
+  @media print {
+    body { background: #fff; }
+    .bar, #login, .no-print { display: none !important; }
+    .wrap, .layout, .preview { display: block; padding: 0; margin: 0; max-width: none; position: static; }
+    .paper { width: auto; min-height: 0; padding: 0; box-shadow: none; }
+    .deed .missing { background: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <div class="card">
+    <img src="/assets/recast-logo-horizontal-black.png" alt="Recast">
+    <h1 style="font-family:var(--font-display);font-size:18px;margin:0 0 4px">Recast Admin</h1>
+    <p class="muted" style="margin:0 0 16px">Enter the admin password.</p>
+    <div class="field"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <button id="loginBtn" class="btn primary" style="width:100%">Sign in</button>
+    <p id="loginErr" class="hint hidden" style="color:#b3261e"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <div class="bar">
+    <a class="brand" href="/homes/" target="_blank" rel="noopener" title="View live site">
+      <img src="/assets/recast-mark-orange-transparent.png" alt="">
+      <span>Recast Properties</span>
+    </a>
+    <nav class="tools">
+      <a href="/admin/">Hub</a>
+      <a href="/admin/listings/">Listings</a>
+      <a href="/admin/email/">Email</a>
+      <a href="/admin/contacts/">Contacts</a>
+      <a href="/admin/blast/">Email Blast</a>
+      <a href="/admin/deed/" class="on">Deeds</a>
+    </nav>
+    <span class="sp"></span>
+    <button id="logoutBtn" class="btn sm">Sign out</button>
+  </div>
+
+  <div class="wrap">
+    <h1 class="page-title no-print">Deed Maker</h1>
+    <div class="layout">
+      <form id="f" class="no-print" autocomplete="off">
+        <div class="card">
+          <h2>Seller (Grantor)</h2>
+          <div class="field"><label for="grantor">Name</label>
+            <input id="grantor" value="Recast Properties LLC"></div>
+          <div class="field"><label for="grantorAddr">Address</label>
+            <input id="grantorAddr" value="2225 Northeast 45th Avenue, Portland, Oregon 97213"></div>
+          <div class="field"><label for="signer">Signed by</label>
+            <input id="signer" value="Paul Bjork">
+            <div class="hint">Printed under the signature line as “Paul Bjork for Recast Properties LLC”.</div></div>
+        </div>
+
+        <div class="card">
+          <h2>Buyer (Grantee)</h2>
+          <div class="field"><label for="grantee">Name</label>
+            <input id="grantee" placeholder="L & R Associates"></div>
+          <div class="field"><label for="granteeAddr">Address</label>
+            <input id="granteeAddr" placeholder="P.O. Box 3071, Waxahachie, Ellis County, Texas"></div>
+        </div>
+
+        <div class="card">
+          <h2>Property</h2>
+          <div class="field"><label for="county">County (Texas)</label>
+            <input id="county" value="Ellis"></div>
+          <div class="field"><label for="legal">Legal description</label>
+            <textarea id="legal" rows="5" placeholder="Lot 12, Block G, of Christian Meadows, Phase Two, an Addition to the City of Ennis, Ellis County, Texas, according to the Map or Plat thereof recorded in/under Cabinet M, Page 7, Map/Plat records, Ellis County, Texas"></textarea>
+            <div class="hint">Copy it word for word from the prior deed or title commitment.</div></div>
+          <div class="field"><label for="consideration">Consideration</label>
+            <input id="consideration" value="TEN AND NO/100 ($10.00) DOLLARS"></div>
+        </div>
+
+        <div class="card">
+          <h2>Signing</h2>
+          <div class="field"><label for="city">Executed at</label>
+            <input id="city" value="Waxahachie, Texas"></div>
+          <div class="row3">
+            <div class="field"><label for="day">Day</label>
+              <input id="day" type="number" min="1" max="31" placeholder="blank"></div>
+            <div class="field"><label for="month">Month</label><select id="month"></select></div>
+            <div class="field"><label for="year">Year</label><input id="year" type="number"></div>
+          </div>
+          <div class="hint" style="margin:-8px 0 14px">Leave the day blank to fill it in by hand at the notary.</div>
+          <div class="row">
+            <div class="field"><label for="ackState">Notarized in state</label>
+              <input id="ackState" value="Texas"></div>
+            <div class="field"><label for="ackCounty">County</label>
+              <input id="ackCounty" value="Ellis"></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="printBtn" class="btn primary">Print / Save PDF</button>
+          <button type="button" id="clearBtn" class="btn">Clear buyer &amp; property</button>
+        </div>
+        <p class="hint">Nothing here is saved or sent anywhere. Yellow in the preview means a box is still empty.</p>
+      </form>
+
+      <div class="preview">
+        <div class="paper">
+          <div class="deed">
+            <h1>SPECIAL WARRANTY DEED</h1>
+            <div class="venue">
+              <div>THE STATE OF TEXAS</div><div>)</div><div></div>
+              <div></div><div>)</div><div>KNOW ALL MEN BY THESE PRESENTS:</div>
+              <div>COUNTY OF <span class="caps" data-f="county"></span></div><div>)</div><div></div>
+            </div>
+
+            <p class="indent"><b>THAT I/We,</b> <span class="caps" data-f="grantor"></span> herein referred to as
+            Grantor, whose address is <span data-f="grantorAddr"></span>, for and in consideration of the sum of
+            <span data-f="consideration"></span> cash and other good and valuable consideration to us in hand paid by
+            <span class="caps" data-f="grantee"></span>, the receipt of which is hereby acknowledged, for which no lien,
+            either express or implied, is hereby retained, have Granted, Sold and Conveyed and by these presents do
+            Grant, Sell and Convey all of our rights, titles, and interests in, unto the said
+            <span class="caps" data-f="grantee"></span> whose address is <span data-f="granteeAddr"></span>, the
+            following described property to-wit:</p>
+
+            <p class="legal" data-f="legal"></p>
+
+            <p style="margin-bottom:2pt">Reservations from and Exceptions to Conveyance and Warranty:</p>
+            <p>Subject, however, to all valid outstanding easements, rights of way, mineral and/or ground leases,
+            mineral reservations, mineral conveyances, restrictive covenants of record, and to zoning laws,
+            regulations and ordinances of municipal and other governmental authorities, if any.</p>
+
+            <p class="indent"><b>TO HAVE AND TO HOLD</b> the above described premises, together with all and singular
+            the rights and appurtenances thereto in anywise belonging unto said <span class="caps" data-f="grantee"></span>,
+            their heirs, executors, administrators and assigns forever; and Grantor does hereby bind himself, his heirs,
+            executors, administrators and assigns forever, to WARRANT AND FOREVER DEFEND all and singular the premises
+            unto the said <span class="caps" data-f="grantee"></span>, their heirs, executors, administrators and
+            assigns, against every person whomsoever lawfully claiming or to claim the same or any part thereof.
+            When the context requires, singular nouns and pronouns include the plural.</p>
+
+            <div class="signing">
+            <p class="indent" style="margin-top:10pt">Executed at <span data-f="city"></span> this
+            <span data-f="dayText"></span> day of <span class="caps" data-f="month"></span>, <span data-f="year"></span>.</p>
+
+            <div class="sig"><div style="height:28pt"></div>
+              <div class="line" data-f="sigText"></div></div>
+
+            <div class="ack-title">ACKNOWLEDGMENT</div>
+            <div class="venue ack">
+              <div>THE STATE OF <span class="caps" data-f="ackState"></span></div><div>)</div><div></div>
+              <div>COUNTY OF <span class="caps" data-f="ackCounty"></span></div><div>)</div><div></div>
+            </div>
+
+            <p class="indent">This instrument was acknowledged before me this the <span data-f="dayText"></span>
+            day of <span data-f="month"></span>, <span data-f="year"></span> by <span data-f="sigText"></span>.</p>
+
+            <div class="notary">Notary Public in and for the State of <span data-f="ackState"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const FN = "/.netlify/functions/";
+  let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
+
+  async function tryLogin(pw) {
+    const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    return res.ok;
+  }
+  function signOut() {
+    token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  }
+  function showApp() {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  }
+  $("loginBtn").onclick = async () => {
+    const pw = $("pw").value.trim();
+    if (!pw) return;
+    $("loginBtn").disabled = true; $("loginErr").classList.add("hidden");
+    try {
+      if (await tryLogin(pw)) {
+        token = pw; localStorage.setItem("recast_admin_token", pw);
+        $("pw").value = "";
+        showApp();
+      } else {
+        $("loginErr").textContent = "Wrong password."; $("loginErr").classList.remove("hidden");
+      }
+    } catch (e) {
+      $("loginErr").textContent = String(e.message || e); $("loginErr").classList.remove("hidden");
+    } finally { $("loginBtn").disabled = false; }
+  };
+  $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = signOut;
+
+  // ── deed ──
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const now = new Date();
+  $("month").innerHTML = MONTHS.map((m) => `<option>${m}</option>`).join("");
+  $("month").value = MONTHS[now.getMonth()];
+  $("year").value = now.getFullYear();
+
+  function ordinal(n) {
+    const s = ["th", "st", "nd", "rd"], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+  const val = (id) => $(id).value.trim();
+
+  function render() {
+    const grantor = val("grantor"), signer = val("signer"), day = parseInt(val("day"), 10);
+    const data = {
+      county: val("county"), grantor, grantorAddr: val("grantorAddr"), consideration: val("consideration"),
+      grantee: val("grantee"), granteeAddr: val("granteeAddr"), legal: $("legal").value.trim(),
+      city: val("city"), month: val("month"), year: val("year"),
+      ackState: val("ackState"), ackCounty: val("ackCounty"),
+      sigText: signer && grantor && signer !== grantor ? `${signer} for ${grantor}` : (signer || grantor),
+    };
+    document.querySelectorAll(".deed [data-f]").forEach((el) => {
+      const k = el.dataset.f;
+      if (k === "dayText") {
+        el.className = day >= 1 && day <= 31 ? "" : "blank";
+        el.textContent = day >= 1 && day <= 31 ? ordinal(day) : "";
+        return;
+      }
+      el.textContent = data[k] || "";
+      el.classList.toggle("missing", !data[k]);
+      if (!data[k]) el.textContent = " ".repeat(12);
+    });
+  }
+  $("f").addEventListener("input", render);
+  $("printBtn").onclick = () => {
+    if (!val("grantee") || !$("legal").value.trim()) {
+      if (!confirm("The buyer or legal description is still empty. Print anyway?")) return;
+    }
+    window.print();
+  };
+  $("clearBtn").onclick = () => {
+    ["grantee", "granteeAddr", "legal", "day"].forEach((id) => { $(id).value = ""; });
+    render();
+  };
+  render();
+
+  (async function boot() {
+    if (token && (await tryLogin(token))) showApp();
+  })();
+})();
+</script>
+</body>
+</html>

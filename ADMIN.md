@@ -61,6 +61,7 @@ on a device and it stays signed in until **Sign out**):
 | `/admin/email/` | **Email setup** — create a property email (alias + label + filter) on paul@ or properties@. Replaces the two Apps Script "Email Setup" dialogs. |
 | `/admin/contacts/` | **Contacts** (the CRM list for email/text blasts) — see below. |
 | `/admin/blast/` | **Email Blast** — write an email (optional listing photo cards), preview, test to paul@, send to the contacts list — see below. |
+| `/admin/deed/` | **Deed Maker** — fill in buyer, legal description, county and date; prints a one-page Texas special warranty deed + acknowledgment (wording copied from the deed Paul handed over, 2026-10-30). Browser-only: no function, nothing saved. Grantor defaults to Recast Properties LLC / Paul Bjork. |
 
 Every admin page is `noindex, nofollow` and served `cache-control: no-store`
 (`netlify.toml`).
@@ -408,6 +409,12 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-30** — **Deed Maker.** New `/admin/deed/` page (menu item on every
+  admin page + hub card): a form and a live letter-size preview of a special
+  warranty deed; Print / Save PDF prints the deed alone on one page. The day can
+  stay blank for the notary. One fix to the source wording: "express of implied"
+  → "express or implied".
 
 - **2026-10-28** — **Contacts + Email Blast verified live.** A real homepage Get
   Notified sign-up landed in Contacts (Paul's test). The first real blast
