@@ -426,6 +426,9 @@ public on the live site, so nothing secret is exposed; the password only gates
   (first: Dennis) access to all of admin from the hub's **Who can sign in** card,
   which emails them a link of their own. New `admin-users.mjs` +
   `lib/admin-auth.mjs`; every admin function now checks through it.
+  Deployed and checked live the same day (a made-up key is refused; the card
+  shows only with the password), and Dennis was sent his sign-in email from
+  the hub. Saved deeds are deployed too.
 
 - **2026-10-30** — **Deeds are saved.** `/admin/deed/` is now the list of saved
   deeds (buyer, property, county, deed date, last edited) under a **Create new
