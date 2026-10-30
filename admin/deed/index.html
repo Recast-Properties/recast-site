@@ -55,6 +55,18 @@
   .login .card { text-align: center; }
   .login img { height: 34px; margin-bottom: 14px; }
 
+  /* deeds list */
+  .tablewrap { background: #fff; border: 1px solid var(--ink-200, #e1e4e9); border-radius: 14px; overflow-x: auto; margin-top: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-500, #71757e); padding: 10px 12px; white-space: nowrap; }
+  td { padding: 10px 12px; border-top: 1px solid var(--ink-100, #eff1f4); white-space: nowrap; }
+  td a { font-weight: 700; text-decoration: none; }
+  td.legal-cell { max-width: 380px; overflow: hidden; text-overflow: ellipsis; color: var(--ink-600, #53575f); }
+  .empty { text-align: center; padding: 28px 12px; white-space: normal; }
+  .err { color: #b3261e; font-size: 13px; margin: 8px 0 0; }
+  .back { font-size: 13.5px; font-weight: 700; text-decoration: none; }
+
   /* form + preview */
   .layout { display: grid; grid-template-columns: 400px 1fr; gap: 22px; align-items: start; }
   @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
@@ -123,7 +135,21 @@
   </div>
 
   <div class="wrap">
-    <h1 class="page-title no-print">Deed Maker</h1>
+    <div id="listView" class="hidden">
+      <h1 class="page-title">Deeds</h1>
+      <a class="btn primary" href="?new" style="display:inline-block;text-decoration:none">+ Create new deed</a>
+      <p id="listErr" class="err hidden"></p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Buyer</th><th>Property</th><th>County</th><th>Deed date</th><th>Last edited</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="muted empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="editView" class="hidden">
+    <a class="back no-print" href="./">← All deeds</a>
+    <h1 id="edTitle" class="page-title no-print" style="margin-top:8px">New deed</h1>
     <div class="layout">
       <form id="f" class="no-print" autocomplete="off">
         <div class="card">
@@ -176,10 +202,14 @@
         </div>
 
         <div class="actions">
-          <button type="button" id="printBtn" class="btn primary">Print / Save PDF</button>
-          <button type="button" id="clearBtn" class="btn">Clear buyer &amp; property</button>
+          <button type="button" id="saveBtn" class="btn primary">Save</button>
+          <button type="button" id="printBtn" class="btn">Save &amp; print</button>
+          <span class="sp" style="flex:1"></span>
+          <button type="button" id="delBtn" class="btn hidden">Delete</button>
         </div>
-        <p class="hint">Nothing here is saved or sent anywhere. Yellow in the preview means a box is still empty.</p>
+        <p id="saveMsg" class="hint"></p>
+        <p id="edErr" class="err hidden"></p>
+        <p class="hint">Yellow in the preview means a box is still empty.</p>
       </form>
 
       <div class="preview">
@@ -238,6 +268,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </div>
 
@@ -258,6 +289,7 @@
   }
   function showApp() {
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    showView();
   }
   $("loginBtn").onclick = async () => {
     const pw = $("pw").value.trim();
@@ -312,18 +344,86 @@
       if (!data[k]) el.textContent = " ".repeat(12);
     });
   }
-  $("f").addEventListener("input", render);
-  $("printBtn").onclick = () => {
+  // ── saved deeds ──
+  const FIELDS = ["grantor", "grantorAddr", "signer", "grantee", "granteeAddr", "county", "legal",
+    "consideration", "city", "day", "month", "year", "ackState", "ackCounty"];
+  const params = new URLSearchParams(location.search);
+  let deedId = params.get("id") || "", dirty = false;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtDate = (s) => s ? new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  function showErr(el, msg) { el.textContent = msg; el.classList.toggle("hidden", !msg); }
+
+  async function api(body) {
+    const res = await fetch(FN + "admin-deeds", { method: "POST",
+      headers: { "x-admin-token": token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (res.status === 401) { signOut(); throw new Error("Signed out."); }
+    const j = await res.json().catch(() => ({ ok: false, error: "Server error (HTTP " + res.status + ")." }));
+    if (!j.ok) throw new Error(j.error || "Something went wrong.");
+    return j;
+  }
+
+  async function showList() {
+    $("listView").classList.remove("hidden");
+    let rows = [];
+    try { rows = (await api({ action: "list" })).rows; showErr($("listErr"), ""); }
+    catch (e) { showErr($("listErr"), "Couldn't load deeds: " + e.message); }
+    $("rows").innerHTML = rows.map((r) => {
+      const href = "?id=" + encodeURIComponent(r.id);
+      const date = [r.day, r.month, r.year].filter(Boolean).join(" ");
+      return "<tr><td><a href=\"" + href + "\">" + (esc(r.grantee) || "(no buyer yet)") + "</a></td>" +
+        '<td class="legal-cell" title="' + esc(r.legal) + '">' + esc(r.legal) + "</td>" +
+        "<td>" + esc(r.county) + "</td><td>" + esc(date) + "</td><td>" + fmtDate(r.updatedAt) + "</td></tr>";
+    }).join("") || '<tr><td colspan="5" class="muted empty">No saved deeds yet.</td></tr>';
+  }
+
+  function markSaved(row) {
+    deedId = row.id; dirty = false;
+    history.replaceState(null, "", "?id=" + encodeURIComponent(row.id));
+    $("edTitle").textContent = "Edit deed";
+    $("delBtn").classList.remove("hidden");
+    $("saveMsg").textContent = "Saved " + new Date(row.updatedAt).toLocaleString("en-US",
+      { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ".";
+  }
+
+  async function showEditor() {
+    $("editView").classList.remove("hidden");
+    if (deedId) {
+      try {
+        const { row } = await api({ action: "get", id: deedId });
+        FIELDS.forEach((k) => { $(k).value = row[k] || ""; });
+        markSaved(row);
+      } catch (e) { showErr($("edErr"), "Couldn't open this deed: " + e.message); }
+    }
+    render();
+  }
+
+  async function save() {
+    const deed = { id: deedId };
+    FIELDS.forEach((k) => { deed[k] = $(k).value; });
+    ["saveBtn", "printBtn", "delBtn"].forEach((id) => { $(id).disabled = true; });
+    try { markSaved((await api({ action: "save", deed })).row); showErr($("edErr"), ""); return true; }
+    catch (e) { showErr($("edErr"), "Not saved: " + e.message); return false; }
+    finally { ["saveBtn", "printBtn", "delBtn"].forEach((id) => { $(id).disabled = false; }); }
+  }
+
+  $("f").addEventListener("input", () => { dirty = true; $("saveMsg").textContent = "Unsaved changes."; render(); });
+  $("saveBtn").onclick = save;
+  $("printBtn").onclick = async () => {
     if (!val("grantee") || !$("legal").value.trim()) {
       if (!confirm("The buyer or legal description is still empty. Print anyway?")) return;
     }
+    if (!(await save()) && !confirm("This deed didn't save. Print anyway?")) return;
     window.print();
   };
-  $("clearBtn").onclick = () => {
-    ["grantee", "granteeAddr", "legal", "day"].forEach((id) => { $(id).value = ""; });
-    render();
+  $("delBtn").onclick = async () => {
+    if (!confirm("Delete this deed? This can't be undone.")) return;
+    try { await api({ action: "delete", id: deedId }); dirty = false; location.href = "./"; }
+    catch (e) { showErr($("edErr"), "Not deleted: " + e.message); }
   };
-  render();
+  window.addEventListener("beforeunload", (e) => { if (dirty) e.preventDefault(); });
+
+  const showView = () => (deedId || params.has("new") ? showEditor() : showList());
 
   (async function boot() {
     if (token && (await tryLogin(token))) showApp();

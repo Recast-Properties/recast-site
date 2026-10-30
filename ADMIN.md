@@ -61,7 +61,7 @@ on a device and it stays signed in until **Sign out**):
 | `/admin/email/` | **Email setup** — create a property email (alias + label + filter) on paul@ or properties@. Replaces the two Apps Script "Email Setup" dialogs. |
 | `/admin/contacts/` | **Contacts** (the CRM list for email/text blasts) — see below. |
 | `/admin/blast/` | **Email Blast** — write an email (optional listing photo cards), preview, test to paul@, send to the contacts list — see below. |
-| `/admin/deed/` | **Deed Maker** — fill in buyer, legal description, county and date; prints a one-page Texas special warranty deed + acknowledgment (wording copied from the deed Paul handed over, 2026-10-30). Browser-only: no function, nothing saved. Grantor defaults to Recast Properties LLC / Paul Bjork. |
+| `/admin/deed/` | **Deed Maker** — the list of saved deeds + **Create new deed**; each deed opens at `/admin/deed/?id=<id>` (new: `?new`). Fill in buyer, legal description, county and date; **Save**, or **Save & print** a one-page Texas special warranty deed + acknowledgment (wording copied from the deed Paul handed over, 2026-10-30). Grantor defaults to Recast Properties LLC / Paul Bjork. Stored by `admin-deeds.mjs` in the Blobs store `deeds`, one key per deed. |
 
 Every admin page is `noindex, nofollow` and served `cache-control: no-store`
 (`netlify.toml`).
@@ -316,6 +316,7 @@ auto-configures (the older `exports.handler` style does NOT get Blobs).
 | `submission-created.mjs` | Netlify event | Runs after each verified form submission; turns `get-notified` sign-ups into contacts (see "Contacts" above). |
 | `admin-blast.mjs` | auth | Email blast: `info` / `preview` / `test` (paul@ only) / `send` (starts the background sender) / `resume`. |
 | `admin-blast-send-background.mjs` | auth (background) | Sends one blast, saving progress after each email. |
+| `admin-deeds.mjs` | auth | Saved deeds (Blobs store `deeds`, one key per deed): `list` / `get` / `save` (no id = new) / `delete`. |
 | `unsubscribe.mjs` | **public** | `/unsubscribe?id=…` — confirm button; POST (or Gmail one-click) unsubscribes. |
 
 Shared server code lives in **`netlify/lib/listings.mjs`** (not a function — imported by
@@ -409,6 +410,12 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-30** — **Deeds are saved.** `/admin/deed/` is now the list of saved
+  deeds (buyer, property, county, deed date, last edited) under a **Create new
+  deed** button; clicking a buyer opens that deed to edit. New `admin-deeds.mjs`
+  (Blobs store `deeds`). **Save & print** saves before printing, and leaving with
+  unsaved changes asks first.
 
 - **2026-10-30** — **Deed Maker.** New `/admin/deed/` page (menu item on every
   admin page + hub card): a form and a live letter-size preview of a special
