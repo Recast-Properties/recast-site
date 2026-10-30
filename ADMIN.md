@@ -54,6 +54,16 @@ nothing else.
 `recast_admin_token`, shared by every page and by `/receipts` — sign in once
 on a device and it stays signed in until **Sign out**):
 
+**Other people sign in with their own link, not the password.** The hub's
+**Who can sign in** card (shown only when signed in with the password) adds a
+person by name + email and emails them, from paul@, a link to
+`/admin/#key=<their key>`. Opening it saves that key as the device's login, so
+they get every admin page (not `/receipts`, which still takes the password
+only). **Remove** deletes the key and their link stops working everywhere.
+Adding an email that is already on the list re-sends the same link. Keys live
+in the Blobs store `admin-users` (one key per person); the check is
+`netlify/lib/admin-auth.mjs`, used by every admin function.
+
 | URL | Tool |
 |---|---|
 | `/admin/` | The hub — cards + nav to everything below. |
@@ -295,13 +305,14 @@ photos, hidden`
   `/homes/<id>?preview=1` (the admin's Preview ↗) — see `listing-page.mjs`.
 
 ### Functions (`netlify/functions/`)
-All admin functions require the header **`x-admin-token: <ADMIN_PASSWORD>`** and
+All admin functions require the header **`x-admin-token`** = the admin password or a person's sign-in key (`lib/admin-auth.mjs`; `admin-migrate-photos` and `admin-users` take the password only) and
 are written as **Netlify v2 (ESM `.mjs`, `export default`)** — required so Blobs
 auto-configures (the older `exports.handler` style does NOT get Blobs).
 
 | Function | Public? | Purpose |
 |---|---|---|
-| `admin-ping.mjs` | auth | Password check (the login screen calls this). |
+| `admin-ping.mjs` | auth | Sign-in check (the login screen calls this); `owner: true` only for the password. |
+| `admin-users.mjs` | password only | Who can sign in: `list` / `invite` (name + email; emails their sign-in link from paul@) / `remove`. |
 | `admin-listings.mjs` | auth | `list` / `save` (upsert by id) / `delete` / `reorder` / `visibility` (flip one row's `hidden` without touching its other fields) / `seed`. |
 | `admin-photos.mjs` | auth | `list` / `add` (stage one photo) / `arrange` (set final order) / `clear`. |
 | `listings.mjs` | **public** | Read-only feed the website loads — returns the listings as **CSV**. |
@@ -410,6 +421,11 @@ public on the live site, so nothing secret is exposed; the password only gates
 ---
 
 ## Change log
+
+- **2026-10-30** — **Personal sign-in links.** Paul can give someone else
+  (first: Dennis) access to all of admin from the hub's **Who can sign in** card,
+  which emails them a link of their own. New `admin-users.mjs` +
+  `lib/admin-auth.mjs`; every admin function now checks through it.
 
 - **2026-10-30** — **Deeds are saved.** `/admin/deed/` is now the list of saved
   deeds (buyer, property, county, deed date, last edited) under a **Create new

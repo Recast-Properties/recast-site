@@ -59,6 +59,15 @@
   .tool .ico { font-size: 26px; line-height: 1; margin-bottom: 10px; }
   .tool h2 { font-family: var(--font-display, sans-serif); font-size: 17px; margin: 0 0 6px; font-weight: 700; }
   .tool p { margin: 0; color: var(--ink-600, #53575f); font-size: 13.5px; line-height: 1.45; }
+
+  /* who can sign in (owner only) */
+  #access { margin-top: 22px; }
+  #access h2 { font-family: var(--font-display, sans-serif); font-size: 17px; margin: 0 0 4px; }
+  #access table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 12px 0 16px; }
+  #access td { padding: 9px 4px; border-top: 1px solid var(--ink-100, #eff1f4); }
+  #access td:last-child { text-align: right; }
+  .invite { display: flex; gap: 8px; flex-wrap: wrap; }
+  .invite input { flex: 1 1 180px; width: auto; }
 </style>
 </head>
 <body>
@@ -122,6 +131,18 @@
         <p>Fill in the buyer, the legal description and the date, then print a special warranty deed ready to sign at the notary.</p>
       </a>
     </div>
+
+    <div id="access" class="card hidden">
+      <h2>Who can sign in</h2>
+      <p class="muted" style="margin:0">Besides you, these people sign in to all of admin with their own emailed link. Remove someone and their link stops working.</p>
+      <table><tbody id="people"></tbody></table>
+      <div class="invite">
+        <input id="invName" placeholder="Name" autocomplete="off">
+        <input id="invEmail" type="email" placeholder="Email" autocomplete="off">
+        <button id="invBtn" class="btn primary">Send sign-in email</button>
+      </div>
+      <p id="accMsg" class="hint"></p>
+    </div>
   </div>
 </div>
 
@@ -132,16 +153,64 @@
   const FN = "/.netlify/functions/";
   let token = localStorage.getItem("recast_admin_token") || sessionStorage.getItem("recast_admin_token") || "";
 
+  // A sign-in link (/admin/#key=...) becomes this device's saved login.
+  const linkKey = (location.hash.match(/^#key=([a-f0-9]{64})$/) || [])[1];
+  if (linkKey) {
+    token = linkKey; localStorage.setItem("recast_admin_token", linkKey);
+    history.replaceState(null, "", location.pathname);
+  }
+
+  let owner = false;
   async function tryLogin(pw) {
     const res = await fetch(FN + "admin-ping", { method: "POST", headers: { "x-admin-token": pw } });
+    owner = !!(res.ok && (await res.json()).owner);
     return res.ok;
   }
+
+  // ── who can sign in (owner only) ──
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  async function users(body) {
+    const res = await fetch(FN + "admin-users", { method: "POST",
+      headers: { "x-admin-token": token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await res.json().catch(() => ({ ok: false, error: "Server error (HTTP " + res.status + ")." }));
+    if (!j.ok) throw new Error(j.error || "Something went wrong.");
+    return j;
+  }
+  async function loadPeople() {
+    try {
+      const { rows } = await users({ action: "list" });
+      $("people").innerHTML = rows.map((r) => '<tr><td><b>' + esc(r.name) + "</b></td><td>" + esc(r.email) + "</td>" +
+        '<td class="muted">added ' + new Date(r.addedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + "</td>" +
+        '<td><button class="btn sm" data-id="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Remove</button></td></tr>').join("") ||
+        '<tr><td class="muted">No one else yet.</td></tr>';
+    } catch (e) { $("accMsg").textContent = "Couldn't load: " + e.message; }
+  }
+  $("invBtn").onclick = async () => {
+    $("invBtn").disabled = true; $("accMsg").textContent = "Sending…";
+    try {
+      const r = await users({ action: "invite", name: $("invName").value, email: $("invEmail").value });
+      $("accMsg").textContent = r.sent ? "Sign-in email sent to " + r.row.email + "."
+        : "Added " + r.row.email + ", but the email didn't send (" + r.error + "). Click Send again to retry.";
+      if (r.sent) { $("invName").value = ""; $("invEmail").value = ""; }
+      await loadPeople();
+    } catch (e) { $("accMsg").textContent = e.message; }
+    finally { $("invBtn").disabled = false; }
+  };
+  $("people").onclick = async (e) => {
+    const b = e.target.closest("button[data-id]");
+    if (!b || !confirm("Remove " + b.dataset.name + "? Their sign-in link stops working.")) return;
+    try { await users({ action: "remove", id: b.dataset.id }); $("accMsg").textContent = ""; await loadPeople(); }
+    catch (err) { $("accMsg").textContent = err.message; }
+  };
   function signOut() {
     token = ""; localStorage.removeItem("recast_admin_token"); sessionStorage.removeItem("recast_admin_token");
     $("app").classList.add("hidden"); $("login").classList.remove("hidden");
   }
   function showApp() {
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    $("access").classList.toggle("hidden", !owner);
+    if (owner) loadPeople();
   }
   $("loginBtn").onclick = async () => {
     const pw = $("pw").value.trim();

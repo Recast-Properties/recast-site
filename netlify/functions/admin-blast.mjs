@@ -1,7 +1,7 @@
 // Admin email blast API (auth required) — the /admin/blast/ page.
 // Who gets a blast, the email and the send: netlify/lib/blast.mjs.
 //
-// POST JSON (header x-admin-token == ADMIN_PASSWORD):
+// POST JSON (header x-admin-token: see lib/admin-auth.mjs):
 //   { action:"info" }   -> { ok, recipients, addressSet, testTo, listings:[{id,label}], blasts:[...] }
 //   { action:"preview", subject, message, listingIds } -> { ok, html }
 //   { action:"test", subject, message, listingIds }  -> { ok }   (to TEST_TO only)
@@ -11,15 +11,11 @@
 import { contactsStore, readAll } from "../lib/contacts.mjs";
 import { readListings, fmtPrice } from "../lib/listings.mjs";
 import { blastsStore, buildEmail, sendOne, recipientsOf, TEST_TO, MAILING_ADDRESS } from "../lib/blast.mjs";
+import { authed } from "../lib/admin-auth.mjs";
 
 const json = (o, status = 200) => Response.json(o, { status });
 // The sender saves after every email; 3 minutes with no save = it stopped.
 const isStalled = (b) => b.status === "sending" && Date.now() - Date.parse(b.updatedAt) > 3 * 60 * 1000;
-
-function authed(req) {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  return expected && (req.headers.get("x-admin-token") || "") === expected;
-}
 
 async function readBlasts(store) {
   const { blobs } = await store.list();
@@ -42,7 +38,7 @@ const kick = (req, id) => fetch(new URL("/.netlify/functions/admin-blast-send-ba
 
 export default async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
-  if (!authed(req)) return json({ ok: false, error: "Unauthorized" }, 401);
+  if (!(await authed(req))) return json({ ok: false, error: "Unauthorized" }, 401);
   let body;
   try { body = await req.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
   const store = blastsStore();

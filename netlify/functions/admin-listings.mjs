@@ -2,7 +2,7 @@
 // (store "listings-data", key "listings.json" = an array of listing objects).
 // No Google Sheet / Apps Script — the admin tool is the single source of truth.
 //
-// POST JSON (header x-admin-token == ADMIN_PASSWORD):
+// POST JSON (header x-admin-token: see lib/admin-auth.mjs):
 //   { action:"list" }                 -> { ok, rows }
 //   { action:"save", listing:{...} }  -> { ok, id }   (upsert by id)
 //   { action:"delete", id }           -> { ok }
@@ -16,6 +16,7 @@
 //   { action:"seed", force? }         -> { ok, count } (one-time import from the
 //                                        old published Google Sheet CSV)
 import { getStore } from "@netlify/blobs";
+import { authed } from "../lib/admin-auth.mjs";
 
 const STORE = "listings-data";
 const KEY = "listings.json";
@@ -25,11 +26,6 @@ const KEY = "listings.json";
 const FIELDS = ["id","status","price","address","city","state","zip","beds","baths","sqft","lot","year","type","tagline","description","highlights","mlsId","agentName","agentPhone","tourUrl","photos","hidden"];
 // One-time seed source: the previously-published listings sheet.
 const SEED_CSV_URL = "https://docs.google.com/spreadsheets/d/1lpCONle2BfovuOu7_9k17hYwCuDKxnvE0ddeQLdGI5k/gviz/tq?tqx=out:csv&gid=701320222";
-
-function authed(req) {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  return expected && (req.headers.get("x-admin-token") || "") === expected;
-}
 
 async function readAll(store) {
   const raw = await store.get(KEY, { type: "json" });
@@ -74,7 +70,7 @@ function parseCSV(text) {
 
 export default async (req) => {
   if (req.method !== "POST") return Response.json({ ok: false, error: "POST only" }, { status: 405 });
-  if (!authed(req)) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!(await authed(req))) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }

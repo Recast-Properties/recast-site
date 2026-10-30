@@ -5,7 +5,7 @@
 // Photos are uploaded ONE AT A TIME (each request stays well under Netlify's
 // ~6MB function body limit), then a final lightweight "arrange" sets the order.
 //
-// POST JSON actions (header x-admin-token must equal ADMIN_PASSWORD):
+// POST JSON actions (header x-admin-token: see lib/admin-auth.mjs):
 //   { action:"list",    folder }                 -> { ok, count }
 //   { action:"add",     folder, dataUrl }        -> { ok, id }   (stages one photo)
 //   { action:"arrange", folder, order:[ ... ] }  -> { ok, count }
@@ -16,14 +16,11 @@
 //   { action:"clear",   folder }                 -> { ok }
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
+import { authed } from "../lib/admin-auth.mjs";
 
 const STORE = "listing-photos";
 const STG = "/.stg/"; // staging sub-path; never matches a numbered photo
 
-function authed(req) {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  return expected && (req.headers.get("x-admin-token") || "") === expected;
-}
 const slugFolder = (s) =>
   String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
@@ -39,7 +36,7 @@ function decodeDataUrl(dataUrl) {
 
 export default async (req) => {
   if (req.method !== "POST") return Response.json({ ok: false, error: "POST only" }, { status: 405 });
-  if (!authed(req)) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!(await authed(req))) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }

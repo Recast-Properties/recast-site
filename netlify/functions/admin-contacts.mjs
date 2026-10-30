@@ -1,22 +1,18 @@
 // Admin CRM contacts API (auth required) — the /admin/contacts/ page.
 // Storage and field rules: netlify/lib/contacts.mjs.
 //
-// POST JSON (header x-admin-token == ADMIN_PASSWORD):
+// POST JSON (header x-admin-token: see lib/admin-auth.mjs):
 //   { action:"list" }                  -> { ok, rows }  (newest first)
 //   { action:"save", contact:{...} }   -> { ok, row }   (no id = add; with id = edit.
 //                                         Adding someone whose email or mobile is
 //                                         already in the list -> 409 + existing id)
 //   { action:"delete", id }            -> { ok }
 import { contactsStore, readAll, findMatch, normalize, put } from "../lib/contacts.mjs";
-
-function authed(req) {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  return expected && (req.headers.get("x-admin-token") || "") === expected;
-}
+import { authed } from "../lib/admin-auth.mjs";
 
 export default async (req) => {
   if (req.method !== "POST") return Response.json({ ok: false, error: "POST only" }, { status: 405 });
-  if (!authed(req)) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!(await authed(req))) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }

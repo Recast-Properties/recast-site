@@ -4,10 +4,10 @@
 // so the page can show "Sent 20 of 37" and a resume never re-sends anyone.
 // ponytail: ~1 email/sec, so ~900 people per run; past that, Resume continues.
 import { blastsStore, buildEmail, sendOne } from "../lib/blast.mjs";
+import { authed } from "../lib/admin-auth.mjs";
 
 export default async (req) => {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  if (!expected || req.headers.get("x-admin-token") !== expected) return;
+  if (!(await authed(req))) return;
   const { id } = await req.json();
   const store = blastsStore();
   const b = await store.get(String(id), { type: "json" });

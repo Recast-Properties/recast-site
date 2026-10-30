@@ -2,25 +2,21 @@
 // Netlify Blobs store "deeds", ONE KEY PER DEED (key = id, value = the deed JSON),
 // same layout as crm-contacts.
 //
-// POST JSON (header x-admin-token == ADMIN_PASSWORD):
+// POST JSON (header x-admin-token: see lib/admin-auth.mjs):
 //   { action:"list" }               -> { ok, rows }  (last edited first)
 //   { action:"get", id }            -> { ok, row }
 //   { action:"save", deed:{...} }   -> { ok, row }   (no id = new; with id = edit)
 //   { action:"delete", id }         -> { ok }
 import { getStore } from "@netlify/blobs";
+import { authed } from "../lib/admin-auth.mjs";
 
 const FIELDS = ["grantor", "grantorAddr", "signer", "grantee", "granteeAddr", "county", "legal",
   "consideration", "city", "day", "month", "year", "ackState", "ackCounty"];
 const clean = (v, max) => (v == null ? "" : String(v).trim().slice(0, max));
 
-function authed(req) {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  return expected && (req.headers.get("x-admin-token") || "") === expected;
-}
-
 export default async (req) => {
   if (req.method !== "POST") return Response.json({ ok: false, error: "POST only" }, { status: 405 });
-  if (!authed(req)) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!(await authed(req))) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }

@@ -9,7 +9,7 @@
 //               label (named the property label) in properties@ and a filter
 //               query:<groupEmail> -> label, skip inbox AND spam.
 //
-// Auth in:  x-admin-token header == ADMIN_PASSWORD (same as every /admin function).
+// Auth in:  x-admin-token header, checked by lib/admin-auth.mjs (same as every /admin function).
 // Auth out: Google service account with DOMAIN-WIDE DELEGATION. We hand-roll the
 //   RS256 JWT -> access-token exchange with native crypto (no googleapis dep),
 //   impersonating GOOGLE_ADMIN_USER for Directory/Groups calls and the target
@@ -35,6 +35,7 @@
 //      GOOGLE_ADMIN_USER (super-admin, e.g. paul@recast-properties.com)
 
 import crypto from "node:crypto";
+import { authed } from "../lib/admin-auth.mjs";
 
 const DOMAIN = "recast-properties.com";
 // Fail-closed allowlist: the only mailboxes this tool may touch.
@@ -57,11 +58,6 @@ const SCOPE_GSET = "https://www.googleapis.com/auth/apps.groups.settings";
 const SCOPE_GMAIL = "https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.settings.basic";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function authed(req) {
-  const expected = process.env.ADMIN_PASSWORD || "";
-  return expected && (req.headers.get("x-admin-token") || "") === expected;
-}
 
 // ---- service-account token (JWT bearer grant, impersonating `sub`) ----
 const b64url = (buf) => Buffer.from(buf).toString("base64url");
@@ -304,7 +300,7 @@ async function removeAlias(mailbox, fullAlias) {
 // ---- handler ----
 export default async (req) => {
   if (req.method !== "POST") return Response.json({ ok: false, error: "POST only" }, { status: 405 });
-  if (!authed(req)) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!(await authed(req))) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   let body;
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }
